@@ -474,11 +474,12 @@
 /* Snap-alignment guide line while dragging a node (AlignmentGuides.tsx,
    spec 006 US1). Editor-only chrome — never reaches an export. Left at the
    EdgeLabelRenderer default of pointer-events: none since it's purely
-   visual and must never intercept the drag it's tracking. */
+   visual and must never intercept the drag it's tracking. Uses the live
+   secondary design token so it matches the rest of the editor chrome. */
 .lab-alignment-guide {
   position: absolute;
-  background: #ff4715;
-  opacity: 0.6;
+  background: var(--token-secondary);
+  opacity: 0.9;
   z-index: 5;
 }
 
