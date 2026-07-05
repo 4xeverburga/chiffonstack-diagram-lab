@@ -71,6 +71,23 @@ describe('exportComponentCode', () => {
     expect(tsx).toContain('"variant": "default"')
   })
 
+  it('serializes labelSize per node and renders the size class in the generated component', () => {
+    const { tsx } = exportComponentCode(kitchenSinkNodes, kitchenSinkEdges, DEFAULT_DESIGN_TOKENS)
+    expect(tsx).toContain('"labelSize": "large"')
+    expect(tsx).toContain('"labelSize": "small"')
+    // Legacy fixture nodes (no labelSize authored) normalize to explicit "normal".
+    expect(tsx).toContain('"labelSize": "normal"')
+    expect(tsx).toContain('node-label node-label-${labelSize}')
+  })
+
+  it('emits the size font-size rules in the generated CSS and keeps .node-label on the body font token', () => {
+    const { css } = exportComponentCode(kitchenSinkNodes, kitchenSinkEdges, DEFAULT_DESIGN_TOKENS)
+    expect(css).toMatch(/\.chiffon-diagram \.node-label-small \{\s*font-size: 11px;/)
+    expect(css).toMatch(/\.chiffon-diagram \.node-label-large \{\s*font-size: 16px;/)
+    expect(css).toMatch(/\.chiffon-diagram \.node-label \{[^}]*font-family: var\(--token-body-font, sans-serif\);/)
+    expect(css).not.toContain('--token-heading-font, sans-serif')
+  })
+
   it('serializes thickness/direction and renders them as edge classes', () => {
     const { tsx } = exportComponentCode(kitchenSinkNodes, kitchenSinkEdges, DEFAULT_DESIGN_TOKENS)
     expect(tsx).toContain('"thickness": "thin"')

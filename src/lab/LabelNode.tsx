@@ -1,5 +1,6 @@
 import { Handle, NodeResizer, type NodeProps } from '@xyflow/react'
 import { HANDLE_SIDES, HANDLE_SIDE_POSITION } from './handleSides'
+import { resolveTextSize } from './textSizes'
 
 // Custom node used for every diagram box: keeps the existing className-driven
 // look (node / node-active / node-dim). Renaming and image assignment happen
@@ -21,6 +22,7 @@ import { HANDLE_SIDES, HANDLE_SIDE_POSITION } from './handleSides'
 export function LabelNode({ data, selected }: NodeProps) {
   const label = typeof data.label === 'string' ? data.label : ''
   const image = typeof data.image === 'string' ? data.image : undefined
+  const labelSize = resolveTextSize(data.labelSize)
 
   return (
     <>
@@ -36,7 +38,7 @@ export function LabelNode({ data, selected }: NodeProps) {
       ))}
       <div className="node-content">
         {image ? <img className="node-image" src={image} alt="" /> : null}
-        <span className="node-label">{label}</span>
+        <span className={`node-label node-label-${labelSize}`}>{label}</span>
       </div>
     </>
   )

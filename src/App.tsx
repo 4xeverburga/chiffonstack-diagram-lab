@@ -239,6 +239,7 @@ function LabEditor() {
           onRenameNode={mutations.renameNode}
           onSetNodeKind={mutations.setNodeKind}
           onSetNodeImage={mutations.setNodeImage}
+          onSetNodeLabelSize={mutations.setNodeLabelSize}
           onSetEdgeVariant={mutations.setEdgeVariant}
           onSetEdgeThickness={mutations.setEdgeThickness}
           onReverseEdgeDirection={mutations.reverseEdgeDirection}

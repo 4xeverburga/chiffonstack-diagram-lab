@@ -4,6 +4,7 @@ import { classNameForKind, type NodeKind } from './nodeKinds'
 import { HEAT_VARIANTS, type HeatVariant } from './heatVariants'
 import { EDGE_THICKNESSES, resolveDirection, resolveThickness, type EdgeThickness } from './edgeStyle'
 import { IMAGE_SIZE_WARNING_BYTES, IMAGE_UPLOAD_ACCEPT, readImageFile } from './imageUpload'
+import { resolveTextSize, TEXT_SIZES, type TextSize } from './textSizes'
 
 const NODE_KINDS: NodeKind[] = ['default', 'active', 'dim']
 
@@ -13,6 +14,7 @@ type InspectorProps = {
   onRenameNode: (id: string, label: string) => void
   onSetNodeKind: (id: string, kind: NodeKind) => void
   onSetNodeImage: (id: string, image: string | undefined) => void
+  onSetNodeLabelSize: (id: string, size: TextSize) => void
   onSetEdgeVariant: (id: string, variant: HeatVariant) => void
   onSetEdgeThickness: (id: string, thickness: EdgeThickness) => void
   onReverseEdgeDirection: (id: string) => void
@@ -27,6 +29,7 @@ export function Inspector({
   onRenameNode,
   onSetNodeKind,
   onSetNodeImage,
+  onSetNodeLabelSize,
   onSetEdgeVariant,
   onSetEdgeThickness,
   onReverseEdgeDirection,
@@ -39,6 +42,7 @@ export function Inspector({
   if (selectedNode) {
     const label = typeof selectedNode.data.label === 'string' ? selectedNode.data.label : ''
     const image = typeof selectedNode.data.image === 'string' ? selectedNode.data.image : undefined
+    const labelSize = resolveTextSize(selectedNode.data.labelSize)
 
     const handleImageChange = (event: ChangeEvent<HTMLInputElement>) => {
       const file = event.target.files?.[0]
@@ -72,6 +76,21 @@ export function Inspector({
                 onClick={() => onSetNodeKind(selectedNode.id, kind)}
               >
                 {kind}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="lab-field">
+          <span>Size</span>
+          <div className="lab-button-row">
+            {TEXT_SIZES.map((size) => (
+              <button
+                key={size}
+                type="button"
+                className={`chip ${labelSize === size ? 'chip-active' : ''}`}
+                onClick={() => onSetNodeLabelSize(selectedNode.id, size)}
+              >
+                {size}
               </button>
             ))}
           </div>

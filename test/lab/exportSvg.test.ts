@@ -64,6 +64,35 @@ describe('exportSvg', () => {
     expect(svg).toContain('width="220" height="96"')
   })
 
+  it('applies the labelSize class to each node\'s text and normalizes legacy nodes to normal', () => {
+    const svg = exportSvg(kitchenSinkNodes, kitchenSinkEdges, DEFAULT_DESIGN_TOKENS)
+    expect(svg).toContain('<text class="node-label node-label-large"')
+    expect(svg).toContain('<text class="node-label node-label-small"')
+    expect(svg).toContain('<text class="node-label node-label-normal"')
+  })
+
+  it('embeds the size font-size rules matching the metric map', () => {
+    const svg = exportSvg(kitchenSinkNodes, kitchenSinkEdges, DEFAULT_DESIGN_TOKENS)
+    expect(svg).toMatch(/\.node-label-small\s*\{\s*font-size: 11px;/)
+    expect(svg).toMatch(/\.node-label-large\s*\{\s*font-size: 16px;/)
+  })
+
+  it('scales an image node\'s label band (and therefore its image height) with its labelSize', () => {
+    const PIXEL_PNG =
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
+    const smallImageNode = { id: 'img-small', type: 'labelNode', position: { x: 0, y: 0 }, data: { label: 'i', image: PIXEL_PNG, labelSize: 'small' } }
+    const largeImageNode = { id: 'img-large', type: 'labelNode', position: { x: 0, y: 0 }, data: { label: 'i', image: PIXEL_PNG, labelSize: 'large' } }
+    const svgSmall = exportSvg([smallImageNode], [], DEFAULT_DESIGN_TOKENS)
+    const svgLarge = exportSvg([largeImageNode], [], DEFAULT_DESIGN_TOKENS)
+    const imageHeight = (svg: string) => Number(svg.match(/<image[^>]*height="([\d.]+)"/)?.[1])
+    const nodeBoxHeight = (svg: string) => Number(svg.match(/<rect[^>]*height="([\d.]+)"/)?.[1])
+    // A large node's overall box grows more than its label band does, so its
+    // image area ends up bigger too — the labelBand metric change is
+    // observable both in the box height and in how much of it the image gets.
+    expect(nodeBoxHeight(svgLarge)).toBeGreaterThan(nodeBoxHeight(svgSmall))
+    expect(imageHeight(svgLarge)).toBeGreaterThan(imageHeight(svgSmall))
+  })
+
   it('anchors edge paths on the side each edge records, not the legacy right/left pair', () => {
     const defaultSideEdges = [{ ...kitchenSinkEdges[0], sourceHandle: undefined, targetHandle: undefined }]
     const explicitSideEdges = [{ ...kitchenSinkEdges[0], sourceHandle: 'top', targetHandle: 'bottom' }]

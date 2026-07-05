@@ -23,6 +23,28 @@ describe('computeNodeBoxes', () => {
     const withImage = boxes.get('image-node')!
     expect(withImage.height).toBeGreaterThan(plain.height)
   })
+
+  it('grows an auto-sized node\'s box for a large labelSize and shrinks it for small, relative to normal', () => {
+    const base = { id: 'n', type: 'labelNode', position: { x: 0, y: 0 }, data: { label: 'same label text' } }
+    const boxes = computeNodeBoxes([
+      { ...base, id: 'n-small', data: { ...base.data, labelSize: 'small' } },
+      { ...base, id: 'n-normal', data: { ...base.data, labelSize: 'normal' } },
+      { ...base, id: 'n-large', data: { ...base.data, labelSize: 'large' } },
+    ])
+    const small = boxes.get('n-small')!
+    const normal = boxes.get('n-normal')!
+    const large = boxes.get('n-large')!
+    expect(small.width).toBeLessThan(normal.width)
+    expect(normal.width).toBeLessThan(large.width)
+    expect(small.height).toBeLessThan(normal.height)
+    expect(normal.height).toBeLessThan(large.height)
+  })
+
+  it('keeps a manually resized node\'s dimensions unaffected by its labelSize', () => {
+    const withSize = { id: 'n', type: 'labelNode', position: { x: 0, y: 0 }, data: { label: 'x', labelSize: 'large' }, width: 100, height: 50 }
+    const boxes = computeNodeBoxes([withSize])
+    expect(boxes.get('n')).toMatchObject({ width: 100, height: 50 })
+  })
 })
 
 describe('computeEdgePaths', () => {

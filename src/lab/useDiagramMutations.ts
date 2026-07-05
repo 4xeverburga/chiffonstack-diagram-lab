@@ -4,6 +4,7 @@ import type { Edge, Node } from '@xyflow/react'
 import { classNameForKind, type NodeKind } from './nodeKinds'
 import type { HeatVariant } from './heatVariants'
 import { nextThickness, resolveDirection, resolveThickness, type EdgeThickness } from './edgeStyle'
+import type { TextSize } from './textSizes'
 
 type SetNodes = Dispatch<SetStateAction<Node[]>>
 type SetEdges = Dispatch<SetStateAction<Edge[]>>
@@ -36,6 +37,15 @@ export function useDiagramMutations(setNodes: SetNodes, setEdges: SetEdges) {
     (id: string, image: string | undefined) => {
       setNodes((current) =>
         current.map((node) => (node.id === id ? { ...node, data: { ...node.data, image } } : node)),
+      )
+    },
+    [setNodes],
+  )
+
+  const setNodeLabelSize = useCallback(
+    (id: string, labelSize: TextSize) => {
+      setNodes((current) =>
+        current.map((node) => (node.id === id ? { ...node, data: { ...node.data, labelSize } } : node)),
       )
     },
     [setNodes],
@@ -105,12 +115,23 @@ export function useDiagramMutations(setNodes: SetNodes, setEdges: SetEdges) {
       renameNode,
       setNodeKind,
       setNodeImage,
+      setNodeLabelSize,
       setEdgeVariant,
       setEdgeThickness,
       cycleEdgeThickness,
       reverseEdgeDirection,
       deleteEdge,
     }),
-    [renameNode, setNodeKind, setNodeImage, setEdgeVariant, setEdgeThickness, cycleEdgeThickness, reverseEdgeDirection, deleteEdge],
+    [
+      renameNode,
+      setNodeKind,
+      setNodeImage,
+      setNodeLabelSize,
+      setEdgeVariant,
+      setEdgeThickness,
+      cycleEdgeThickness,
+      reverseEdgeDirection,
+      deleteEdge,
+    ],
   )
 }

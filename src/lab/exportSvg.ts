@@ -3,6 +3,7 @@ import type { DesignTokens } from './designTokens'
 import { classNameForKind, kindForClassName } from './nodeKinds'
 import { edgeStyleClassNames, THICKNESS_STROKE_WIDTH } from './edgeStyle'
 import { CANVAS_MARGIN, computeContentSize, computeEdgePaths, computeNodeBoxes, nodeImage, nodeLabel } from './exportGeometry'
+import { resolveTextSize, TEXT_SIZE_METRICS } from './textSizes'
 
 const GENERIC_FONT_KEYWORDS = new Set([
   'serif',
@@ -49,7 +50,6 @@ function escapeCssFontFamily(value: string): string {
 
 const IMAGE_SIDE_PADDING = 8
 const IMAGE_TOP_PADDING = 6
-const LABEL_BAND_HEIGHT = 20
 
 // Generates a single self-contained, animated SVG document: zero <script>,
 // zero external references (images inline as data URIs), styled only by the
@@ -78,15 +78,17 @@ export function exportSvg(nodes: Node[], edges: Edge[], tokens: DesignTokens): s
       const className = classNameForKind(kindForClassName(node.className))
       const label = nodeLabel(node)
       const image = nodeImage(node)
+      const labelSize = resolveTextSize(node.data.labelSize)
+      const labelBandHeight = TEXT_SIZE_METRICS[labelSize].labelBand
 
-      const labelY = image ? box.y + box.height - LABEL_BAND_HEIGHT / 2 : box.y + box.height / 2
+      const labelY = image ? box.y + box.height - labelBandHeight / 2 : box.y + box.height / 2
       const imageMarkup = image
-        ? `\n      <image href="${escapeXmlAttr(image)}" x="${box.x + IMAGE_SIDE_PADDING}" y="${box.y + IMAGE_TOP_PADDING}" width="${box.width - IMAGE_SIDE_PADDING * 2}" height="${box.height - LABEL_BAND_HEIGHT - IMAGE_TOP_PADDING}" preserveAspectRatio="xMidYMid meet" />`
+        ? `\n      <image href="${escapeXmlAttr(image)}" x="${box.x + IMAGE_SIDE_PADDING}" y="${box.y + IMAGE_TOP_PADDING}" width="${box.width - IMAGE_SIDE_PADDING * 2}" height="${box.height - labelBandHeight - IMAGE_TOP_PADDING}" preserveAspectRatio="xMidYMid meet" />`
         : ''
 
       return `    <g class="${className}">
       <rect x="${box.x}" y="${box.y}" width="${box.width}" height="${box.height}" rx="8" />${imageMarkup}
-      <text class="node-label" x="${box.x + box.width / 2}" y="${labelY}">${escapeXmlText(label)}</text>
+      <text class="node-label node-label-${labelSize}" x="${box.x + box.width / 2}" y="${labelY}">${escapeXmlText(label)}</text>
     </g>`
     })
     .join('\n')
@@ -116,6 +118,12 @@ export function exportSvg(nodes: Node[], edges: Edge[], tokens: DesignTokens): s
       text-anchor: middle;
       dominant-baseline: middle;
       fill: #111;
+    }
+    .node-label-small {
+      font-size: ${TEXT_SIZE_METRICS.small.fontPx}px;
+    }
+    .node-label-large {
+      font-size: ${TEXT_SIZE_METRICS.large.fontPx}px;
     }
     .node-dim .node-label {
       fill: rgba(0, 0, 0, 0.55);

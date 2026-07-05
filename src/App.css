@@ -349,6 +349,18 @@
   white-space: nowrap;
 }
 
+/* Size steps set font-size only — font-family always stays the body font
+   token from the .node rule above (FR-002, no heading concept on node
+   text). "normal" renders from the base rule; these two are the only
+   overrides needed. */
+.node-label-small {
+  font-size: 11px;
+}
+
+.node-label-large {
+  font-size: 16px;
+}
+
 .node-image {
   /* Sized at 28px by default (flex-basis), but flex-grow:1 lets it expand
      to fill any extra height once the node is resized larger — that's the

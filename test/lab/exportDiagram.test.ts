@@ -18,6 +18,43 @@ describe('parseDiagram', () => {
     expect(parsedNodes[0].data.label).toBe(HOSTILE_LABEL)
   })
 
+  it('round-trips labelSize for all three steps', () => {
+    const json = serializeDiagram(kitchenSinkNodes, kitchenSinkEdges)
+    const { nodes } = parseDiagram(json)
+    expect(nodes.find((node) => node.id === 'active-node')?.data.labelSize).toBe('large')
+    expect(nodes.find((node) => node.id === 'dim-node')?.data.labelSize).toBe('small')
+    expect(nodes.find((node) => node.id === 'default-node')?.data.labelSize).toBe('normal')
+  })
+
+  it('parses a legacy node with no labelSize as normal', () => {
+    const json = JSON.stringify({
+      nodes: [{ id: 'a', position: { x: 0, y: 0 }, data: { label: 'a' } }],
+      edges: [],
+    })
+    const { nodes } = parseDiagram(json)
+    expect(nodes[0].data.labelSize).toBe('normal')
+  })
+
+  it('falls back to normal for an unrecognized labelSize without affecting the rest of the node', () => {
+    const json = JSON.stringify({
+      nodes: [{ id: 'a', position: { x: 0, y: 0 }, data: { label: 'a', labelSize: 'huge' } }],
+      edges: [],
+    })
+    const { nodes } = parseDiagram(json)
+    expect(nodes[0].data.labelSize).toBe('normal')
+    expect(nodes[0].data.label).toBe('a')
+  })
+
+  it('emits an explicit labelSize on every node after re-export', () => {
+    const json = JSON.stringify({
+      nodes: [{ id: 'a', position: { x: 0, y: 0 }, data: { label: 'a' } }],
+      edges: [],
+    })
+    const { nodes } = parseDiagram(json)
+    const reexported = JSON.parse(serializeDiagram(nodes, []))
+    expect(reexported.nodes[0].data.labelSize).toBe('normal')
+  })
+
   it('drops width/height on untouched nodes so they keep auto-sizing', () => {
     const json = serializeDiagram(kitchenSinkNodes, kitchenSinkEdges)
     const { nodes } = parseDiagram(json)
