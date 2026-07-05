@@ -11,7 +11,7 @@ const NODE_HEIGHT = 40
 const CHAR_WIDTH = 7.5
 const NODE_PADDING_X = 28
 const CANVAS_MARGIN = 32
-const ICON_SIZE = 20
+const ICON_SIZE = 28
 const ICON_GAP = 6
 
 function nodeLabel(node: Node): string {
@@ -22,8 +22,16 @@ function nodeImage(node: Node): string | undefined {
   return typeof node.data.image === 'string' ? node.data.image : undefined
 }
 
+// Nodes stack their image above the label (like a captioned icon), so an
+// image only adds to the node's height, not its width.
 function nodeWidth(label: string, hasImage: boolean): number {
-  return Math.max(80, Math.round(label.length * CHAR_WIDTH) + NODE_PADDING_X + (hasImage ? ICON_SIZE + ICON_GAP : 0))
+  const textWidth = Math.round(label.length * CHAR_WIDTH) + NODE_PADDING_X
+  const minWidthForIcon = hasImage ? ICON_SIZE + NODE_PADDING_X : 0
+  return Math.max(80, textWidth, minWidthForIcon)
+}
+
+function nodeHeight(hasImage: boolean): number {
+  return hasImage ? NODE_HEIGHT + ICON_SIZE + ICON_GAP : NODE_HEIGHT
 }
 
 function escapeHtml(value: string): string {
@@ -47,7 +55,10 @@ export function generateDiagramCode(nodes: Node[], edges: Edge[], tokens: Design
   }
 
   const dims = new Map(
-    nodes.map((node) => [node.id, { width: nodeWidth(nodeLabel(node), Boolean(nodeImage(node))), height: NODE_HEIGHT }]),
+    nodes.map((node) => {
+      const hasImage = Boolean(nodeImage(node))
+      return [node.id, { width: nodeWidth(nodeLabel(node), hasImage), height: nodeHeight(hasImage) }]
+    }),
   )
   const minX = Math.min(...nodes.map((node) => node.position.x))
   const minY = Math.min(...nodes.map((node) => node.position.y))
@@ -68,6 +79,7 @@ export function generateDiagramCode(nodes: Node[], edges: Edge[], tokens: Design
         `width:${width}px`,
         `height:${height}px`,
         'display:flex',
+        'flex-direction:column',
         'align-items:center',
         'justify-content:center',
         'gap:6px',
@@ -75,14 +87,17 @@ export function generateDiagramCode(nodes: Node[], edges: Edge[], tokens: Design
         'border-radius:8px',
         `font-family:${tokens.bodyFont}`,
         'font-size:13px',
-        `opacity:${isDim ? 0.6 : 1}`,
+        'text-align:center',
+        // Dim nodes are de-emphasized via a dashed border + muted text only —
+        // never a blanket opacity, which would also wash out the node's image.
+        isDim ? 'color:rgba(0,0,0,0.55)' : '',
         isActive ? `box-shadow:0 0 0 1px ${tokens.primaryColor}66` : '',
       ]
         .filter(Boolean)
         .join('; ')
       const image = nodeImage(node)
       const imageTag = image
-        ? `<img src="${escapeHtml(image)}" alt="" style="width:${ICON_SIZE}px; height:${ICON_SIZE}px; object-fit:contain; border-radius:4px; flex:0 0 auto;" />`
+        ? `<img src="${escapeHtml(image)}" alt="" style="width:${ICON_SIZE}px; height:${ICON_SIZE}px; object-fit:contain; border-radius:6px; background:#fff; padding:3px; box-shadow:0 0 0 1px rgba(0,0,0,0.12); flex:0 0 auto;" />`
         : ''
       return `    <div style="${style}">${imageTag}<span>${escapeHtml(nodeLabel(node))}</span></div>`
     })
