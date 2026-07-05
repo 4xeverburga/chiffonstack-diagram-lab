@@ -54,10 +54,15 @@ export function generateDiagramCode(nodes: Node[], edges: Edge[], tokens: Design
     return '<!-- Diagram Lab: add nodes to the canvas before exporting code. -->'
   }
 
+  // A node the user manually resized (NodeResizer, in LabelNode.tsx) carries
+  // an explicit width/height — honor that instead of the auto-computed size
+  // so the exported code matches what's on the canvas.
   const dims = new Map(
     nodes.map((node) => {
       const hasImage = Boolean(nodeImage(node))
-      return [node.id, { width: nodeWidth(nodeLabel(node), hasImage), height: nodeHeight(hasImage) }]
+      const width = node.width ?? nodeWidth(nodeLabel(node), hasImage)
+      const height = node.height ?? nodeHeight(hasImage)
+      return [node.id, { width, height }]
     }),
   )
   const minX = Math.min(...nodes.map((node) => node.position.x))
@@ -85,6 +90,8 @@ export function generateDiagramCode(nodes: Node[], edges: Edge[], tokens: Design
         'gap:6px',
         `border:1px ${isDim ? 'dashed' : 'solid'} ${borderColor}`,
         'border-radius:8px',
+        'box-sizing:border-box',
+        'overflow:hidden',
         `font-family:${tokens.bodyFont}`,
         'font-size:13px',
         'text-align:center',
@@ -96,8 +103,10 @@ export function generateDiagramCode(nodes: Node[], edges: Edge[], tokens: Design
         .filter(Boolean)
         .join('; ')
       const image = nodeImage(node)
+      // Matches .node-image in App.css: flex-grow so a manually resized,
+      // taller node also renders a bigger, more legible image here.
       const imageTag = image
-        ? `<img src="${escapeHtml(image)}" alt="" style="width:${ICON_SIZE}px; height:${ICON_SIZE}px; object-fit:contain; border-radius:6px; background:#fff; padding:3px; box-shadow:0 0 0 1px rgba(0,0,0,0.12); flex:0 0 auto;" />`
+        ? `<img src="${escapeHtml(image)}" alt="" style="flex:1 1 ${ICON_SIZE}px; min-width:0; min-height:0; width:auto; max-width:100%; object-fit:contain; border-radius:6px; background:#fff; padding:3px; box-shadow:0 0 0 1px rgba(0,0,0,0.12);" />`
         : ''
       return `    <div style="${style}">${imageTag}<span>${escapeHtml(nodeLabel(node))}</span></div>`
     })

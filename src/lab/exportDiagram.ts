@@ -10,6 +10,11 @@ export function serializeDiagram(nodes: Node[], edges: Edge[]): string {
     position: node.position,
     data: { label: node.data.label, image: node.data.image },
     className: node.className,
+    // Present only once the user has manually resized the node (NodeResizer
+    // in LabelNode.tsx) — undefined otherwise, so JSON.stringify drops it and
+    // untouched nodes keep the auto-sizing behavior on re-import.
+    width: node.width,
+    height: node.height,
   }))
 
   const plainEdges = edges.map((edge) => ({

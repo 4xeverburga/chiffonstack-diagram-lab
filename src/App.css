@@ -296,17 +296,52 @@
   font-family: var(--token-body-font, var(--mono));
   font-size: 13px;
   text-align: center;
+  /* Nodes are resizable (see NodeResizer in LabelNode.tsx) — once the user
+     drags a resize handle, React Flow applies an explicit width/height to
+     this same element. box-sizing keeps padding/border inside that size
+     instead of growing past it. */
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.node-label {
+  flex: 0 0 auto;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .node-image {
-  flex: 0 0 auto;
-  width: 28px;
-  height: 28px;
+  /* Sized at 28px by default (flex-basis), but flex-grow:1 lets it expand
+     to fill any extra height once the node is resized larger — that's the
+     whole point of making nodes resizable: a bigger box means a bigger,
+     more legible image. */
+  flex: 1 1 28px;
+  min-width: 0;
+  min-height: 0;
+  width: auto;
+  max-width: 100%;
   object-fit: contain;
   border-radius: 6px;
   background: #fff;
   padding: 3px;
   box-shadow: 0 0 0 1px var(--border);
+}
+
+/* Resize handles/lines shown when a node is selected (NodeResizer in
+   LabelNode.tsx). Restyled from React Flow's default blue to match the
+   brand accent. */
+.node-resize-handle {
+  width: 8px !important;
+  height: 8px !important;
+  border-radius: 2px !important;
+  background: var(--token-primary, #ff4715) !important;
+  border: 1px solid #fff !important;
+}
+
+.node-resize-line {
+  border-color: var(--token-primary, #ff4715) !important;
 }
 
 .react-flow__node.node-active {
