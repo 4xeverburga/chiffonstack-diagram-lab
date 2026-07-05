@@ -42,14 +42,30 @@ export const kitchenSinkNodes: Node[] = [
 ]
 
 export const kitchenSinkEdges: Edge[] = [
-  { id: 'default-active', source: 'default-node', target: 'active-node', type: 'heat', data: { variant: 'default' } },
-  { id: 'active-dim', source: 'active-node', target: 'dim-node', type: 'heat', data: { variant: 'dashed' } },
+  // Thickness steps and a reversed heat-flow are spread across the edges so
+  // every export generator's tests exercise the 003 styling fields; the
+  // heat-static edge stays field-free to keep covering the legacy-default
+  // path (thickness "normal", direction "forward" on export).
+  {
+    id: 'default-active',
+    source: 'default-node',
+    target: 'active-node',
+    type: 'heat',
+    data: { variant: 'default', thickness: 'thin' },
+  },
+  {
+    id: 'active-dim',
+    source: 'active-node',
+    target: 'dim-node',
+    type: 'heat',
+    data: { variant: 'dashed', thickness: 'thick' },
+  },
   {
     id: 'image-resized',
     source: 'image-node',
     target: 'resized-node',
     type: 'heat',
-    data: { variant: 'heat-flow' },
+    data: { variant: 'heat-flow', thickness: 'normal', direction: 'reverse' },
   },
   {
     id: 'default-image',

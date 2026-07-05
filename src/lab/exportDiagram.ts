@@ -1,6 +1,25 @@
 import type { Edge, Node } from '@xyflow/react'
 import { HEAT_VARIANTS, type HeatVariant } from './heatVariants'
 import { LEGACY_SOURCE_SIDE, LEGACY_TARGET_SIDE, resolveHandleSide } from './handleSides'
+import { resolveDirection, resolveThickness } from './edgeStyle'
+
+// The canonical edge `data` is exactly these three fields. Both the
+// serializer and the parser build `data` through this whitelist, so
+// editor-runtime fields injected into rendered edges (primaryColor, toolbar
+// callbacks — App.tsx) can never leak into the JSON, and every recognized
+// value is emitted explicitly on export (contracts/edge-style.md guarantees
+// 4 and 5).
+function plainEdgeData(data: unknown) {
+  const record = isRecord(data) ? data : {}
+  const variant: HeatVariant = HEAT_VARIANTS.includes(record.variant as HeatVariant)
+    ? (record.variant as HeatVariant)
+    : 'default'
+  return {
+    variant,
+    thickness: resolveThickness(record.thickness),
+    direction: resolveDirection(record.direction),
+  }
+}
 
 // Strips React Flow's internal/runtime fields down to the canonical shape
 // (specs/001-export-suite/data-model.md). Shared by the JSON export, the
@@ -25,7 +44,7 @@ export function toPlainDiagram(nodes: Node[], edges: Edge[]) {
     source: edge.source,
     target: edge.target,
     type: edge.type,
-    data: edge.data,
+    data: plainEdgeData(edge.data),
     // Always written explicitly (even for edges still holding the legacy
     // right/left default), so a re-export of an imported pre-002 diagram
     // upgrades it to explicit sides rather than staying implicit (FR-004,
@@ -86,18 +105,17 @@ function parsePlainEdge(value: unknown, index: number): Edge {
   if (typeof value.source !== 'string' || typeof value.target !== 'string') {
     throw new Error(`Diagram Lab: edge "${value.id}" is missing a string "source"/"target".`)
   }
-  const rawVariant = isRecord(value.data) ? value.data.variant : undefined
-  const variant: HeatVariant = HEAT_VARIANTS.includes(rawVariant as HeatVariant) ? (rawVariant as HeatVariant) : 'default'
   // Each endpoint falls back to its own legacy default independently — an
   // edge with a valid sourceHandle but an unrecognized targetHandle keeps
   // its valid side and only the bad endpoint is replaced (FR-008, contracts/
-  // edge-attachments.md guarantee 3).
+  // edge-attachments.md guarantee 3). plainEdgeData applies the same
+  // per-field tolerance to variant/thickness/direction.
   return {
     id: value.id,
     source: value.source,
     target: value.target,
     type: typeof value.type === 'string' ? value.type : 'heat',
-    data: { variant },
+    data: plainEdgeData(value.data),
     sourceHandle: resolveHandleSide(value.sourceHandle, LEGACY_SOURCE_SIDE),
     targetHandle: resolveHandleSide(value.targetHandle, LEGACY_TARGET_SIDE),
   }

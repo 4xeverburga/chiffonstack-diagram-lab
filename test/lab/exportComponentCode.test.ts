@@ -71,6 +71,25 @@ describe('exportComponentCode', () => {
     expect(tsx).toContain('"variant": "default"')
   })
 
+  it('serializes thickness/direction and renders them as edge classes', () => {
+    const { tsx } = exportComponentCode(kitchenSinkNodes, kitchenSinkEdges, DEFAULT_DESIGN_TOKENS)
+    expect(tsx).toContain('"thickness": "thin"')
+    expect(tsx).toContain('"thickness": "thick"')
+    expect(tsx).toContain('"direction": "reverse"')
+    // Legacy edge (no fields on the fixture) is normalized to explicit values.
+    expect(tsx).toContain('"thickness": "normal"')
+    expect(tsx).toContain('edge-w-${thickness}')
+    expect(tsx).toContain("direction === 'reverse' ? ' edge-reverse' : ''")
+  })
+
+  it('emits the thickness width rules and the reverse animation rule in the generated CSS', () => {
+    const { css } = exportComponentCode(kitchenSinkNodes, kitchenSinkEdges, DEFAULT_DESIGN_TOKENS)
+    expect(css).toMatch(/\.chiffon-diagram \.edge-w-thin \{\s*stroke-width: 1\.5;/)
+    expect(css).toMatch(/\.chiffon-diagram \.edge-w-thick \{\s*stroke-width: 4;/)
+    expect(css).toMatch(/\.chiffon-diagram \.edge-reverse \{\s*animation-direction: reverse;/)
+    expect(css).not.toContain('.edge-w-normal')
+  })
+
   it('includes the heat-flow keyframes and a reduced-motion override', () => {
     const { css } = exportComponentCode(kitchenSinkNodes, kitchenSinkEdges, DEFAULT_DESIGN_TOKENS)
     expect(css).toContain('@keyframes chiffon-heat-flow')

@@ -43,10 +43,20 @@ describe('exportSvg', () => {
     expect(svg).toContain('class="node node-active"')
     expect(svg).toContain('class="node node-dim"')
     expect(svg).toContain('<image href="data:image/png;base64,')
-    expect(svg).toContain('class="edge edge-default"')
-    expect(svg).toContain('class="edge edge-dashed"')
-    expect(svg).toContain('class="edge edge-heat-flow"')
-    expect(svg).toContain('class="edge edge-heat-static"')
+    expect(svg).toContain('class="edge edge-default edge-w-thin"')
+    expect(svg).toContain('class="edge edge-dashed edge-w-thick"')
+    expect(svg).toContain('class="edge edge-heat-flow edge-w-normal edge-reverse"')
+    expect(svg).toContain('class="edge edge-heat-static edge-w-normal"')
+  })
+
+  it('embeds the thickness width rules and the reverse animation rule', () => {
+    const svg = exportSvg(kitchenSinkNodes, kitchenSinkEdges, DEFAULT_DESIGN_TOKENS)
+    expect(svg).toMatch(/\.edge-w-thin\s*\{\s*stroke-width: 1\.5;/)
+    expect(svg).toMatch(/\.edge-w-thick\s*\{\s*stroke-width: 4;/)
+    expect(svg).toMatch(/\.edge-reverse\s*\{\s*animation-direction: reverse;/)
+    // No .edge-w-normal rule: "normal" renders each variant's baseline width
+    // so pre-003 diagrams look identical (contracts/edge-style.md).
+    expect(svg).not.toContain('.edge-w-normal')
   })
 
   it('honors a manually resized node dimensions', () => {
@@ -59,7 +69,7 @@ describe('exportSvg', () => {
     const explicitSideEdges = [{ ...kitchenSinkEdges[0], sourceHandle: 'top', targetHandle: 'bottom' }]
     const defaultSvg = exportSvg(kitchenSinkNodes, defaultSideEdges, DEFAULT_DESIGN_TOKENS)
     const explicitSvg = exportSvg(kitchenSinkNodes, explicitSideEdges, DEFAULT_DESIGN_TOKENS)
-    const pathFrom = (svg: string) => svg.match(/<path class="edge edge-default" d="([^"]+)"/)?.[1]
+    const pathFrom = (svg: string) => svg.match(/<path class="edge edge-default[^"]*" d="([^"]+)"/)?.[1]
     expect(pathFrom(explicitSvg)).not.toBe(pathFrom(defaultSvg))
   })
 

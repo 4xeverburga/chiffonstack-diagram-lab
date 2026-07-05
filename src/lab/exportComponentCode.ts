@@ -1,5 +1,6 @@
 import type { Edge, Node } from '@xyflow/react'
 import type { DesignTokens } from './designTokens'
+import { THICKNESS_STROKE_WIDTH } from './edgeStyle'
 import { toPlainDiagram } from './exportDiagram'
 
 // Generates a self-contained React Flow component that reproduces the
@@ -75,8 +76,10 @@ function DiagramLabelNode({ data }: NodeProps) {
 
 function DiagramHeatEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, data }: EdgeProps) {
   const [edgePath] = getBezierPath({ sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition })
-  const variant = (data as { variant?: string } | undefined)?.variant ?? 'default'
+  const { variant = 'default', thickness = 'normal', direction = 'forward' } =
+    (data as { variant?: string; thickness?: string; direction?: string } | undefined) ?? {}
   const isHeat = variant === 'heat-flow' || variant === 'heat-static'
+  const edgeClass = \`edge edge-\${variant} edge-w-\${thickness}\${direction === 'reverse' ? ' edge-reverse' : ''}\`
   const gradientId = \`chiffon-heat-gradient-\${id}\`
   return (
     <>
@@ -88,7 +91,7 @@ function DiagramHeatEdge({ id, sourceX, sourceY, targetX, targetY, sourcePositio
           </linearGradient>
         </defs>
       ) : null}
-      <BaseEdge id={id} path={edgePath} className={\`edge edge-\${variant}\`} style={isHeat ? { stroke: \`url(#\${gradientId})\` } : undefined} />
+      <BaseEdge id={id} path={edgePath} className={edgeClass} style={isHeat ? { stroke: \`url(#\${gradientId})\` } : undefined} />
     </>
   )
 }
@@ -221,6 +224,21 @@ export default function Diagram() {
 
 .chiffon-diagram .edge-default {
   stroke: var(--token-secondary, #ccc);
+}
+
+/* Thickness steps: only thin/thick override — "normal" keeps each
+   variant's baseline width above, matching the editor canvas exactly. */
+.chiffon-diagram .edge-w-thin {
+  stroke-width: ${THICKNESS_STROKE_WIDTH.thin};
+}
+
+.chiffon-diagram .edge-w-thick {
+  stroke-width: ${THICKNESS_STROKE_WIDTH.thick};
+}
+
+/* Reverses heat-flow playback; inert on variants without an animation. */
+.chiffon-diagram .edge-reverse {
+  animation-direction: reverse;
 }
 
 @keyframes chiffon-heat-flow {

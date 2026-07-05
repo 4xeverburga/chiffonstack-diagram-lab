@@ -84,6 +84,63 @@ describe('parseDiagram', () => {
     expect(edges[0].targetHandle).toBe('left')
   })
 
+  it('round-trips edge thickness and direction', () => {
+    const nodes = [kitchenSinkNodes[0], kitchenSinkNodes[1]]
+    const edges = [
+      { id: 'e1', source: 'default-node', target: 'active-node', type: 'heat', data: { variant: 'heat-flow', thickness: 'thick', direction: 'reverse' } },
+      { id: 'e2', source: 'default-node', target: 'active-node', type: 'heat', data: { variant: 'default', thickness: 'thin', direction: 'forward' } },
+    ]
+    const json = serializeDiagram(nodes, edges)
+    const { edges: parsedEdges } = parseDiagram(json)
+    expect(parsedEdges.map((edge) => [edge.data?.thickness, edge.data?.direction])).toEqual([
+      ['thick', 'reverse'],
+      ['thin', 'forward'],
+    ])
+  })
+
+  it('defaults thickness/direction on a pre-003 edge and falls back per-field on unknown values', () => {
+    const json = JSON.stringify({
+      nodes: [
+        { id: 'a', position: { x: 0, y: 0 }, data: { label: 'a' } },
+        { id: 'b', position: { x: 100, y: 0 }, data: { label: 'b' } },
+      ],
+      edges: [
+        { id: 'legacy', source: 'a', target: 'b', data: { variant: 'dashed' } },
+        { id: 'hand-edited', source: 'a', target: 'b', data: { variant: 'heat-flow', thickness: 'chunky', direction: 'reverse' } },
+      ],
+    })
+    const { edges } = parseDiagram(json)
+    expect(edges[0].data).toEqual({ variant: 'dashed', thickness: 'normal', direction: 'forward' })
+    // Only the bad field falls back; the valid direction is kept.
+    expect(edges[1].data).toEqual({ variant: 'heat-flow', thickness: 'normal', direction: 'reverse' })
+  })
+
+  it('strips editor-runtime fields from edge data so they never reach the JSON', () => {
+    const nodes = [kitchenSinkNodes[0], kitchenSinkNodes[1]]
+    const edges = [
+      {
+        id: 'e1',
+        source: 'default-node',
+        target: 'active-node',
+        type: 'heat',
+        data: { variant: 'heat-flow', thickness: 'thick', direction: 'forward', primaryColor: '#ff4715', onCycleThickness: () => {} },
+      },
+    ]
+    const serialized = JSON.parse(serializeDiagram(nodes, edges)) as { edges: Array<{ data: Record<string, unknown> }> }
+    expect(serialized.edges[0].data).toEqual({ variant: 'heat-flow', thickness: 'thick', direction: 'forward' })
+  })
+
+  it('emits explicit thickness/direction when re-exporting an imported legacy diagram', () => {
+    const json = JSON.stringify({
+      nodes: [{ id: 'a', position: { x: 0, y: 0 }, data: { label: 'a' } }],
+      edges: [{ id: 'e1', source: 'a', target: 'a', data: { variant: 'default' } }],
+    })
+    const { nodes, edges } = parseDiagram(json)
+    const reExported = JSON.parse(serializeDiagram(nodes, edges)) as { edges: Array<{ data: Record<string, unknown> }> }
+    expect(reExported.edges[0].data.thickness).toBe('normal')
+    expect(reExported.edges[0].data.direction).toBe('forward')
+  })
+
   it('assigns the legacy right/left sides to a pre-feature edge with no handle fields', () => {
     const json = JSON.stringify({
       nodes: [

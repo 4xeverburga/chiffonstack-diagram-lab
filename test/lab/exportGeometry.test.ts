@@ -49,6 +49,17 @@ describe('computeEdgePaths', () => {
     expect(second).toEqual(first)
   })
 
+  it('carries each edge\'s thickness and direction, defaulting legacy edges', () => {
+    const boxes = computeNodeBoxes(kitchenSinkNodes)
+    const paths = computeEdgePaths(kitchenSinkEdges, boxes)
+    const byId = new Map(paths.map((path) => [path.id, path]))
+    expect(byId.get('default-active')).toMatchObject({ thickness: 'thin', direction: 'forward' })
+    expect(byId.get('active-dim')).toMatchObject({ thickness: 'thick', direction: 'forward' })
+    expect(byId.get('image-resized')).toMatchObject({ thickness: 'normal', direction: 'reverse' })
+    // heat-static edge carries no styling fields → parser-identical defaults.
+    expect(byId.get('default-image')).toMatchObject({ thickness: 'normal', direction: 'forward' })
+  })
+
   it('anchors an edge with no recorded sides at the legacy right/left pair', () => {
     const boxes = computeNodeBoxes(kitchenSinkNodes)
     const sourceBox = boxes.get('default-node')!

@@ -2,6 +2,7 @@ import { useState, type ChangeEvent } from 'react'
 import type { Edge, Node } from '@xyflow/react'
 import { classNameForKind, type NodeKind } from './nodeKinds'
 import { HEAT_VARIANTS, type HeatVariant } from './heatVariants'
+import { EDGE_THICKNESSES, resolveDirection, resolveThickness, type EdgeThickness } from './edgeStyle'
 import { IMAGE_SIZE_WARNING_BYTES, IMAGE_UPLOAD_ACCEPT, readImageFile } from './imageUpload'
 
 const NODE_KINDS: NodeKind[] = ['default', 'active', 'dim']
@@ -13,6 +14,8 @@ type InspectorProps = {
   onSetNodeKind: (id: string, kind: NodeKind) => void
   onSetNodeImage: (id: string, image: string | undefined) => void
   onSetEdgeVariant: (id: string, variant: HeatVariant) => void
+  onSetEdgeThickness: (id: string, thickness: EdgeThickness) => void
+  onReverseEdgeDirection: (id: string) => void
   onDeleteEdge: (id: string) => void
 }
 
@@ -25,6 +28,8 @@ export function Inspector({
   onSetNodeKind,
   onSetNodeImage,
   onSetEdgeVariant,
+  onSetEdgeThickness,
+  onReverseEdgeDirection,
   onDeleteEdge,
 }: InspectorProps) {
   // Must stay unconditional (Rules of Hooks) even though it's only read in
@@ -102,6 +107,8 @@ export function Inspector({
 
   if (selectedEdge) {
     const variant = ((selectedEdge.data as { variant?: HeatVariant } | undefined)?.variant) ?? 'default'
+    const thickness = resolveThickness((selectedEdge.data as { thickness?: unknown } | undefined)?.thickness)
+    const direction = resolveDirection((selectedEdge.data as { direction?: unknown } | undefined)?.direction)
     return (
       <aside key={`edge-${selectedEdge.id}`} className="lab-inspector lab-inspector-flash">
         <h2 className="lab-panel-title">Edge</h2>
@@ -120,6 +127,35 @@ export function Inspector({
             ))}
           </div>
         </div>
+        <div className="lab-field">
+          <span>Thickness</span>
+          <div className="lab-button-row">
+            {EDGE_THICKNESSES.map((step) => (
+              <button
+                key={step}
+                type="button"
+                className={`chip ${thickness === step ? 'chip-active' : ''}`}
+                onClick={() => onSetEdgeThickness(selectedEdge.id, step)}
+              >
+                {step}
+              </button>
+            ))}
+          </div>
+        </div>
+        {variant === 'heat-flow' ? (
+          <div className="lab-field">
+            <span>Flow direction</span>
+            <div className="lab-button-row">
+              <button
+                type="button"
+                className={`chip ${direction === 'reverse' ? 'chip-active' : ''}`}
+                onClick={() => onReverseEdgeDirection(selectedEdge.id)}
+              >
+                {direction === 'reverse' ? 'reversed' : 'reverse'}
+              </button>
+            </div>
+          </div>
+        ) : null}
         <button type="button" className="lab-danger" onClick={() => onDeleteEdge(selectedEdge.id)}>
           Delete edge
         </button>
