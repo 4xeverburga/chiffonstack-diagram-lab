@@ -41,6 +41,7 @@ import { AlignmentGuides } from './lab/AlignmentGuides'
 import { DEFAULT_DESIGN_TOKENS, type DesignTokens } from './lab/designTokens'
 import { useSimulation } from './sim/useSimulation'
 import { createSimStore, hasGeneratorRole, selectEdgeMetrics, selectNodeMetrics, useSimStore } from './sim/store'
+import { DEFAULT_TRAFFIC_SCALE, SIGMOID_MAPPING_BY_TRAFFIC_SCALE, type TrafficScale } from './engine/config'
 
 const nodeTypes = { labelNode: LabelNode }
 const edgeTypes = { heat: HeatEdge }
@@ -61,6 +62,11 @@ function LabEditor() {
   // toggled by onConnectStart/onConnectEnd below and read by App.css to reveal
   // every node's handles for the duration of the drag (US2, research.md R4).
   const [connecting, setConnecting] = useState(false)
+  // Which order-of-magnitude of req/s counts as "a lot" for this diagram's
+  // architecture (src/engine/config.ts) — purely a rendering choice for
+  // HeatEdge's animation mapping, not sent to the worker at all (the
+  // engine itself has no notion of "peak" traffic).
+  const [trafficScale, setTrafficScale] = useState<TrafficScale>(DEFAULT_TRAFFIC_SCALE)
 
   const mutations = useDiagramMutations(setNodes, setEdges)
 
@@ -106,9 +112,10 @@ function LabEditor() {
           onCycleThickness: mutations.cycleEdgeThickness,
           onReverseDirection: mutations.reverseEdgeDirection,
           simMetrics: latestWindow ? (selectEdgeMetrics(latestWindow, edge.id) ?? { throughputPerSec: 0 }) : undefined,
+          mappingConfig: SIGMOID_MAPPING_BY_TRAFFIC_SCALE[trafficScale],
         },
       })),
-    [edges, tokens.primaryColor, mutations.cycleEdgeThickness, mutations.reverseEdgeDirection, latestWindow],
+    [edges, tokens.primaryColor, mutations.cycleEdgeThickness, mutations.reverseEdgeDirection, latestWindow, trafficScale],
   )
 
   // Nodes touched by the current selection (a selected node itself, or
@@ -308,9 +315,11 @@ function LabEditor() {
           runStatus={runStatus}
           statusMessage={statusMessage}
           hasGenerator={hasGenerator}
+          trafficScale={trafficScale}
           onStart={simActions.start}
           onPause={simActions.pause}
           onReset={simActions.reset}
+          onChangeTrafficScale={setTrafficScale}
         />
         <button type="button" className="lab-export" onClick={handleExportJson}>
           {jsonExportLabel}

@@ -4,6 +4,7 @@ import type { HeatVariant } from './heatVariants'
 import { edgeStyleClassNames, resolveDirection, resolveThickness } from './edgeStyle'
 import { EdgeToolbar } from './EdgeToolbar'
 import { DEFAULT_SIGMOID_MAPPING_CONFIG, DEFAULT_FLOW_SMOOTHING_CONFIG } from '../engine/config'
+import type { SigmoidMappingConfig } from '../engine/sigmoidMapping'
 import { createInitialFlowAnimationState, updateFlowAnimationState, type FlowAnimationState } from '../engine/flowAnimationSmoothing'
 
 // The "flowing heat path" edge from the Langflow/n8n reference: a live path
@@ -30,11 +31,13 @@ export function HeatEdge({
   const {
     variant = 'default',
     primaryColor = '#ff4715',
+    mappingConfig = DEFAULT_SIGMOID_MAPPING_CONFIG,
     onCycleThickness,
     onReverseDirection,
   } = (data as {
     variant?: HeatVariant
     primaryColor?: string
+    mappingConfig?: SigmoidMappingConfig
     onCycleThickness?: (id: string) => void
     onReverseDirection?: (id: string) => void
   } | undefined) ?? {}
@@ -51,27 +54,26 @@ export function HeatEdge({
   // per-window reading is noisy (Poisson variance), so it's smoothed
   // through flowAnimationSmoothing before it ever reaches CSS — see that
   // module for the two-timescale EMA + hysteresis/hold-time design.
+  // mappingConfig rides in on data (App.tsx, from the traffic-scale
+  // dropdown) rather than always using the fixed default — what counts as
+  // "fast"/"saturated" throughput is architecture-dependent (src/engine/
+  // config.ts's SIGMOID_MAPPING_BY_TRAFFIC_SCALE), so it must be tunable
+  // per diagram, not a single hardcoded curve for every project.
   const throughputPerSec = (data as { simMetrics?: { throughputPerSec: number } } | undefined)?.simMetrics?.throughputPerSec
-  const smoothingRef = useRef<FlowAnimationState>(createInitialFlowAnimationState(DEFAULT_SIGMOID_MAPPING_CONFIG))
+  const smoothingRef = useRef<FlowAnimationState>(createInitialFlowAnimationState(mappingConfig))
   const [committedAnimation, setCommittedAnimation] = useState(() => smoothingRef.current.committed)
 
   useEffect(() => {
     if (throughputPerSec === undefined) {
       // Simulation stopped/reset — start the next run's smoothing fresh
       // rather than resuming from a stale baseline.
-      smoothingRef.current = createInitialFlowAnimationState(DEFAULT_SIGMOID_MAPPING_CONFIG)
+      smoothingRef.current = createInitialFlowAnimationState(mappingConfig)
       return
     }
-    const next = updateFlowAnimationState(
-      smoothingRef.current,
-      throughputPerSec,
-      Date.now(),
-      DEFAULT_FLOW_SMOOTHING_CONFIG,
-      DEFAULT_SIGMOID_MAPPING_CONFIG,
-    )
+    const next = updateFlowAnimationState(smoothingRef.current, throughputPerSec, Date.now(), DEFAULT_FLOW_SMOOTHING_CONFIG, mappingConfig)
     smoothingRef.current = next
     setCommittedAnimation((current) => (next.committed === current ? current : next.committed))
-  }, [throughputPerSec])
+  }, [throughputPerSec, mappingConfig])
 
   const flowStyle: CSSProperties | undefined =
     throughputPerSec === undefined

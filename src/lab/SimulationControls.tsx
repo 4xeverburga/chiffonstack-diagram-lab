@@ -1,12 +1,15 @@
 import type { RunStatus } from '../sim/workerProtocol'
+import { TRAFFIC_SCALE_LABELS, type TrafficScale } from '../engine/config'
 
 type SimulationControlsProps = {
   runStatus: RunStatus
   statusMessage: string | undefined
   hasGenerator: boolean
+  trafficScale: TrafficScale
   onStart: () => void
   onPause: () => void
   onReset: () => void
+  onChangeTrafficScale: (scale: TrafficScale) => void
 }
 
 // Persistent Start/Pause/Reset bar (FR-003) — replaces ExportBar's slot at
@@ -18,9 +21,11 @@ export function SimulationControls({
   runStatus,
   statusMessage,
   hasGenerator,
+  trafficScale,
   onStart,
   onPause,
   onReset,
+  onChangeTrafficScale,
 }: SimulationControlsProps) {
   const canStart = hasGenerator && runStatus !== 'running'
   const canPause = runStatus === 'running'
@@ -38,6 +43,16 @@ export function SimulationControls({
           Reset
         </button>
       </div>
+      <label className="sim-scale-select">
+        <span>Peak traffic</span>
+        <select value={trafficScale} onChange={(event) => onChangeTrafficScale(event.target.value as TrafficScale)}>
+          {(Object.keys(TRAFFIC_SCALE_LABELS) as TrafficScale[]).map((scale) => (
+            <option key={scale} value={scale}>
+              {TRAFFIC_SCALE_LABELS[scale]}
+            </option>
+          ))}
+        </select>
+      </label>
       {!hasGenerator ? (
         <span className="sim-controls-message">Add a load generator node to start the simulation.</span>
       ) : null}

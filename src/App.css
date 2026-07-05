@@ -67,6 +67,30 @@
   cursor: default;
 }
 
+.sim-scale-select {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text);
+}
+
+.sim-scale-select select {
+  font-family: var(--mono);
+  font-size: 12px;
+  padding: 5px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-h);
+  cursor: pointer;
+}
+
+.sim-scale-select select:hover {
+  border-color: #ff4715;
+}
+
 .sim-controls-message {
   font-family: var(--mono);
   font-size: 12px;
