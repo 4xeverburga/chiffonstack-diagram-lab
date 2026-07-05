@@ -24,8 +24,8 @@ description: "Task list for Node Connection Handles"
 
 **Purpose**: The single shared vocabulary every user story consumes — side names, legacy defaults, and side→Position/anchor math. Nothing below can start until this exists.
 
-- [ ] T001 Create `src/lab/handleSides.ts`: `HANDLE_SIDES` const array + derived `HandleSide` type ("top" | "bottom" | "left" | "right"), `isHandleSide` type guard, `LEGACY_SOURCE_SIDE = "right"` / `LEGACY_TARGET_SIDE = "left"` constants, a side→`Position` map (for `LabelNode`/generated component), and a pure helper that returns the anchor point + `Position` on a `NodeBox` for a given side (for `exportGeometry.ts`)
-- [ ] T002 [P] Add `test/lab/handleSides.test.ts`: covers `HANDLE_SIDES`/`isHandleSide`, the legacy default constants, and the anchor-point helper for all four sides against a sample `NodeBox`
+- [x] T001 Create `src/lab/handleSides.ts`: `HANDLE_SIDES` const array + derived `HandleSide` type ("top" | "bottom" | "left" | "right"), `isHandleSide` type guard, `LEGACY_SOURCE_SIDE = "right"` / `LEGACY_TARGET_SIDE = "left"` constants, a side→`Position` map (for `LabelNode`/generated component), and a pure helper that returns the anchor point + `Position` on a `NodeBox` for a given side (for `exportGeometry.ts`)
+- [x] T002 [P] Add `test/lab/handleSides.test.ts`: covers `HANDLE_SIDES`/`isHandleSide`, the legacy default constants, and the anchor-point helper for all four sides against a sample `NodeBox`
 
 **Checkpoint**: Foundation ready — user story work can begin.
 
@@ -39,9 +39,9 @@ description: "Task list for Node Connection Handles"
 
 ### Implementation for User Story 1
 
-- [ ] T003 [US1] In `src/lab/LabelNode.tsx`, replace the two fixed `Handle` elements with four `Handle type="source"` elements (ids `"top"`, `"bottom"`, `"left"`, `"right"`), positioned via `handleSides.ts`'s side→`Position` map
-- [ ] T004 [US1] In `src/App.tsx`, set `connectionMode="loose"` on `<ReactFlow>` and add an `isValidConnection` that rejects a connection where `source === target` (self-loop, per research.md R6)
-- [ ] T005 [US1] In `src/App.tsx`, verify `onConnect` forwards the dragged connection's `sourceHandle`/`targetHandle` onto the new edge unchanged (the current `addEdge({ ...connection, ... })` spread already carries them — confirm no field is stripped and add a short comment recording this invariant)
+- [x] T003 [US1] In `src/lab/LabelNode.tsx`, replace the two fixed `Handle` elements with four `Handle type="source"` elements (ids `"top"`, `"bottom"`, `"left"`, `"right"`), positioned via `handleSides.ts`'s side→`Position` map
+- [x] T004 [US1] In `src/App.tsx`, set `connectionMode="loose"` on `<ReactFlow>` and add an `isValidConnection` that rejects a connection where `source === target` (self-loop, per research.md R6)
+- [x] T005 [US1] In `src/App.tsx`, verify `onConnect` forwards the dragged connection's `sourceHandle`/`targetHandle` onto the new edge unchanged (the current `addEdge({ ...connection, ... })` spread already carries them — confirm no field is stripped and add a short comment recording this invariant)
 
 **Checkpoint**: User Story 1 is fully functional — any side can connect to any side, verified manually per the Independent Test above.
 
@@ -55,14 +55,14 @@ description: "Task list for Node Connection Handles"
 
 ### Implementation for User Story 3
 
-- [ ] T006 [US3] In `src/lab/exportDiagram.ts`, extend `toPlainDiagram` to serialize each edge's `sourceHandle`/`targetHandle`
-- [ ] T007 [US3] In `src/lab/exportDiagram.ts`, extend `parsePlainEdge` to validate `sourceHandle`/`targetHandle` against `HANDLE_SIDES` (from `handleSides.ts`), falling back to `LEGACY_SOURCE_SIDE`/`LEGACY_TARGET_SIDE` independently per endpoint when a field is missing or unrecognized (depends on T001, T006)
-- [ ] T008 [P] [US3] Extend `test/lab/exportDiagram.test.ts`: a round-trip test covering 3+ distinct side combinations, and a test asserting each endpoint falls back to its own legacy default independently when the other endpoint's value is valid
-- [ ] T009 [US3] In `src/lab/exportGeometry.ts`, extend `computeEdgePaths` to read each edge's `sourceHandle`/`targetHandle` (via the T001 helper, defaulting through `parsePlainEdge`'s resolved values) and anchor/position the bezier path on the matching side of each node's box, replacing the hardcoded right→left pair (depends on T001)
-- [ ] T010 [P] [US3] Extend `test/lab/exportGeometry.test.ts` with cases spanning multiple side combinations, asserting the computed path's endpoint coordinates land on the expected side of each node's box
-- [ ] T011 [US3] In `src/lab/exportComponentCode.ts`, update the generated `DiagramLabelNode`/CSS to render the same four handles (ids matching `handleSides.ts`, hidden via generated CSS) and give the generated `<ReactFlow>` `connectionMode="loose"` (depends on T001, T003)
-- [ ] T012 [P] [US3] Extend `test/lab/exportComponentCode.test.ts` asserting the generated `tsx` includes all four handle ids and `connectionMode="loose"`
-- [ ] T013 [P] [US3] Extend `test/lab/exportSvg.test.ts` asserting exported edge paths reflect each edge's recorded side attachments for a non-default side combination (via the updated `computeEdgePaths`)
+- [x] T006 [US3] In `src/lab/exportDiagram.ts`, extend `toPlainDiagram` to serialize each edge's `sourceHandle`/`targetHandle`
+- [x] T007 [US3] In `src/lab/exportDiagram.ts`, extend `parsePlainEdge` to validate `sourceHandle`/`targetHandle` against `HANDLE_SIDES` (from `handleSides.ts`), falling back to `LEGACY_SOURCE_SIDE`/`LEGACY_TARGET_SIDE` independently per endpoint when a field is missing or unrecognized (depends on T001, T006)
+- [x] T008 [P] [US3] Extend `test/lab/exportDiagram.test.ts`: a round-trip test covering 3+ distinct side combinations, and a test asserting each endpoint falls back to its own legacy default independently when the other endpoint's value is valid
+- [x] T009 [US3] In `src/lab/exportGeometry.ts`, extend `computeEdgePaths` to read each edge's `sourceHandle`/`targetHandle` (via the T001 helper, defaulting through `parsePlainEdge`'s resolved values) and anchor/position the bezier path on the matching side of each node's box, replacing the hardcoded right→left pair (depends on T001)
+- [x] T010 [P] [US3] Extend `test/lab/exportGeometry.test.ts` with cases spanning multiple side combinations, asserting the computed path's endpoint coordinates land on the expected side of each node's box
+- [x] T011 [US3] In `src/lab/exportComponentCode.ts`, update the generated `DiagramLabelNode`/CSS to render the same four handles (ids matching `handleSides.ts`, hidden via generated CSS) and give the generated `<ReactFlow>` `connectionMode="loose"` (depends on T001, T003)
+- [x] T012 [P] [US3] Extend `test/lab/exportComponentCode.test.ts` asserting the generated `tsx` includes all four handle ids and `connectionMode="loose"`
+- [x] T013 [P] [US3] Extend `test/lab/exportSvg.test.ts` asserting exported edge paths reflect each edge's recorded side attachments for a non-default side combination (via the updated `computeEdgePaths`)
 
 **Checkpoint**: Side attachments now flow, unbroken, through JSON, component code, and SVG exports.
 
@@ -76,10 +76,10 @@ description: "Task list for Node Connection Handles"
 
 ### Implementation for User Story 2
 
-- [ ] T014 [US2] Create `src/lab/useHandleVisibility.ts`: a pure function that derives the set of node ids whose handles should be visible from the current selection (selected node ids, plus both endpoint ids of every selected edge), wrapped in a small hook that memoizes it over `nodes`/`edges`/`selection`
-- [ ] T015 [P] [US2] Add `test/lab/useHandleVisibility.test.ts` for the pure function: empty selection → empty set; selected node → that node's id; selected edge → both endpoint ids; overlapping selections dedupe
-- [ ] T016 [US2] In `src/App.tsx`, wire `useHandleVisibility` in: apply a `"handles-visible"` class to nodes in the derived set, and toggle a `"connecting"` class on the canvas wrapper via `onConnectStart`/`onConnectEnd` (depends on T014)
-- [ ] T017 [US2] In `src/App.css`, add handle-visibility rules: handles hidden by default (`opacity: 0`, pointer events retained so a hover-then-drag still works), revealed by `.react-flow__node:hover`, `.react-flow__node.selected`, `.react-flow__node.handles-visible`, and `.lab-canvas.connecting` (per research.md R4)
+- [x] T014 [US2] Create `src/lab/useHandleVisibility.ts`: a pure function that derives the set of node ids whose handles should be visible from the current selection (selected node ids, plus both endpoint ids of every selected edge), wrapped in a small hook that memoizes it over `nodes`/`edges`/`selection`
+- [x] T015 [P] [US2] Add `test/lab/useHandleVisibility.test.ts` for the pure function: empty selection → empty set; selected node → that node's id; selected edge → both endpoint ids; overlapping selections dedupe
+- [x] T016 [US2] In `src/App.tsx`, wire `useHandleVisibility` in: apply a `"handles-visible"` class to nodes in the derived set, and toggle a `"connecting"` class on the canvas wrapper via `onConnectStart`/`onConnectEnd` (depends on T014)
+- [x] T017 [US2] In `src/App.css`, add handle-visibility rules: handles hidden by default (`opacity: 0`, pointer events retained so a hover-then-drag still works), revealed by `.react-flow__node:hover`, `.react-flow__node.selected`, `.react-flow__node.handles-visible`, and `.lab-canvas.connecting` (per research.md R4)
 
 **Checkpoint**: Canvas is clean at rest; handles appear only during the interactions above, verified manually per the Independent Test.
 
@@ -93,8 +93,8 @@ description: "Task list for Node Connection Handles"
 
 ### Implementation for User Story 4
 
-- [ ] T018 [P] [US4] Add a pre-feature diagram fixture (edges with no `sourceHandle`/`targetHandle` fields) to `test/lab/fixtures/kitchenSink.ts` or a new `test/lab/fixtures/legacyDiagram.ts`
-- [ ] T019 [US4] Extend `test/lab/exportDiagram.test.ts`: importing the legacy fixture assigns `sourceHandle: "right"` / `targetHandle: "left"` to every edge (FR-007), and re-serializing the parsed result emits those sides explicitly (FR-004, US4 scenario 2) — depends on T007, T018
+- [x] T018 [P] [US4] Add a pre-feature diagram fixture (edges with no `sourceHandle`/`targetHandle` fields) to `test/lab/fixtures/kitchenSink.ts` or a new `test/lab/fixtures/legacyDiagram.ts`
+- [x] T019 [US4] Extend `test/lab/exportDiagram.test.ts`: importing the legacy fixture assigns `sourceHandle: "right"` / `targetHandle: "left"` to every edge (FR-007), and re-serializing the parsed result emits those sides explicitly (FR-004, US4 scenario 2) — depends on T007, T018
 
 **Checkpoint**: All four user stories are independently functional and testable.
 
@@ -104,9 +104,9 @@ description: "Task list for Node Connection Handles"
 
 **Purpose**: Final verification across all stories.
 
-- [ ] T020 [P] Review [quickstart.md](./quickstart.md) against the finished behavior and correct any step whose wording no longer matches (e.g. handle ids, CSS class names)
-- [ ] T021 Run `npm run lint`, `npm run build`, and `npm test`; fix any resulting issues
-- [ ] T022 Manually execute the quickstart.md round-trip gate: export JSON → re-import → visual parity; render the component export in a bare app; open the SVG both directly and via `<img>` — confirm edge anchoring matches the canvas everywhere
+- [x] T020 [P] Review [quickstart.md](./quickstart.md) against the finished behavior and correct any step whose wording no longer matches (e.g. handle ids, CSS class names)
+- [x] T021 Run `npm run lint`, `npm run build`, and `npm test`; fix any resulting issues
+- [x] T022 Manually execute the quickstart.md round-trip gate: export JSON → re-import → visual parity; render the component export in a bare app; open the SVG both directly and via `<img>` — confirm edge anchoring matches the canvas everywhere
 
 ---
 
