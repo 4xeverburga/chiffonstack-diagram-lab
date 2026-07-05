@@ -1,9 +1,10 @@
 import { BaseEdge, getBezierPath, type EdgeProps } from '@xyflow/react'
-import type { CSSProperties } from 'react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import type { HeatVariant } from './heatVariants'
 import { edgeStyleClassNames, resolveDirection, resolveThickness } from './edgeStyle'
 import { EdgeToolbar } from './EdgeToolbar'
-import { DEFAULT_SIGMOID_MAPPING_CONFIG, mapThroughputToAnimation } from '../engine/sigmoidMapping'
+import { DEFAULT_SIGMOID_MAPPING_CONFIG, DEFAULT_FLOW_SMOOTHING_CONFIG } from '../engine/config'
+import { createInitialFlowAnimationState, updateFlowAnimationState, type FlowAnimationState } from '../engine/flowAnimationSmoothing'
 
 // The "flowing heat path" edge from the Langflow/n8n reference: a live path
 // through a topology gets a moving gradient in the user's primary token
@@ -46,13 +47,37 @@ export function HeatEdge({
   // last metrics-window throughput onto CSS variables consumed by the
   // .lab-edge-heat-flow keyframe animation below — undefined (no
   // simMetrics, i.e. no simulation running yet) falls back to the
-  // pre-pivot static 0.7s/6 6 defaults declared in App.css.
+  // pre-pivot static 0.7s/6 6 defaults declared in App.css. The raw
+  // per-window reading is noisy (Poisson variance), so it's smoothed
+  // through flowAnimationSmoothing before it ever reaches CSS — see that
+  // module for the two-timescale EMA + hysteresis/hold-time design.
   const throughputPerSec = (data as { simMetrics?: { throughputPerSec: number } } | undefined)?.simMetrics?.throughputPerSec
+  const smoothingRef = useRef<FlowAnimationState>(createInitialFlowAnimationState(DEFAULT_SIGMOID_MAPPING_CONFIG))
+  const [committedAnimation, setCommittedAnimation] = useState(() => smoothingRef.current.committed)
+
+  useEffect(() => {
+    if (throughputPerSec === undefined) {
+      // Simulation stopped/reset — start the next run's smoothing fresh
+      // rather than resuming from a stale baseline.
+      smoothingRef.current = createInitialFlowAnimationState(DEFAULT_SIGMOID_MAPPING_CONFIG)
+      return
+    }
+    const next = updateFlowAnimationState(
+      smoothingRef.current,
+      throughputPerSec,
+      Date.now(),
+      DEFAULT_FLOW_SMOOTHING_CONFIG,
+      DEFAULT_SIGMOID_MAPPING_CONFIG,
+    )
+    smoothingRef.current = next
+    setCommittedAnimation((current) => (next.committed === current ? current : next.committed))
+  }, [throughputPerSec])
+
   const flowStyle: CSSProperties | undefined =
     throughputPerSec === undefined
       ? undefined
       : (() => {
-          const { durationSec, dashDensity } = mapThroughputToAnimation(throughputPerSec, DEFAULT_SIGMOID_MAPPING_CONFIG)
+          const { durationSec, dashDensity } = committedAnimation
           const gap = 2 + (1 - dashDensity) * 10
           return {
             '--sim-flow-duration': `${durationSec}s`,

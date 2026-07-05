@@ -6,11 +6,8 @@
 import { createSimulation } from '../engine/simulation'
 import { mulberry32, PoissonTrafficSource } from '../engine/poisson'
 import { CycleError, type MetricsWindow, type Simulation } from '../engine/ports'
+import { SIM_TICK_MS } from '../engine/config'
 import type { FromWorker, ToWorker } from './workerProtocol'
-
-// One tick per aggregation window, driven by the worker's own wall clock —
-// the engine stays clockless (tick-driven), the host (here) owns real time.
-const TICK_INTERVAL_MS = 200
 
 let simulation: Simulation | undefined
 let intervalId: ReturnType<typeof setInterval> | undefined
@@ -39,8 +36,8 @@ function stopTicking(): void {
 function startTicking(): void {
   stopTicking()
   intervalId = setInterval(() => {
-    simulation?.tick(TICK_INTERVAL_MS)
-  }, TICK_INTERVAL_MS)
+    simulation?.tick(SIM_TICK_MS)
+  }, SIM_TICK_MS)
 }
 
 self.addEventListener('message', (event) => {

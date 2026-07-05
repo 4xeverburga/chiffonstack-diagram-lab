@@ -24,17 +24,8 @@ export interface AnimationParams {
   dashDensity: number
 }
 
-// Fixed bounds for the shipped HeatEdge animation (research.md D6):
-// duration clamped to [0.4s, 6s], dash density to [0, 1]. Log-scaled input
-// so 10 req/s vs 1,000 req/s vs 100,000 req/s remain visually distinguishable.
-export const DEFAULT_SIGMOID_MAPPING_CONFIG: SigmoidMappingConfig = {
-  durationMaxSec: 6.0,
-  durationMinSec: 0.4,
-  densityMin: 0,
-  densityMax: 1,
-  k: 1.5,
-  x0: 2,
-}
+// The default bounds/steepness live in ./config.ts (DEFAULT_SIGMOID_MAPPING_CONFIG)
+// alongside every other simulation-tunable parameter.
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max)

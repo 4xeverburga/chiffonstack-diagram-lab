@@ -3,7 +3,8 @@
 Guidance for Claude Code when working in this repository.
 
 ## Coding conventions
-Centralize the parameters on a config file or .env
+- Centralize any parameter on a config file or .env
+- All imports must be declared with relation to  the root of the project. This way refactoring and moving files is easier.
 
 ## Branch Strategies
 main and dev branches are protected to push. You can only pr it.

@@ -84,6 +84,18 @@ function LabEditor() {
   // so none of these runtime fields can reach the canonical JSON. simMetrics
   // rides the same untracked channel — the latest metrics window for this
   // edge, if the simulation has produced one yet (US2).
+  //
+  // A metrics window only lists edges that had at least one crossing that
+  // tick (buildMetricsWindow), so an edge with zero crossings is simply
+  // absent from `latestWindow.edges` — NOT the same thing as "no simulation
+  // running". Once a window exists at all, a missing entry means a real,
+  // legitimate 0 req/s reading and must flow into HeatEdge's smoothing
+  // pipeline like any other sample; only the true idle/reset case (no
+  // window yet) should read as `undefined` there, since HeatEdge treats
+  // `undefined` as "start this edge's smoothing over from scratch". Passing
+  // `undefined` for a merely-quiet window would wrongly reset the EMA/hold
+  // state on every quiet tick, which at low request rates is most ticks —
+  // defeating the 3s hold and the whole point of the smoothing.
   const renderedEdges = useMemo(
     () =>
       edges.map((edge) => ({
@@ -93,7 +105,7 @@ function LabEditor() {
           primaryColor: tokens.primaryColor,
           onCycleThickness: mutations.cycleEdgeThickness,
           onReverseDirection: mutations.reverseEdgeDirection,
-          simMetrics: selectEdgeMetrics(latestWindow, edge.id),
+          simMetrics: latestWindow ? (selectEdgeMetrics(latestWindow, edge.id) ?? { throughputPerSec: 0 }) : undefined,
         },
       })),
     [edges, tokens.primaryColor, mutations.cycleEdgeThickness, mutations.reverseEdgeDirection, latestWindow],
