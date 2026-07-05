@@ -1,8 +1,10 @@
 import {
   useCallback,
+  useEffect,
   useMemo,
   useRef,
   useState,
+  type ChangeEvent,
   type CSSProperties,
   type DragEvent,
 } from 'react'
@@ -27,19 +29,24 @@ import './App.css'
 import { LabelNode } from './lab/LabelNode'
 import { HeatEdge } from './lab/HeatEdge'
 import { Sidebar, DRAG_MIME_TYPE } from './lab/Sidebar'
-import { ExportBar } from './lab/ExportBar'
+import { SimulationControls } from './lab/SimulationControls'
 import { Inspector } from './lab/Inspector'
 import { classNameForKind, type NodeKind } from './lab/nodeKinds'
 import { initialEdges, initialNodes } from './lab/initialDiagram'
 import { useDiagramMutations } from './lab/useDiagramMutations'
-import { useExportActions } from './lab/useExportActions'
+import { downloadDiagram, parseDiagram } from './lab/exportDiagram'
 import { useHandleVisibility, withHandlesVisibleClass } from './lab/useHandleVisibility'
 import { useLayoutHelpers } from './lab/useLayoutHelpers'
 import { AlignmentGuides } from './lab/AlignmentGuides'
 import { DEFAULT_DESIGN_TOKENS, type DesignTokens } from './lab/designTokens'
+import { useSimulation } from './sim/useSimulation'
+import { createSimStore, hasGeneratorRole, selectEdgeMetrics, selectNodeMetrics, useSimStore } from './sim/store'
 
 const nodeTypes = { labelNode: LabelNode }
 const edgeTypes = { heat: HeatEdge }
+
+type JsonStatus = 'idle' | 'done' | 'error'
+const JSON_STATUS_RESET_MS = 1800
 
 function LabEditor() {
   const [nodes, setNodes, onNodesChangeBase] = useNodesState(initialNodes)
@@ -57,13 +64,26 @@ function LabEditor() {
 
   const mutations = useDiagramMutations(setNodes, setEdges)
 
+  // One Zustand store instance for the lifetime of this editor — created
+  // once via useRef rather than per-render, so useSimulation's worker
+  // effect (keyed on this same instance) doesn't get recreated either
+  // (research.md D4).
+  const simStore = useRef(createSimStore()).current
+  const runStatus = useSimStore(simStore, (state) => state.runStatus)
+  const statusMessage = useSimStore(simStore, (state) => state.statusMessage)
+  const latestWindow = useSimStore(simStore, (state) => state.latestWindow)
+  const simActions = useSimulation(simStore, nodes, edges)
+  const hasGenerator = hasGeneratorRole(nodes)
+
   // Heat edges color their gradient from the live primary token, so the
   // canvas preview always matches what every export target would produce.
   // Carried through each edge's `data` (rather than closing over it in
   // edgeTypes) so edgeTypes stays a stable reference and React Flow doesn't
   // remount edges on every color change. The EdgeToolbar callbacks ride the
   // same channel (research.md R4); exportDiagram.ts whitelists edge data,
-  // so none of these runtime fields can reach the canonical JSON.
+  // so none of these runtime fields can reach the canonical JSON. simMetrics
+  // rides the same untracked channel — the latest metrics window for this
+  // edge, if the simulation has produced one yet (US2).
   const renderedEdges = useMemo(
     () =>
       edges.map((edge) => ({
@@ -73,9 +93,10 @@ function LabEditor() {
           primaryColor: tokens.primaryColor,
           onCycleThickness: mutations.cycleEdgeThickness,
           onReverseDirection: mutations.reverseEdgeDirection,
+          simMetrics: selectEdgeMetrics(latestWindow, edge.id),
         },
       })),
-    [edges, tokens.primaryColor, mutations.cycleEdgeThickness, mutations.reverseEdgeDirection],
+    [edges, tokens.primaryColor, mutations.cycleEdgeThickness, mutations.reverseEdgeDirection, latestWindow],
   )
 
   // Nodes touched by the current selection (a selected node itself, or
@@ -107,16 +128,75 @@ function LabEditor() {
   // diagram.json deterministically reproduces what was exported
   // (contracts/diagram-json.md round-trip guarantee). Clears the selection
   // too, since the previously selected node/edge id may no longer exist.
+  // Also resets the simulation run (T033/US3 edge case): an imported
+  // topology is unrelated to whatever was mid-run before, so the worker
+  // goes back to idle with a blank metrics window rather than silently
+  // continuing to simulate the old graph shape for one more tick.
   const handleImportDiagram = useCallback(
     (importedNodes: Node[], importedEdges: Edge[]) => {
       setNodes(importedNodes)
       setEdges(importedEdges)
       setSelection({ nodes: [], edges: [] })
+      simActions.reset()
     },
-    [setNodes, setEdges],
+    [setNodes, setEdges, simActions],
   )
 
-  const exportActions = useExportActions(nodes, edges, tokens, handleImportDiagram)
+  const [jsonExportStatus, setJsonExportStatus] = useState<JsonStatus>('idle')
+  const [jsonImportStatus, setJsonImportStatus] = useState<JsonStatus>('idle')
+  const uploadInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (jsonExportStatus === 'idle') return
+    const timer = setTimeout(() => setJsonExportStatus('idle'), JSON_STATUS_RESET_MS)
+    return () => clearTimeout(timer)
+  }, [jsonExportStatus])
+
+  useEffect(() => {
+    if (jsonImportStatus === 'idle') return
+    const timer = setTimeout(() => setJsonImportStatus('idle'), JSON_STATUS_RESET_MS)
+    return () => clearTimeout(timer)
+  }, [jsonImportStatus])
+
+  // The only remaining export target (FR-010): the topology JSON, now
+  // including each node's simulation role (exportDiagram.ts).
+  const handleExportJson = useCallback(() => {
+    try {
+      downloadDiagram(nodes, edges)
+      setJsonExportStatus('done')
+    } catch (error: unknown) {
+      console.error('Failed to download diagram JSON', error)
+      setJsonExportStatus('error')
+    }
+  }, [nodes, edges])
+
+  const handleClickUpload = useCallback(() => {
+    uploadInputRef.current?.click()
+  }, [])
+
+  const handleUploadFileChange = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0]
+      event.target.value = ''
+      if (!file) return
+      file
+        .text()
+        .then((text) => {
+          const { nodes: importedNodes, edges: importedEdges } = parseDiagram(text)
+          handleImportDiagram(importedNodes, importedEdges)
+          setJsonImportStatus('done')
+        })
+        .catch((error: unknown) => {
+          console.error('Failed to import diagram JSON', error)
+          setJsonImportStatus('error')
+        })
+    },
+    [handleImportDiagram],
+  )
+
+  const jsonExportLabel = jsonExportStatus === 'done' ? 'Downloaded!' : jsonExportStatus === 'error' ? 'Download failed' : 'Export JSON'
+  const jsonImportLabel = jsonImportStatus === 'done' ? 'Loaded!' : jsonImportStatus === 'error' ? 'Upload failed' : 'Upload JSON'
+
   const canvasRef = useRef<HTMLDivElement>(null)
   const idCounter = useRef(0)
   const { screenToFlowPosition } = useReactFlow()
@@ -205,10 +285,35 @@ function LabEditor() {
   const selectedEdgeId = selection.edges[0]?.id
   const selectedNode = selectedNodeId ? nodes.find((node) => node.id === selectedNodeId) : undefined
   const selectedEdge = selectedEdgeId ? edges.find((edge) => edge.id === selectedEdgeId) : undefined
+  const selectedNodeMetrics = selectedNodeId ? selectNodeMetrics(latestWindow, selectedNodeId) : undefined
 
   return (
     <div className="lab">
-      <ExportBar actions={exportActions} />
+      <header className="lab-bar">
+        <span className="lab-title">Diagram Lab</span>
+        <span className="lab-meta">React Flow authoring tool for system topology diagrams</span>
+        <SimulationControls
+          runStatus={runStatus}
+          statusMessage={statusMessage}
+          hasGenerator={hasGenerator}
+          onStart={simActions.start}
+          onPause={simActions.pause}
+          onReset={simActions.reset}
+        />
+        <button type="button" className="lab-export" onClick={handleExportJson}>
+          {jsonExportLabel}
+        </button>
+        <button type="button" className="lab-export" onClick={handleClickUpload}>
+          {jsonImportLabel}
+        </button>
+        <input
+          ref={uploadInputRef}
+          type="file"
+          accept="application/json"
+          className="lab-upload-input"
+          onChange={handleUploadFileChange}
+        />
+      </header>
       <div className="lab-body">
         <Sidebar onAddNode={handleAddFromSidebar} tokens={tokens} onChangeTokens={setTokens} />
         <div
@@ -241,10 +346,12 @@ function LabEditor() {
         <Inspector
           selectedNode={selectedNode}
           selectedEdge={selectedEdge}
+          selectedNodeMetrics={selectedNodeMetrics}
           onRenameNode={mutations.renameNode}
           onSetNodeKind={mutations.setNodeKind}
           onSetNodeImage={mutations.setNodeImage}
           onSetNodeLabelSize={mutations.setNodeLabelSize}
+          onSetNodeSimRole={mutations.setNodeSimRole}
           onSetEdgeVariant={mutations.setEdgeVariant}
           onSetEdgeThickness={mutations.setEdgeThickness}
           onReverseEdgeDirection={mutations.reverseEdgeDirection}

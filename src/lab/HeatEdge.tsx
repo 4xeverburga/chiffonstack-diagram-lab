@@ -1,7 +1,9 @@
 import { BaseEdge, getBezierPath, type EdgeProps } from '@xyflow/react'
+import type { CSSProperties } from 'react'
 import type { HeatVariant } from './heatVariants'
 import { edgeStyleClassNames, resolveDirection, resolveThickness } from './edgeStyle'
 import { EdgeToolbar } from './EdgeToolbar'
+import { DEFAULT_SIGMOID_MAPPING_CONFIG, mapThroughputToAnimation } from '../engine/sigmoidMapping'
 
 // The "flowing heat path" edge from the Langflow/n8n reference: a live path
 // through a topology gets a moving gradient in the user's primary token
@@ -40,6 +42,24 @@ export function HeatEdge({
   const isHeat = variant === 'heat-flow' || variant === 'heat-static'
   const gradientId = `heat-gradient-${id}`
 
+  // Bounded logistic mapping (constitution Principle V) from this edge's
+  // last metrics-window throughput onto CSS variables consumed by the
+  // .lab-edge-heat-flow keyframe animation below — undefined (no
+  // simMetrics, i.e. no simulation running yet) falls back to the
+  // pre-pivot static 0.7s/6 6 defaults declared in App.css.
+  const throughputPerSec = (data as { simMetrics?: { throughputPerSec: number } } | undefined)?.simMetrics?.throughputPerSec
+  const flowStyle: CSSProperties | undefined =
+    throughputPerSec === undefined
+      ? undefined
+      : (() => {
+          const { durationSec, dashDensity } = mapThroughputToAnimation(throughputPerSec, DEFAULT_SIGMOID_MAPPING_CONFIG)
+          const gap = 2 + (1 - dashDensity) * 10
+          return {
+            '--sim-flow-duration': `${durationSec}s`,
+            '--sim-flow-dash': `6 ${gap}`,
+          } as CSSProperties
+        })()
+
   return (
     <>
       {isHeat ? (
@@ -55,7 +75,7 @@ export function HeatEdge({
         path={edgePath}
         markerEnd={markerEnd}
         className={edgeStyleClassNames(variant, thickness, direction, 'lab-edge')}
-        style={isHeat ? { stroke: `url(#${gradientId})` } : undefined}
+        style={{ ...(isHeat ? { stroke: `url(#${gradientId})` } : undefined), ...flowStyle }}
       />
       {selected && onCycleThickness && onReverseDirection ? (
         <EdgeToolbar
@@ -69,3 +89,4 @@ export function HeatEdge({
     </>
   )
 }
+

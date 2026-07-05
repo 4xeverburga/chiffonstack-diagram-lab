@@ -6,7 +6,9 @@ Guidance for Claude Code when working in this repository.
 Centralize the parameters on a config file or .env
 
 ## Branch Strategies
-Main branch is protected to push. You can only pr it.
+main and dev branches are protected to push. You can only pr it.
+
+when finishing a feature you pr to dev first. Only then to main
 
 ### No default parameter values
 

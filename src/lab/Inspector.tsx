@@ -5,16 +5,135 @@ import { HEAT_VARIANTS, type HeatVariant } from './heatVariants'
 import { EDGE_THICKNESSES, resolveDirection, resolveThickness, type EdgeThickness } from './edgeStyle'
 import { IMAGE_SIZE_WARNING_BYTES, IMAGE_UPLOAD_ACCEPT, readImageFile } from './imageUpload'
 import { resolveTextSize, TEXT_SIZES, type TextSize } from './textSizes'
+import type { NodeMetrics, SimRole } from '../engine/ports'
 
 const NODE_KINDS: NodeKind[] = ['default', 'active', 'dim']
+
+const SIM_ROLE_CHOICES = ['none', 'generator', 'processor', 'sink'] as const
+type SimRoleChoice = (typeof SIM_ROLE_CHOICES)[number]
+
+function simRoleChoice(sim: SimRole | undefined): SimRoleChoice {
+  return sim?.role ?? 'none'
+}
+
+type SimRoleFieldsProps = {
+  node: Node
+  metrics: NodeMetrics | undefined
+  onSetNodeSimRole: (id: string, sim: SimRole | undefined) => void
+}
+
+// Extracted so its rate-text/validation-error local state resets cleanly
+// whenever the selected node changes — Inspector renders this with
+// `key={node.id}`, which remounts it (and so resets its hooks) instead of
+// carrying stale draft text over from a previously selected node.
+function SimRoleFields({ node, metrics, onSetNodeSimRole }: SimRoleFieldsProps) {
+  const sim = (node.data as { sim?: SimRole } | undefined)?.sim
+  const [rateText, setRateText] = useState(() =>
+    sim?.role === 'generator' ? String(sim.ratePerSec) : sim?.role === 'processor' ? String(sim.serviceRatePerSec) : '',
+  )
+  const [error, setError] = useState<string | undefined>(undefined)
+
+  const handleRoleChange = (choice: SimRoleChoice) => {
+    setError(undefined)
+    if (choice === 'none') {
+      setRateText('')
+      onSetNodeSimRole(node.id, undefined)
+      return
+    }
+    if (choice === 'sink') {
+      setRateText('')
+      onSetNodeSimRole(node.id, { role: 'sink' })
+      return
+    }
+    if (choice === 'generator') {
+      setRateText('100')
+      onSetNodeSimRole(node.id, { role: 'generator', ratePerSec: 100 })
+      return
+    }
+    setRateText('200')
+    onSetNodeSimRole(node.id, { role: 'processor', serviceRatePerSec: 200 })
+  }
+
+  const handleRateChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const text = event.target.value
+    setRateText(text)
+    const value = Number(text)
+    if (sim?.role === 'generator') {
+      if (!Number.isFinite(value) || value < 0) {
+        setError('Rate must be a number \u2265 0.')
+        return
+      }
+      setError(undefined)
+      onSetNodeSimRole(node.id, { role: 'generator', ratePerSec: value })
+      return
+    }
+    if (sim?.role === 'processor') {
+      if (!Number.isFinite(value) || value <= 0) {
+        setError('Service rate must be a number > 0.')
+        return
+      }
+      setError(undefined)
+      onSetNodeSimRole(node.id, { role: 'processor', serviceRatePerSec: value })
+    }
+  }
+
+  return (
+    <div className="lab-field">
+      <span>Simulation role</span>
+      <div className="lab-button-row">
+        {SIM_ROLE_CHOICES.map((choice) => (
+          <button
+            key={choice}
+            type="button"
+            className={`chip ${simRoleChoice(sim) === choice ? 'chip-active' : ''}`}
+            onClick={() => handleRoleChange(choice)}
+          >
+            {choice === 'none' ? 'plain' : choice}
+          </button>
+        ))}
+      </div>
+      {sim?.role === 'generator' ? (
+        <label className="lab-field">
+          <span>Rate (req/s)</span>
+          <input type="number" min={0} step="any" value={rateText} onChange={handleRateChange} />
+        </label>
+      ) : null}
+      {sim?.role === 'processor' ? (
+        <>
+          <label className="lab-field">
+            <span>Service rate (req/s)</span>
+            <input type="number" min={0} step="any" value={rateText} onChange={handleRateChange} />
+          </label>
+          <p className="sim-placeholder-note">
+            Placeholder (fixed rate) — no real technology model behind this node yet.
+          </p>
+        </>
+      ) : null}
+      {error ? <div className="lab-warning">{error}</div> : null}
+      {sim && sim.role !== 'sink' ? (
+        <div className="sim-metrics-readout">
+          <span>Throughput: {metrics ? `${metrics.throughputPerSec.toFixed(1)} req/s` : '—'}</span>
+          {sim.role === 'processor' ? <span>Queue depth: {metrics ? metrics.queueDepth.toFixed(1) : '—'}</span> : null}
+        </div>
+      ) : null}
+      {sim?.role === 'sink' ? (
+        <div className="sim-metrics-readout">
+          <span>Throughput: {metrics ? `${metrics.throughputPerSec.toFixed(1)} req/s` : '—'}</span>
+        </div>
+      ) : null}
+    </div>
+  )
+}
 
 type InspectorProps = {
   selectedNode: Node | undefined
   selectedEdge: Edge | undefined
+  selectedNodeMetrics: NodeMetrics | undefined
   onRenameNode: (id: string, label: string) => void
   onSetNodeKind: (id: string, kind: NodeKind) => void
   onSetNodeImage: (id: string, image: string | undefined, naturalWidth: number | undefined, naturalHeight: number | undefined) => void
   onSetNodeLabelSize: (id: string, size: TextSize) => void
+  onSetNodeSimRole: (id: string, sim: SimRole | undefined) => void
   onSetEdgeVariant: (id: string, variant: HeatVariant) => void
   onSetEdgeThickness: (id: string, thickness: EdgeThickness) => void
   onReverseEdgeDirection: (id: string) => void
@@ -26,10 +145,12 @@ type InspectorProps = {
 export function Inspector({
   selectedNode,
   selectedEdge,
+  selectedNodeMetrics,
   onRenameNode,
   onSetNodeKind,
   onSetNodeImage,
   onSetNodeLabelSize,
+  onSetNodeSimRole,
   onSetEdgeVariant,
   onSetEdgeThickness,
   onReverseEdgeDirection,
@@ -120,6 +241,7 @@ export function Inspector({
             </div>
           ) : null}
         </div>
+        <SimRoleFields node={selectedNode} metrics={selectedNodeMetrics} onSetNodeSimRole={onSetNodeSimRole} />
       </aside>
     )
   }
