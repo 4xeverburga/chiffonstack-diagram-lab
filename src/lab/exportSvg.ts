@@ -1,6 +1,7 @@
 import type { Edge, Node } from '@xyflow/react'
 import type { DesignTokens } from './designTokens'
 import { classNameForKind, kindForClassName } from './nodeKinds'
+import { edgeStyleClassNames, THICKNESS_STROKE_WIDTH } from './edgeStyle'
 import { CANVAS_MARGIN, computeContentSize, computeEdgePaths, computeNodeBoxes, nodeImage, nodeLabel } from './exportGeometry'
 
 const GENERIC_FONT_KEYWORDS = new Set([
@@ -67,7 +68,9 @@ export function exportSvg(nodes: Node[], edges: Edge[], tokens: DesignTokens): s
   const edgePaths = computeEdgePaths(edges, boxes)
   const { width, height } = computeContentSize(boxes, CANVAS_MARGIN)
 
-  const edgeMarkup = edgePaths.map((edge) => `    <path class="edge edge-${edge.variant}" d="${edge.d}" />`).join('\n')
+  const edgeMarkup = edgePaths
+    .map((edge) => `    <path class="${edgeStyleClassNames(edge.variant, edge.thickness, edge.direction, 'edge')}" d="${edge.d}" />`)
+    .join('\n')
 
   const nodeMarkup = nodes
     .map((node) => {
@@ -138,6 +141,15 @@ export function exportSvg(nodes: Node[], edges: Edge[], tokens: DesignTokens): s
     .edge-default {
       stroke: var(--token-secondary);
       stroke-width: 2;
+    }
+    .edge-w-thin {
+      stroke-width: ${THICKNESS_STROKE_WIDTH.thin};
+    }
+    .edge-w-thick {
+      stroke-width: ${THICKNESS_STROKE_WIDTH.thick};
+    }
+    .edge-reverse {
+      animation-direction: reverse;
     }
     @keyframes chiffon-heat-flow {
       from {

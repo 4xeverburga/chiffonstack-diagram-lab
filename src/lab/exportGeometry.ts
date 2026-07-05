@@ -1,6 +1,7 @@
 import { getBezierPath, type Edge, type Node } from '@xyflow/react'
 import type { HeatVariant } from './heatVariants'
 import { anchorPointForSide, HANDLE_SIDE_POSITION, LEGACY_SOURCE_SIDE, LEGACY_TARGET_SIDE, resolveHandleSide } from './handleSides'
+import { resolveDirection, resolveThickness, type EdgeDirection, type EdgeThickness } from './edgeStyle'
 
 // Shared node sizing + edge path math used by every visual export target
 // (component code, animated SVG) so they can't drift apart from each other
@@ -26,6 +27,8 @@ export type EdgePath = {
   id: string
   d: string
   variant: HeatVariant
+  thickness: EdgeThickness
+  direction: EdgeDirection
 }
 
 export function nodeLabel(node: Node): string {
@@ -93,7 +96,19 @@ export function computeEdgePaths(edges: Edge[], boxes: Map<string, NodeBox>): Ed
       targetY: targetPoint.y,
       targetPosition: HANDLE_SIDE_POSITION[targetSide],
     })
-    return [{ id: edge.id, d, variant: edgeVariant(edge) }]
+    // Thickness/direction resolve through the same fallbacks the parser
+    // applies, so an edge coming straight from canvas state (never through
+    // parseDiagram) styles identically (contracts/edge-style.md).
+    const data = edge.data as { thickness?: unknown; direction?: unknown } | undefined
+    return [
+      {
+        id: edge.id,
+        d,
+        variant: edgeVariant(edge),
+        thickness: resolveThickness(data?.thickness),
+        direction: resolveDirection(data?.direction),
+      },
+    ]
   })
 }
 

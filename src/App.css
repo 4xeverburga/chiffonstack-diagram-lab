@@ -442,6 +442,59 @@
   stroke: var(--token-secondary, var(--border));
 }
 
+/* Thickness steps (edgeStyle.ts): only thin/thick override — `normal` keeps
+   each variant's baseline width above, so pre-003 diagrams render
+   identically (contracts/edge-style.md guarantee 2). Same two values are
+   emitted by the SVG and component-code exports. */
+.lab-edge-w-thin {
+  stroke-width: 1.5;
+}
+
+.lab-edge-w-thick {
+  stroke-width: 4;
+}
+
+/* Reverses heat-flow playback only — a no-op on variants without an
+   animation, kept unconditional so a stored direction reapplies when the
+   variant becomes animated again (research.md R6). */
+.lab-edge-reverse {
+  animation-direction: reverse;
+}
+
+/* Floating quick actions for the selected edge (EdgeToolbar.tsx).
+   EdgeLabelRenderer children default to pointer-events: none, so the
+   toolbar re-enables them itself; position: absolute is required for the
+   translate() anchoring at the edge midpoint. */
+.lab-edge-toolbar {
+  position: absolute;
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  pointer-events: all;
+  z-index: 10;
+}
+
+.lab-edge-toolbar button {
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-h);
+  cursor: pointer;
+}
+
+.lab-edge-toolbar button:hover {
+  border-color: #ff4715;
+}
+
 @keyframes heat-flow {
   from {
     stroke-dashoffset: 24;

@@ -1,12 +1,16 @@
 import { BaseEdge, getBezierPath, type EdgeProps } from '@xyflow/react'
 import type { HeatVariant } from './heatVariants'
+import { edgeStyleClassNames, resolveDirection, resolveThickness } from './edgeStyle'
+import { EdgeToolbar } from './EdgeToolbar'
 
 // The "flowing heat path" edge from the Langflow/n8n reference: a live path
 // through a topology gets a moving gradient in the user's primary token
 // color, everything else stays a plain hairline or dashed fallback.
-// `primaryColor` rides in on `data` (set by App.tsx on every render) rather
-// than as a dedicated prop, so `edgeTypes` can stay a stable module-level
-// constant and React Flow doesn't remount edges when the color changes.
+// `primaryColor` and the toolbar callbacks ride in on `data` (set by
+// App.tsx on every render) rather than as dedicated props, so `edgeTypes`
+// can stay a stable module-level constant and React Flow doesn't remount
+// edges when they change. They never reach the canonical JSON —
+// exportDiagram.ts whitelists edge data on both serialize and parse.
 export function HeatEdge({
   id,
   sourceX,
@@ -17,10 +21,22 @@ export function HeatEdge({
   targetPosition,
   data,
   markerEnd,
+  selected,
 }: EdgeProps) {
-  const [edgePath] = getBezierPath({ sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition })
-  const { variant = 'default', primaryColor = '#ff4715' } =
-    (data as { variant?: HeatVariant; primaryColor?: string } | undefined) ?? {}
+  const [edgePath, labelX, labelY] = getBezierPath({ sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition })
+  const {
+    variant = 'default',
+    primaryColor = '#ff4715',
+    onCycleThickness,
+    onReverseDirection,
+  } = (data as {
+    variant?: HeatVariant
+    primaryColor?: string
+    onCycleThickness?: (id: string) => void
+    onReverseDirection?: (id: string) => void
+  } | undefined) ?? {}
+  const thickness = resolveThickness((data as { thickness?: unknown } | undefined)?.thickness)
+  const direction = resolveDirection((data as { direction?: unknown } | undefined)?.direction)
   const isHeat = variant === 'heat-flow' || variant === 'heat-static'
   const gradientId = `heat-gradient-${id}`
 
@@ -38,9 +54,18 @@ export function HeatEdge({
         id={id}
         path={edgePath}
         markerEnd={markerEnd}
-        className={`lab-edge lab-edge-${variant}`}
+        className={edgeStyleClassNames(variant, thickness, direction, 'lab-edge')}
         style={isHeat ? { stroke: `url(#${gradientId})` } : undefined}
       />
+      {selected && onCycleThickness && onReverseDirection ? (
+        <EdgeToolbar
+          x={labelX}
+          y={labelY}
+          showReverse={variant === 'heat-flow'}
+          onCycleThickness={() => onCycleThickness(id)}
+          onReverseDirection={() => onReverseDirection(id)}
+        />
+      ) : null}
     </>
   )
 }
