@@ -20,7 +20,7 @@
 
 **Purpose**: Confirm the ground this feature builds on before writing code
 
-- [ ] T001 Confirm no new dependency is needed: `@xyflow/react` (already installed) exposes `onNodeDrag`/`onNodeDragStop` props on `<ReactFlow>` and populates `node.measured.width`/`.height` — verify by grepping `node_modules/@xyflow/react/dist/esm/index.js` for `onNodeDrag`, no `package.json` change expected
+- [x] T001 Confirm no new dependency is needed: `@xyflow/react` (already installed) exposes `onNodeDrag`/`onNodeDragStop` props on `<ReactFlow>` and populates `node.measured.width`/`.height` — verify by grepping `node_modules/@xyflow/react/dist/esm/index.js` for `onNodeDrag`, no `package.json` change expected
 
 ---
 
@@ -40,15 +40,15 @@
 
 > Write these first; they must fail (module doesn't exist yet) before implementation.
 
-- [ ] T002 [P] [US1] Unit tests for `computeGuides` in `test/lab/layout.test.ts`: six comparison values per axis (left/centerX/right, top/centerY/bottom), nearest-match-wins when several are in range, exact threshold boundary (`<=` vs `>`), no match when `others` is empty or `thresholdFlow <= 0`, mixed-size rects (per [contracts/layout-helpers.md](./contracts/layout-helpers.md)), and that `dragged`/`others` are never mutated
+- [x] T002 [P] [US1] Unit tests for `computeGuides` in `test/lab/layout.test.ts`: six comparison values per axis (left/centerX/right, top/centerY/bottom), nearest-match-wins when several are in range, exact threshold boundary (`<=` vs `>`), no match when `others` is empty or `thresholdFlow <= 0`, mixed-size rects (per [contracts/layout-helpers.md](./contracts/layout-helpers.md)), and that `dragged`/`others` are never mutated
 
 ### Implementation for User Story 1
 
-- [ ] T003 [US1] Implement `Rect`, `Guide`, `SnapResult` types and the pure `computeGuides(dragged, others, thresholdFlow)` function in `src/lab/layout.ts` (per [data-model.md](./data-model.md)), making T002 pass
-- [ ] T004 [US1] Implement `useLayoutHelpers` hook in `src/lab/useLayoutHelpers.ts`: wraps `onNodeDrag`/`onNodeDragStop`, converts the screen-space `SNAP_THRESHOLD_PX` constant to flow-space using the current viewport zoom before calling `computeGuides` (research.md R3), skips guide computation entirely when the drag event's `altKey` is set (research.md R4), applies the returned snapped `position` via `setNodes` on drag, clears active guides on drag stop, and exposes the current `Guide[]` for rendering (depends on T003)
-- [ ] T005 [US1] Implement `AlignmentGuides.tsx` in `src/lab/AlignmentGuides.tsx`: renders the hook's current guides as lines via React Flow's `EdgeLabelRenderer` portal so they track pan/zoom (research.md R5), rendering nothing when there are no active guides (depends on T004)
-- [ ] T006 [US1] Add guide-line styling in `src/App.css` (thin, low-opacity accent-colored lines consistent with existing editor chrome — not exported, editor-only per the Constitution Check)
-- [ ] T007 [US1] Wire `useLayoutHelpers` and `<AlignmentGuides>` into `src/App.tsx`: pass `onNodeDrag`/`onNodeDragStop` to `<ReactFlow>` and mount the overlay alongside it, keeping `App.tsx`'s own body to wiring only (no algorithmic code) (depends on T004, T005, T006)
+- [x] T003 [US1] Implement `Rect`, `Guide`, `SnapResult` types and the pure `computeGuides(dragged, others, thresholdFlow)` function in `src/lab/layout.ts` (per [data-model.md](./data-model.md)), making T002 pass
+- [x] T004 [US1] Implement `useLayoutHelpers` hook in `src/lab/useLayoutHelpers.ts`: wraps `onNodeDrag`/`onNodeDragStop`, converts the screen-space `SNAP_THRESHOLD_PX` constant to flow-space using the current viewport zoom before calling `computeGuides` (research.md R3), skips guide computation entirely when the drag event's `altKey` is set (research.md R4), applies the returned snapped `position` via `setNodes` on drag, clears active guides on drag stop, and exposes the current `Guide[]` for rendering (depends on T003)
+- [x] T005 [US1] Implement `AlignmentGuides.tsx` in `src/lab/AlignmentGuides.tsx`: renders the hook's current guides as lines via React Flow's `EdgeLabelRenderer` portal so they track pan/zoom (research.md R5), rendering nothing when there are no active guides (depends on T004)
+- [x] T006 [US1] Add guide-line styling in `src/App.css` (thin, low-opacity accent-colored lines consistent with existing editor chrome — not exported, editor-only per the Constitution Check)
+- [x] T007 [US1] Wire `useLayoutHelpers` and `<AlignmentGuides>` into `src/App.tsx`: pass `onNodeDrag`/`onNodeDragStop` to `<ReactFlow>` and mount the overlay alongside it, keeping `App.tsx`'s own body to wiring only (no algorithmic code) (depends on T004, T005, T006)
 
 **Checkpoint**: Dragging any node near another now shows guides and snaps, escapable by threshold or `Alt`, invisible at rest — the full feature, independently testable via the quickstart.
 
@@ -58,9 +58,9 @@
 
 **Purpose**: Constitution-mandated quality gates before this feature is considered done
 
-- [ ] T008 Run `npm run lint`, `npm run build`, and `npx vitest run` — all three must pass clean
-- [ ] T009 Manual round-trip gate from [quickstart.md](./quickstart.md): drag-snap near a mixed-size diagram (including an image-fitted node from 005) → export JSON → re-import → visual parity; component and SVG exports match the canvas; try 50+ nodes to confirm no perceptible drag lag (SC-003)
-- [ ] T010 [P] Check line counts (`wc -l`) of `src/lab/layout.ts`, `src/lab/useLayoutHelpers.ts`, `src/lab/AlignmentGuides.tsx`, and the modified `src/App.tsx` against the constitution's ~250-line soft cap / 300-line hard cap
+- [x] T008 Run `npm run lint`, `npm run build`, and `npx vitest run` — all three must pass clean
+- [x] T009 Manual round-trip gate from [quickstart.md](./quickstart.md): drag-snap near a mixed-size diagram (including an image-fitted node from 005) → export JSON → re-import → visual parity; component and SVG exports match the canvas; try 50+ nodes to confirm no perceptible drag lag (SC-003)
+- [x] T010 [P] Check line counts (`wc -l`) of `src/lab/layout.ts`, `src/lab/useLayoutHelpers.ts`, `src/lab/AlignmentGuides.tsx`, and the modified `src/App.tsx` against the constitution's ~250-line soft cap / 300-line hard cap
 
 ---
 
