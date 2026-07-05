@@ -12,6 +12,7 @@ import {
   ReactFlowProvider,
   Background,
   Controls,
+  ConnectionMode,
   MiniMap,
   addEdge,
   useNodesState,
@@ -32,6 +33,7 @@ import { Sidebar, DRAG_MIME_TYPE } from './lab/Sidebar'
 import { Inspector } from './lab/Inspector'
 import { classNameForKind, type NodeKind } from './lab/nodeKinds'
 import { useExportActions } from './lab/useExportActions'
+import { useHandleVisibility } from './lab/useHandleVisibility'
 import { DEFAULT_DESIGN_TOKENS, type DesignTokens } from './lab/designTokens'
 
 // Starter topology matching the ChiffonStack teardown diagram language
@@ -48,9 +50,42 @@ const initialNodes: Node[] = [
 ]
 
 const initialEdges: Edge[] = [
-  { id: 'user-router', source: 'user', target: 'router', type: 'heat', data: { variant: 'heat-flow' } },
-  { id: 'router-tool', source: 'router', target: 'tool', type: 'heat', data: { variant: 'heat-static' } },
-  { id: 'router-fallback', source: 'router', target: 'fallback', type: 'heat', data: { variant: 'dashed' } },
+  {
+    id: 'user-router',
+    source: 'user',
+    target: 'router',
+    type: 'heat',
+    data: { variant: 'heat-flow' },
+    sourceHandle: 'right',
+    targetHandle: 'left',
+  },
+  {
+    id: 'router-tool',
+    source: 'router',
+    target: 'tool',
+    type: 'heat',
+    data: { variant: 'heat-static' },
+    sourceHandle: 'right',
+    targetHandle: 'left',
+  },
+  {
+    id: 'router-fallback',
+    source: 'router',
+    target: 'fallback',
+    type: 'heat',
+    data: { variant: 'dashed' },
+    sourceHandle: 'right',
+    targetHandle: 'left',
+  },
+  {
+    id: 'tool-fallback',
+    source: 'tool',
+    target: 'fallback',
+    type: 'heat',
+    data: { variant: 'default' },
+    sourceHandle: 'bottom',
+    targetHandle: 'top',
+  },
 ]
 
 const nodeTypes = { labelNode: LabelNode }
@@ -61,6 +96,10 @@ function LabEditor() {
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)
   const [selection, setSelection] = useState<OnSelectionChangeParams>({ nodes: [], edges: [] })
   const [tokens, setTokens] = useState<DesignTokens>(DEFAULT_DESIGN_TOKENS)
+  // True while the user is actively dragging a new connection from a handle —
+  // toggled by onConnectStart/onConnectEnd below and read by App.css to reveal
+  // every node's handles for the duration of the drag (US2, research.md R4).
+  const [connecting, setConnecting] = useState(false)
 
   // Heat edges color their gradient from the live primary token, so the
   // canvas preview always matches what every export target would produce.
@@ -70,6 +109,22 @@ function LabEditor() {
   const renderedEdges = useMemo(
     () => edges.map((edge) => ({ ...edge, data: { ...edge.data, primaryColor: tokens.primaryColor } })),
     [edges, tokens.primaryColor],
+  )
+
+  // Nodes touched by the current selection (a selected node itself, or
+  // either endpoint of a selected edge) get a "handles-visible" class so
+  // their otherwise-hidden connection points show while the selection lasts
+  // (US2, FR-002). Hover and in-progress connection drags are handled by
+  // App.css alone.
+  const handlesVisibleNodeIds = useHandleVisibility(selection)
+  const renderedNodes = useMemo(
+    () =>
+      nodes.map((node) =>
+        handlesVisibleNodeIds.has(node.id)
+          ? { ...node, className: `${node.className ?? ''} handles-visible`.trim() }
+          : node,
+      ),
+    [nodes, handlesVisibleNodeIds],
   )
 
   // Exposed as CSS custom properties on the canvas wrapper so node/edge
@@ -111,11 +166,38 @@ function LabEditor() {
   const idCounter = useRef(0)
   const { screenToFlowPosition } = useReactFlow()
 
+  // `connection` already carries the dragged handle ids as sourceHandle/
+  // targetHandle (React Flow reports the handle the drag started/ended on);
+  // spreading it straight onto the new edge is what makes those ids the
+  // edge's canonical attachment (FR-003) — nothing here needs to read or
+  // rename them.
+  //
+  // A freshly-drawn edge is also selected (deselecting whatever nodes/edges
+  // came before it), so the Inspector immediately shows its style controls
+  // instead of leaving the panel on its empty "select a node or edge" state.
   const onConnect = useCallback(
-    (connection: Connection) =>
-      setEdges((eds) => addEdge({ ...connection, type: 'heat', data: { variant: 'default' } }, eds)),
-    [setEdges],
+    (connection: Connection) => {
+      const previousIds = new Set(edges.map((edge) => edge.id))
+      const nextEdges = addEdge({ ...connection, type: 'heat', data: { variant: 'default' } }, edges)
+      const newEdge = nextEdges.find((edge) => !previousIds.has(edge.id))
+      if (!newEdge) {
+        setEdges(nextEdges)
+        return
+      }
+      setEdges(nextEdges.map((edge) => ({ ...edge, selected: edge.id === newEdge.id })))
+      setNodes((current) => current.map((node) => (node.selected ? { ...node, selected: false } : node)))
+      setSelection({ nodes: [], edges: [newEdge] })
+    },
+    [edges, setEdges, setNodes],
   )
+
+  // Loose mode plus this guard is what lets every one of a node's four
+  // handles both originate and receive a connection (FR-001, research.md
+  // R1) while still rejecting a node connecting to itself (research.md R6).
+  const isValidConnection = useCallback((connection: Connection | Edge) => connection.source !== connection.target, [])
+
+  const handleConnectStart = useCallback(() => setConnecting(true), [])
+  const handleConnectEnd = useCallback(() => setConnecting(false), [])
 
   const handleRenameNode = useCallback(
     (id: string, label: string) => {
@@ -253,20 +335,24 @@ function LabEditor() {
       <div className="lab-body">
         <Sidebar onAddNode={handleAddFromSidebar} tokens={tokens} onChangeTokens={setTokens} />
         <div
-          className="lab-canvas"
+          className={`lab-canvas${connecting ? ' connecting' : ''}`}
           ref={canvasRef}
           onDrop={onDrop}
           onDragOver={onDragOver}
           style={canvasTokenStyle}
         >
           <ReactFlow
-            nodes={nodes}
+            nodes={renderedNodes}
             edges={renderedEdges}
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
+            connectionMode={ConnectionMode.Loose}
+            isValidConnection={isValidConnection}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
+            onConnectStart={handleConnectStart}
+            onConnectEnd={handleConnectEnd}
             onSelectionChange={setSelection}
             fitView
           >

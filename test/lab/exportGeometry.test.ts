@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { computeContentSize, computeEdgePaths, computeNodeBoxes } from '../../src/lab/exportGeometry'
+import { anchorPointForSide, type HandleSide } from '../../src/lab/handleSides'
 import { kitchenSinkEdges, kitchenSinkNodes } from './fixtures/kitchenSink'
 
 describe('computeNodeBoxes', () => {
@@ -46,6 +47,42 @@ describe('computeEdgePaths', () => {
     const first = computeEdgePaths(kitchenSinkEdges, boxes)
     const second = computeEdgePaths(kitchenSinkEdges, boxes)
     expect(second).toEqual(first)
+  })
+
+  it('anchors an edge with no recorded sides at the legacy right/left pair', () => {
+    const boxes = computeNodeBoxes(kitchenSinkNodes)
+    const sourceBox = boxes.get('default-node')!
+    const targetBox = boxes.get('active-node')!
+    const legacySource = anchorPointForSide(sourceBox, 'right')
+    const legacyTarget = anchorPointForSide(targetBox, 'left')
+    const [path] = computeEdgePaths(
+      [{ id: 'e', source: 'default-node', target: 'active-node', type: 'heat', data: {} }],
+      boxes,
+    )
+    expect(path.d.startsWith(`M${legacySource.x},${legacySource.y}`)).toBe(true)
+    expect(path.d.endsWith(`${legacyTarget.x},${legacyTarget.y}`)).toBe(true)
+  })
+
+  it('anchors the path on each edge\'s recorded source/target side', () => {
+    const boxes = computeNodeBoxes(kitchenSinkNodes)
+    const sourceBox = boxes.get('default-node')!
+    const targetBox = boxes.get('active-node')!
+    const combos: Array<[HandleSide, HandleSide]> = [
+      ['top', 'bottom'],
+      ['left', 'right'],
+      ['bottom', 'top'],
+      ['right', 'left'],
+    ]
+    for (const [sourceHandle, targetHandle] of combos) {
+      const [path] = computeEdgePaths(
+        [{ id: 'e', source: 'default-node', target: 'active-node', type: 'heat', data: {}, sourceHandle, targetHandle }],
+        boxes,
+      )
+      const expectedSource = anchorPointForSide(sourceBox, sourceHandle)
+      const expectedTarget = anchorPointForSide(targetBox, targetHandle)
+      expect(path.d.startsWith(`M${expectedSource.x},${expectedSource.y}`)).toBe(true)
+      expect(path.d.endsWith(`${expectedTarget.x},${expectedTarget.y}`)).toBe(true)
+    }
   })
 })
 

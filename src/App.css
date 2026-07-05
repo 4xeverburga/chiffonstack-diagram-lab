@@ -395,6 +395,25 @@
   border-style: dashed;
 }
 
+/* Connection handles (LabelNode.tsx renders one per side: top/bottom/left/
+   right) are hidden at rest and revealed only during interaction, so the
+   canvas stays as clean as the exports it produces (US2, FR-002). Opacity 0
+   rather than display:none — the handle keeps taking up its spot on the
+   node's edge and stays a valid drop target, it's just invisible; pointer
+   events stay on so hovering straight into a drag still works
+   (research.md R4). */
+.react-flow__handle {
+  opacity: 0;
+  pointer-events: all;
+}
+
+.react-flow__node:hover .react-flow__handle,
+.react-flow__node.selected .react-flow__handle,
+.react-flow__node.handles-visible .react-flow__handle,
+.lab-canvas.connecting .react-flow__handle {
+  opacity: 1;
+}
+
 
 /* React Flow edge treatments (className lands on the edge <g>). Edges
    default to a pointer cursor in React Flow's own stylesheet; keep the
