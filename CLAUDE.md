@@ -3,6 +3,10 @@
 Guidance for Claude Code when working in this repository.
 
 ## Coding conventions
+Centralize the parameters on a config file or .env
+
+## Branch Strategies
+Main branch is protected to push. You can only pr it.
 
 ### No default parameter values
 
@@ -24,5 +28,5 @@ argument.
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan:
-[specs/003-edge-styling-controls/plan.md](specs/003-edge-styling-controls/plan.md)
+[specs/008-simulation-engine-skeleton/plan.md](specs/008-simulation-engine-skeleton/plan.md)
 <!-- SPECKIT END -->
