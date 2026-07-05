@@ -2,6 +2,7 @@ import type { Edge, Node } from '@xyflow/react'
 import type { DesignTokens } from './designTokens'
 import { THICKNESS_STROKE_WIDTH } from './edgeStyle'
 import { toPlainDiagram } from './exportDiagram'
+import { TEXT_SIZE_METRICS } from './textSizes'
 
 // Generates a self-contained React Flow component that reproduces the
 // canvas diagram *live* (animation, pan/zoom) in the consumer's own React
@@ -60,6 +61,7 @@ const edges: Edge[] = ${JSON.stringify(plainEdges, null, 2)}
 function DiagramLabelNode({ data }: NodeProps) {
   const label = typeof data.label === 'string' ? data.label : ''
   const image = typeof data.image === 'string' ? data.image : undefined
+  const labelSize = data.labelSize === 'small' || data.labelSize === 'large' ? data.labelSize : 'normal'
   return (
     <>
       <Handle id="top" type="source" position={Position.Top} />
@@ -68,7 +70,7 @@ function DiagramLabelNode({ data }: NodeProps) {
       <Handle id="right" type="source" position={Position.Right} />
       <div className="node-content">
         {image ? <img className="node-image" src={image} alt="" /> : null}
-        <span className="node-label">{label}</span>
+        <span className={\`node-label node-label-\${labelSize}\`}>{label}</span>
       </div>
     </>
   )
@@ -180,7 +182,18 @@ export default function Diagram() {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-family: var(--token-heading-font, sans-serif);
+  font-family: var(--token-body-font, sans-serif);
+}
+
+/* Size steps set font-size only — font-family always stays the body font
+   token above (FR-002, no heading concept on node text). "normal" renders
+   from the base rule. */
+.chiffon-diagram .node-label-small {
+  font-size: ${TEXT_SIZE_METRICS.small.fontPx}px;
+}
+
+.chiffon-diagram .node-label-large {
+  font-size: ${TEXT_SIZE_METRICS.large.fontPx}px;
 }
 
 .chiffon-diagram .node-image {

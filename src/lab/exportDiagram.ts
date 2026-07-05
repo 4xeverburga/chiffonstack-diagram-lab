@@ -2,6 +2,7 @@ import type { Edge, Node } from '@xyflow/react'
 import { HEAT_VARIANTS, type HeatVariant } from './heatVariants'
 import { LEGACY_SOURCE_SIDE, LEGACY_TARGET_SIDE, resolveHandleSide } from './handleSides'
 import { resolveDirection, resolveThickness } from './edgeStyle'
+import { resolveTextSize } from './textSizes'
 
 // The canonical edge `data` is exactly these three fields. Both the
 // serializer and the parser build `data` through this whitelist, so
@@ -30,7 +31,7 @@ export function toPlainDiagram(nodes: Node[], edges: Edge[]) {
     id: node.id,
     type: node.type,
     position: node.position,
-    data: { label: node.data.label, image: node.data.image },
+    data: { label: node.data.label, image: node.data.image, labelSize: resolveTextSize(node.data.labelSize) },
     className: node.className,
     // Present only once the user has manually resized the node (NodeResizer
     // in LabelNode.tsx) — undefined otherwise, so JSON.stringify drops it and
@@ -90,7 +91,7 @@ function parsePlainNode(value: unknown, index: number): Node {
     id: value.id,
     type: typeof value.type === 'string' ? value.type : 'labelNode',
     position: { x: value.position.x, y: value.position.y },
-    data: { label: value.data.label, image },
+    data: { label: value.data.label, image, labelSize: resolveTextSize(value.data.labelSize) },
     className: typeof value.className === 'string' ? value.className : undefined,
   }
   if (typeof value.width === 'number') node.width = value.width

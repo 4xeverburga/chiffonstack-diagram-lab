@@ -2,14 +2,15 @@ import { getBezierPath, type Edge, type Node } from '@xyflow/react'
 import type { HeatVariant } from './heatVariants'
 import { anchorPointForSide, HANDLE_SIDE_POSITION, LEGACY_SOURCE_SIDE, LEGACY_TARGET_SIDE, resolveHandleSide } from './handleSides'
 import { resolveDirection, resolveThickness, type EdgeDirection, type EdgeThickness } from './edgeStyle'
+import { resolveTextSize, TEXT_SIZE_METRICS } from './textSizes'
 
 // Shared node sizing + edge path math used by every visual export target
 // (component code, animated SVG) so they can't drift apart from each other
 // or from the canvas. Sizing heuristic and margin match the canvas's default
 // node dimensions; edge paths reuse React Flow's own bezier function so the
-// exported curves are identical to what HeatEdge.tsx draws.
-const NODE_HEIGHT = 40
-const CHAR_WIDTH = 7.5
+// exported curves are identical to what HeatEdge.tsx draws. Per-step font
+// size, char width, node height, and label band all come from textSizes.ts
+// so a node's size choice scales its box the same way everywhere (FR-007).
 const NODE_PADDING_X = 28
 const ICON_SIZE = 28
 const ICON_GAP = 6
@@ -41,28 +42,29 @@ export function nodeImage(node: Node): string | undefined {
 
 // Nodes stack their image above the label (like a captioned icon), so an
 // image only adds to the node's height, not its width.
-function nodeWidth(label: string, hasImage: boolean): number {
-  const textWidth = Math.round(label.length * CHAR_WIDTH) + NODE_PADDING_X
+function nodeWidth(label: string, hasImage: boolean, charWidth: number): number {
+  const textWidth = Math.round(label.length * charWidth) + NODE_PADDING_X
   const minWidthForIcon = hasImage ? ICON_SIZE + NODE_PADDING_X : 0
   return Math.max(80, textWidth, minWidthForIcon)
 }
 
-function nodeHeight(hasImage: boolean): number {
-  return hasImage ? NODE_HEIGHT + ICON_SIZE + ICON_GAP : NODE_HEIGHT
+function nodeHeight(hasImage: boolean, baseHeight: number): number {
+  return hasImage ? baseHeight + ICON_SIZE + ICON_GAP : baseHeight
 }
 
 // Computes every node's on-canvas box: position normalized so the top-left-
 // most node sits at (0, 0), and size honoring a manual resize (NodeResizer
 // in LabelNode.tsx) when present, falling back to the same auto-size
-// heuristic the canvas uses.
+// heuristic the canvas uses, scaled by the node's labelSize (FR-007).
 export function computeNodeBoxes(nodes: Node[]): Map<string, NodeBox> {
   const minX = Math.min(...nodes.map((node) => node.position.x))
   const minY = Math.min(...nodes.map((node) => node.position.y))
   return new Map(
     nodes.map((node) => {
       const hasImage = Boolean(nodeImage(node))
-      const width = node.width ?? nodeWidth(nodeLabel(node), hasImage)
-      const height = node.height ?? nodeHeight(hasImage)
+      const metrics = TEXT_SIZE_METRICS[resolveTextSize(node.data.labelSize)]
+      const width = node.width ?? nodeWidth(nodeLabel(node), hasImage, metrics.charWidth)
+      const height = node.height ?? nodeHeight(hasImage, metrics.nodeHeight)
       return [node.id, { id: node.id, x: node.position.x - minX, y: node.position.y - minY, width, height }]
     }),
   )

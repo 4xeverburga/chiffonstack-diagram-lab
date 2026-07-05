@@ -13,14 +13,14 @@ export const kitchenSinkNodes: Node[] = [
     id: 'active-node',
     type: 'labelNode',
     position: { x: 200, y: 0 },
-    data: { label: 'active' },
+    data: { label: 'active', labelSize: 'large' },
     className: 'node node-active',
   },
   {
     id: 'dim-node',
     type: 'labelNode',
     position: { x: 400, y: 0 },
-    data: { label: 'dim' },
+    data: { label: 'dim', labelSize: 'small' },
     className: 'node node-dim',
   },
   {
