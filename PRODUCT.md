@@ -1,36 +1,101 @@
 # Product
 
-## Register
+## Product
 
-brand
+**Diagram Lab** — an open-source architecture-diagram editor by ChiffonStack.
+A React Flow (`@xyflow/react`) canvas for composing system topologies (nodes,
+edges, heat paths, active/dim emphasis) that export as artifacts you can drop
+into any site: a landing page, a blog post, a README.
 
 ## Users
 
-Founders, CTOs, and Product Managers evaluating an engineering partner for serious custom software and production ML work. They are technically literate (or advised by someone who is), allergic to vague agency marketing, and trying to answer one question fast: *can these people actually architect and ship the hard thing?* Primary first-wave context is Peru via professional networks, but every word of the surface is English and built to read as a credible global studio from day one. They arrive skeptical of offshore staffing shops and enterprise boilerplate, and they leave either convinced of technical depth or gone.
+Developers, technical founders, and technical writers who need
+architecture/system diagrams that match *their* brand and embed cleanly in
+*their* pages. They don't want a heavyweight diagramming SaaS, a proprietary
+file format, or a diagram that requires a JS runtime to render. They want to
+sketch a topology fast, style it with the handful of tokens their site already
+defines, and paste the result into their codebase. The first user is
+ChiffonStack itself: the landing page's case-study teardowns and blog diagrams
+are produced here.
 
 ## Product Purpose
 
-ChiffonStack's landing page is the studio's first proof of work. It exists to convert technically-discerning decision-makers into qualified leads by *demonstrating* engineering mastery rather than asserting it — through architectural teardowns, real shipped products, and a roster of capabilities presented as one cohesive studio (never a freelancer catalog). Success looks like: a CTO reads a case study, thinks "they actually understand hybrid-cloud RAG at scale," and books a call. The page must also embody the brand thesis — **Rebel Core, Elite Delivery** — so that the *craft of the page itself* is the first case study.
+Diagram Lab exists to turn "I need a clean architecture diagram for this post"
+into a five-minute task with a copy-pasteable result. Success looks like: a
+user lays out a topology on the canvas, sets four design tokens to match their
+site, clicks export, and pastes a self-contained snippet that renders
+pixel-faithful to what they saw — with zero runtime dependencies. The diagram
+source (JSON) stays round-trippable, so any exported diagram can be pasted
+back in and edited later.
 
-## Brand Personality
+## Export Formats
 
-**Rebel Core, Elite Delivery.** Three words: **playful, precise, uncompromising.** Young and high-impulse on the surface (fresh, a little irreverent, PostHog-adjacent energy, a chiffon-cake loader that doesn't take itself too seriously) over a spine of world-class engineering discipline (DDD, hexagonal architecture, strict testing, clean separation of concerns). The voice is confident without being corporate, technical without being dry, warm without being soft on rigor. It should feel like the sharpest engineers you know decided to have fun building their own studio. Emotional goal: a discerning technical buyer feels *respected* (no dumbed-down marketing) and *intrigued* (this is not the same six agency templates).
+Export is the product. Everything on the canvas must survive the trip out.
+Two audiences, two tracks:
+
+**For developers (code track):**
+
+1. **Diagram JSON** — the canonical, round-trippable source. Stripped of
+   React Flow runtime fields; paste it back into the editor to keep editing.
+   Manual node resizes are preserved; untouched nodes keep auto-sizing.
+   Self-contained by design: node images are embedded as base64 data URIs at
+   upload time, so a JSON file can be shared, versioned, or stored anywhere
+   and re-imported intact — no external asset references.
+2. **React Flow code** — the flagship code export. A component snippet that
+   reproduces the diagram live in the consumer's React app, preserving what
+   makes React Flow worth using: animated edges (heat-flow), interactivity,
+   and pan/zoom. Styled by the caller's design tokens.
+3. **Agent-ready bundle** — a downloadable zip containing the React Flow
+   component code, the diagram JSON, any image assets, and a `prompt.md`
+   explaining the token contract and integration steps — so the user can hand
+   the whole thing to a coding agent and say "put this diagram in my app."
+
+**For non-coders (image track):**
+
+4. **Animated SVG** — one self-contained vector covers both static and
+   animated needs: edge animation (heat-flow) is preserved as CSS/SMIL
+   animation *inside* the SVG, which plays even in a plain `<img>` tag. No
+   runtime, no external requests; drops into any page or doc. Where a host
+   can't play SVG animation (e.g. importing into a design tool), it degrades
+   gracefully to the static frame.
+
+The current static HTML/SVG generator (`exportCode.ts`) is the seed of the
+image track; the React Flow code export is the priority for the code track,
+since a static snippet loses the animation and interactivity that justify
+building diagrams here instead of in a drawing tool.
+
+## Design Personalization
+
+Deliberately minimal: consumers restyle exports through a small design-token
+contract (`primaryColor`, `secondaryColor`, `headingFont`, `bodyFont`) rather
+than a full theming system. The tool's own chrome uses ChiffonStack defaults,
+but nothing brand-specific may leak into an export beyond what the tokens
+express. If a styling need can't be met by a token, the answer is usually a
+new node/edge *variant* (like `heat-flow`, `dashed`, `active`, `dim`), not a
+new token. Don't overshoot: this is an editor with a token contract, not a
+design system.
+
+## Open Source
+
+The project is open source. That constrains how it's built:
+
+- **Self-contained and static-hostable** — a Vite SPA with no backend, no
+  accounts, no telemetry required to use it. Clone, install, run.
+- **No proprietary format** — the diagram source is plain JSON with a small,
+  documented shape; exports are plain HTML/SVG and (eventually) plain React.
+- **Personalizable, not ChiffonStack-flavored** — the token contract is the
+  public API for branding. ChiffonStack's own look is just the default token
+  values, not a hard-coded skin.
+- **Contributor-legible** — small modules with one job each (`exportCode`,
+  `exportDiagram`, `designTokens`, `nodeKinds`, `heatVariants`), conventions
+  enforced in CLAUDE.md, lint via oxlint.
 
 ## Anti-references
 
-- **BairesDev and offshore staffing directories** — headcount-as-product, "1000+ vetted developers," body-shop energy. ChiffonStack sells *structural solutions and architecture*, never developer headcount.
-- **TCS / generic enterprise consultancy boilerplate** — vague marketing abstractions, stock handshake imagery, "digital transformation synergy." Empty corporate template filled with nothing.
-- **The saturated AI-landing-page look** — cream/sand body background, tiny tracked uppercase eyebrows above every section, identical icon-heading-text card grids, gradient text, hero-metric template. If it reads as "an AI made this," it has failed the brand thesis on contact.
-- **Editorial-magazine costume** — display-serif-italic + drop caps + broadsheet grid. ChiffonStack is an engineering studio, not a literary journal.
-
-## Design Principles
-
-1. **Show the architecture, don't claim the expertise.** Every credibility moment is a teardown, a topology, a real shipped artifact — value the reader can verify, not adjectives. (Sidesteps NDA via pure architectural value.)
-2. **The page is the portfolio.** Craft, performance (zero-JS baseline, deferred WebGL), and precision in the page itself prove "Elite Delivery" before any copy does. Practice what we preach.
-3. **One studio, one voice.** Capabilities and case studies read as a single cohesive engineering practice, never a roster of independent freelancers.
-4. **Rebel core, earned.** Playfulness (the cake loader, motion, warmth) is permitted *because* the engineering underneath is rigorous. Delight never undercuts credibility; it rides on top of it.
-5. **English-first, bilingual from day one.** Structure, copy, and SEO assume a global audience (English is the default locale), with a first-class **Spanish** track for the initial Peru leads. The site ships bilingual — a visible EN/ES toggle, proper i18n routing, and full copy parity — not an English page with an afterthought translation.
-
-## Accessibility & Inclusion
-
-Target **WCAG 2.1 AA**. Body text ≥4.5:1 contrast (the warm-ink-on-white system is built to clear this; never ship muted gray on tinted white that fails it). Full keyboard navigability and visible focus states. The chiffon-cake loader and all entrance/scroll motion must honor `prefers-reduced-motion: reduce` with a crossfade or instant-paint alternative — and the loader must never gate first paint (localStorage first-visit-only, deferred Three.js island). Respect reduced-data/low-end devices: the critical render path ships no WebGL.
+- **Diagramming SaaS lock-in** (Lucidchart-style) — accounts, cloud storage,
+  proprietary formats, export paywalls. Diagram Lab's output is text you own.
+- **Third-party embeds** — diagrams that display through an iframe, a hosted
+  viewer, or a vendor script. The React Flow export is code the consumer owns
+  in their own app; the image track must render anywhere with no code at all.
+- **Theming-system sprawl** — dozens of tokens, per-node style panels, CSS
+  escape hatches. Four tokens and a variant vocabulary; resist additions.
