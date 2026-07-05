@@ -417,6 +417,33 @@
   pointer-events: all;
 }
 
+/* React Flow centers each handle ON the node border by default (straddling
+   half in / half out), because edge routing anchors to the handle's OUTER
+   edge, not its center (@xyflow/system getHandlePosition: Position.Right
+   uses handle.x + handle.width, i.e. the handle's own right edge).
+   With a visible handle dot that half-out straddle is invisible — the dot
+   visually bridges the seam. With handles hidden at rest (below), that same
+   straddle shows up as a real gap between the edge line and the node.
+   Pulling each handle fully inside the node (flush with the border instead
+   of straddling it) puts its outer edge exactly on the border, closing the
+   gap, without changing where a visible/hovered handle sits relative to the
+   node corner. */
+.react-flow__handle-top {
+  transform: translate(-50%, 0%);
+}
+
+.react-flow__handle-bottom {
+  transform: translate(-50%, 0%);
+}
+
+.react-flow__handle-left {
+  transform: translate(0%, -50%);
+}
+
+.react-flow__handle-right {
+  transform: translate(0%, -50%);
+}
+
 .react-flow__node:hover .react-flow__handle,
 .react-flow__node.selected .react-flow__handle,
 .react-flow__node.handles-visible .react-flow__handle,

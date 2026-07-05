@@ -9,7 +9,6 @@ import {
 import {
   ReactFlow,
   ReactFlowProvider,
-  Background,
   Controls,
   ConnectionMode,
   MiniMap,
@@ -234,7 +233,6 @@ function LabEditor() {
             onSelectionChange={setSelection}
             fitView
           >
-            <Background gap={24} size={1} />
             <Controls />
             <MiniMap pannable zoomable />
             <AlignmentGuides guides={guides} />
