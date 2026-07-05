@@ -34,7 +34,7 @@ import { classNameForKind, type NodeKind } from './lab/nodeKinds'
 import { initialEdges, initialNodes } from './lab/initialDiagram'
 import { useDiagramMutations } from './lab/useDiagramMutations'
 import { useExportActions } from './lab/useExportActions'
-import { useHandleVisibility } from './lab/useHandleVisibility'
+import { useHandleVisibility, withHandlesVisibleClass } from './lab/useHandleVisibility'
 import { DEFAULT_DESIGN_TOKENS, type DesignTokens } from './lab/designTokens'
 
 const nodeTypes = { labelNode: LabelNode }
@@ -77,15 +77,15 @@ function LabEditor() {
   // either endpoint of a selected edge) get a "handles-visible" class so
   // their otherwise-hidden connection points show while the selection lasts
   // (US2, FR-002). Hover and in-progress connection drags are handled by
-  // App.css alone.
+  // App.css alone. See withHandlesVisibleClass for why this must be
+  // idempotent rather than a blind append.
   const handlesVisibleNodeIds = useHandleVisibility(selection)
   const renderedNodes = useMemo(
     () =>
-      nodes.map((node) =>
-        handlesVisibleNodeIds.has(node.id)
-          ? { ...node, className: `${node.className ?? ''} handles-visible`.trim() }
-          : node,
-      ),
+      nodes.map((node) => {
+        const className = withHandlesVisibleClass(node.className, handlesVisibleNodeIds.has(node.id))
+        return className === (node.className ?? '') ? node : { ...node, className }
+      }),
     [nodes, handlesVisibleNodeIds],
   )
 
