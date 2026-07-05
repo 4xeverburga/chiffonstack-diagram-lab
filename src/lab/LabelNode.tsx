@@ -23,8 +23,10 @@ export function LabelNode({ data, selected }: NodeProps) {
         lineClassName="node-resize-line"
       />
       <Handle type="target" position={Position.Left} />
-      {image ? <img className="node-image" src={image} alt="" /> : null}
-      <span className="node-label">{label}</span>
+      <div className="node-content">
+        {image ? <img className="node-image" src={image} alt="" /> : null}
+        <span className="node-label">{label}</span>
+      </div>
       <Handle type="source" position={Position.Right} />
     </>
   )
