@@ -35,14 +35,20 @@ import { initialEdges, initialNodes } from './lab/initialDiagram'
 import { useDiagramMutations } from './lab/useDiagramMutations'
 import { useExportActions } from './lab/useExportActions'
 import { useHandleVisibility, withHandlesVisibleClass } from './lab/useHandleVisibility'
+import { useLayoutHelpers } from './lab/useLayoutHelpers'
+import { AlignmentGuides } from './lab/AlignmentGuides'
 import { DEFAULT_DESIGN_TOKENS, type DesignTokens } from './lab/designTokens'
 
 const nodeTypes = { labelNode: LabelNode }
 const edgeTypes = { heat: HeatEdge }
 
 function LabEditor() {
-  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes)
+  const [nodes, setNodes, onNodesChangeBase] = useNodesState(initialNodes)
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)
+  // Snap-to-node alignment guides while dragging (spec 006, US1) — wraps
+  // onNodesChangeBase rather than using onNodeDrag, since that fires too
+  // late to influence the applied position (research.md R1/R3/R4).
+  const { guides, onNodesChange } = useLayoutHelpers(nodes, onNodesChangeBase)
   const [selection, setSelection] = useState<OnSelectionChangeParams>({ nodes: [], edges: [] })
   const [tokens, setTokens] = useState<DesignTokens>(DEFAULT_DESIGN_TOKENS)
   // True while the user is actively dragging a new connection from a handle —
@@ -231,6 +237,7 @@ function LabEditor() {
             <Background gap={24} size={1} />
             <Controls />
             <MiniMap pannable zoomable />
+            <AlignmentGuides guides={guides} />
           </ReactFlow>
         </div>
         <Inspector
