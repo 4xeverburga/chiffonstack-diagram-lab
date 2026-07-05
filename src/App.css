@@ -57,6 +57,17 @@
   position: relative;
 }
 
+/* React Flow defaults the pane to a "grab" hand cursor at rest, which reads
+   as if you're already mid-drag. Keep the normal pointer arrow at rest and
+   only switch to a hand while actually panning. Note: `.draggable` and
+   `.dragging` are both present on the pane during an active pan, so a bare
+   `.react-flow__pane.draggable` override would tie in specificity with
+   React Flow's own `.react-flow__pane.dragging { cursor: grabbing }` rule —
+   scope this to the non-dragging state so grabbing still wins while panning. */
+.react-flow__pane.draggable:not(.dragging) {
+  cursor: default;
+}
+
 /* Sidebar — add-node palette */
 .lab-sidebar,
 .lab-inspector {
@@ -82,6 +93,35 @@
   letter-spacing: 0.04em;
   color: var(--text);
   margin: 0 0 12px;
+}
+
+.lab-panel-title-spaced {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.lab-color-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.lab-color-field input[type='color'] {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  cursor: pointer;
+}
+
+.lab-color-field input[type='text'],
+.lab-color-field input:not([type]) {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 /* Selecting a node/edge doesn't touch the canvas — only the Inspector's
@@ -219,12 +259,12 @@
   border-color: #ff0024;
 }
 
-/* React Flow node treatments. React Flow already gives the canvas/pane a
-   grab hand cursor; nodes are draggable too so they'd inherit the same grab
-   cursor by default — override to a pointer so hovering a node reads as
-   "clickable item", distinct from panning the canvas. */
+/* React Flow node treatments. Nodes/edges keep the normal arrow cursor at
+   rest — React Flow's own `.dragging` classes (higher specificity) still
+   switch to the grab/grabbing hand while a node or the canvas is actually
+   being dragged. */
 .react-flow__node.node {
-  cursor: pointer;
+  cursor: default;
   padding: 8px 14px;
   border-radius: 8px;
   border: 1px solid var(--border);
@@ -245,7 +285,13 @@
   opacity: 0.7;
 }
 
-/* React Flow edge treatments (className lands on the edge <g>) */
+/* React Flow edge treatments (className lands on the edge <g>). Edges
+   default to a pointer cursor in React Flow's own stylesheet; keep the
+   normal arrow at rest to match the rest of the canvas. */
+.react-flow__edge.selectable {
+  cursor: default;
+}
+
 .lab-edge-heat-flow {
   stroke-width: 2.5;
   stroke-dasharray: 6 6;

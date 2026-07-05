@@ -24,6 +24,8 @@ import { Sidebar, DRAG_MIME_TYPE } from './lab/Sidebar'
 import { Inspector } from './lab/Inspector'
 import { classNameForKind, type NodeKind } from './lab/nodeKinds'
 import { copyDiagramToClipboard } from './lab/exportDiagram'
+import { copyDiagramCodeToClipboard } from './lab/exportCode'
+import { DEFAULT_DESIGN_TOKENS, type DesignTokens } from './lab/designTokens'
 
 // Starter topology matching the ChiffonStack teardown diagram language
 // (see DESIGN.md §4 Case-Study Teardown / §7 Isotype & Logo).
@@ -51,7 +53,9 @@ function LabEditor() {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes)
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)
   const [selection, setSelection] = useState<OnSelectionChangeParams>({ nodes: [], edges: [] })
-  const [exportStatus, setExportStatus] = useState<'idle' | 'copied' | 'error'>('idle')
+  const [tokens, setTokens] = useState<DesignTokens>(DEFAULT_DESIGN_TOKENS)
+  const [jsonExportStatus, setJsonExportStatus] = useState<'idle' | 'copied' | 'error'>('idle')
+  const [codeExportStatus, setCodeExportStatus] = useState<'idle' | 'copied' | 'error'>('idle')
   const canvasRef = useRef<HTMLDivElement>(null)
   const idCounter = useRef(0)
   const { screenToFlowPosition } = useReactFlow()
@@ -134,38 +138,58 @@ function LabEditor() {
     [setEdges],
   )
 
-  const handleExport = useCallback(() => {
+  const handleExportJson = useCallback(() => {
     copyDiagramToClipboard(nodes, edges)
-      .then(() => setExportStatus('copied'))
+      .then(() => setJsonExportStatus('copied'))
       .catch((error: unknown) => {
         console.error('Failed to copy diagram JSON', error)
-        setExportStatus('error')
+        setJsonExportStatus('error')
       })
   }, [nodes, edges])
 
+  const handleExportCode = useCallback(() => {
+    copyDiagramCodeToClipboard(nodes, edges, tokens)
+      .then(() => setCodeExportStatus('copied'))
+      .catch((error: unknown) => {
+        console.error('Failed to copy diagram code', error)
+        setCodeExportStatus('error')
+      })
+  }, [nodes, edges, tokens])
+
   useEffect(() => {
-    if (exportStatus === 'idle') return
-    const timer = setTimeout(() => setExportStatus('idle'), 1800)
+    if (jsonExportStatus === 'idle') return
+    const timer = setTimeout(() => setJsonExportStatus('idle'), 1800)
     return () => clearTimeout(timer)
-  }, [exportStatus])
+  }, [jsonExportStatus])
+
+  useEffect(() => {
+    if (codeExportStatus === 'idle') return
+    const timer = setTimeout(() => setCodeExportStatus('idle'), 1800)
+    return () => clearTimeout(timer)
+  }, [codeExportStatus])
 
   const selectedNode = selection.nodes[0]
   const selectedEdge = selection.edges[0]
 
-  const exportLabel =
-    exportStatus === 'copied' ? 'Copied!' : exportStatus === 'error' ? 'Copy failed' : 'Export JSON'
+  const jsonExportLabel =
+    jsonExportStatus === 'copied' ? 'Copied!' : jsonExportStatus === 'error' ? 'Copy failed' : 'Export JSON'
+  const codeExportLabel =
+    codeExportStatus === 'copied' ? 'Copied!' : codeExportStatus === 'error' ? 'Copy failed' : 'Export code'
 
   return (
     <div className="lab">
       <header className="lab-bar">
         <span className="lab-title">Diagram Lab</span>
         <span className="lab-meta">React Flow authoring tool for system topology diagrams</span>
-        <button type="button" className="lab-export" onClick={handleExport}>
-          {exportLabel}
+        <button type="button" className="lab-export" onClick={handleExportCode}>
+          {codeExportLabel}
+        </button>
+        <button type="button" className="lab-export" onClick={handleExportJson}>
+          {jsonExportLabel}
         </button>
       </header>
       <div className="lab-body">
-        <Sidebar onAddNode={handleAddFromSidebar} />
+        <Sidebar onAddNode={handleAddFromSidebar} tokens={tokens} onChangeTokens={setTokens} />
         <div className="lab-canvas" ref={canvasRef} onDrop={onDrop} onDragOver={onDragOver}>
           <ReactFlow
             nodes={nodes}
