@@ -9,7 +9,7 @@ export type DesignTokens = {
 
 export const DEFAULT_DESIGN_TOKENS: DesignTokens = {
   primaryColor: '#ff4715',
-  secondaryColor: '#1f2937',
+  secondaryColor: '#d8d4cf',
   headingFont: 'Quicksand, sans-serif',
   bodyFont: 'Hanken Grotesk, sans-serif',
 }
