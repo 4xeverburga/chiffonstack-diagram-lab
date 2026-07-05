@@ -24,6 +24,9 @@ export function exportComponentCode(nodes: Node[], edges: Edge[], tokens: Design
 import {
   ReactFlow,
   BaseEdge,
+  ConnectionMode,
+  Handle,
+  Position,
   getBezierPath,
   type Edge,
   type EdgeProps,
@@ -48,14 +51,25 @@ const nodes: Node[] = ${JSON.stringify(plainNodes, null, 2)}
 
 const edges: Edge[] = ${JSON.stringify(plainEdges, null, 2)}
 
+// Renders the same four handles (top/bottom/left/right) the editor uses, so
+// React Flow anchors sourceHandle/targetHandle identically here as on the
+// canvas (contracts/edge-attachments.md). Hidden via diagram.css — exports
+// never show connection points; they're only present so edges have
+// something to anchor to.
 function DiagramLabelNode({ data }: NodeProps) {
   const label = typeof data.label === 'string' ? data.label : ''
   const image = typeof data.image === 'string' ? data.image : undefined
   return (
-    <div className="node-content">
-      {image ? <img className="node-image" src={image} alt="" /> : null}
-      <span className="node-label">{label}</span>
-    </div>
+    <>
+      <Handle id="top" type="source" position={Position.Top} />
+      <Handle id="bottom" type="source" position={Position.Bottom} />
+      <Handle id="left" type="source" position={Position.Left} />
+      <Handle id="right" type="source" position={Position.Right} />
+      <div className="node-content">
+        {image ? <img className="node-image" src={image} alt="" /> : null}
+        <span className="node-label">{label}</span>
+      </div>
+    </>
   )
 }
 
@@ -100,6 +114,7 @@ export default function Diagram() {
         edges={edges}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
+        connectionMode={ConnectionMode.Loose}
         fitView
         panOnDrag
         zoomOnScroll
@@ -122,6 +137,14 @@ export default function Diagram() {
   position: relative;
   width: 100%;
   height: 100%;
+}
+
+/* Connection handles exist only so edges have somewhere to anchor — this
+   export never lets a viewer create or drag a connection, so the handles
+   themselves are never shown. */
+.chiffon-diagram .react-flow__handle {
+  opacity: 0;
+  pointer-events: none;
 }
 
 .chiffon-diagram .node {

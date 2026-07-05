@@ -1,5 +1,6 @@
-import { getBezierPath, Position, type Edge, type Node } from '@xyflow/react'
+import { getBezierPath, type Edge, type Node } from '@xyflow/react'
 import type { HeatVariant } from './heatVariants'
+import { anchorPointForSide, HANDLE_SIDE_POSITION, LEGACY_SOURCE_SIDE, LEGACY_TARGET_SIDE, resolveHandleSide } from './handleSides'
 
 // Shared node sizing + edge path math used by every visual export target
 // (component code, animated SVG) so they can't drift apart from each other
@@ -69,20 +70,28 @@ export function edgeVariant(edge: Edge): HeatVariant {
   return variant ?? 'default'
 }
 
-// Right-center -> left-center handles, matching LabelNode.tsx (Handle
-// type="source" at Position.Right, type="target" at Position.Left).
+// Anchors each edge on the side its data records (sourceHandle/targetHandle,
+// defaulting through the legacy right/left pair — same fallback parseDiagram.ts
+// applies on import, so an edge that skipped that path, e.g. straight from
+// canvas state, anchors identically). Reuses React Flow's own bezier
+// function so the exported curve is identical to what HeatEdge.tsx draws
+// (FR-005, FR-006, FR-009).
 export function computeEdgePaths(edges: Edge[], boxes: Map<string, NodeBox>): EdgePath[] {
   return edges.flatMap((edge) => {
     const source = boxes.get(edge.source)
     const target = boxes.get(edge.target)
     if (!source || !target) return []
+    const sourceSide = resolveHandleSide(edge.sourceHandle, LEGACY_SOURCE_SIDE)
+    const targetSide = resolveHandleSide(edge.targetHandle, LEGACY_TARGET_SIDE)
+    const sourcePoint = anchorPointForSide(source, sourceSide)
+    const targetPoint = anchorPointForSide(target, targetSide)
     const [d] = getBezierPath({
-      sourceX: source.x + source.width,
-      sourceY: source.y + source.height / 2,
-      sourcePosition: Position.Right,
-      targetX: target.x,
-      targetY: target.y + target.height / 2,
-      targetPosition: Position.Left,
+      sourceX: sourcePoint.x,
+      sourceY: sourcePoint.y,
+      sourcePosition: HANDLE_SIDE_POSITION[sourceSide],
+      targetX: targetPoint.x,
+      targetY: targetPoint.y,
+      targetPosition: HANDLE_SIDE_POSITION[targetSide],
     })
     return [{ id: edge.id, d, variant: edgeVariant(edge) }]
   })

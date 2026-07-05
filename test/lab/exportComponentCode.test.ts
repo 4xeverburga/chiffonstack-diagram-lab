@@ -30,6 +30,24 @@ describe('exportComponentCode', () => {
     expect(tsx).toContain('fitView')
   })
 
+  it('renders the same four handle ids as the canvas node and enables loose connection mode', () => {
+    const { tsx } = exportComponentCode(kitchenSinkNodes, kitchenSinkEdges, DEFAULT_DESIGN_TOKENS)
+    expect(tsx).toContain('<Handle id="top" type="source" position={Position.Top} />')
+    expect(tsx).toContain('<Handle id="bottom" type="source" position={Position.Bottom} />')
+    expect(tsx).toContain('<Handle id="left" type="source" position={Position.Left} />')
+    expect(tsx).toContain('<Handle id="right" type="source" position={Position.Right} />')
+    expect(tsx).toContain('connectionMode={ConnectionMode.Loose}')
+  })
+
+  it('serializes each edge\'s sourceHandle/targetHandle and hides handles in the generated CSS', () => {
+    const edgesWithSides = [{ ...kitchenSinkEdges[0], sourceHandle: 'top', targetHandle: 'bottom' }]
+    const { tsx, css } = exportComponentCode(kitchenSinkNodes, edgesWithSides, DEFAULT_DESIGN_TOKENS)
+    expect(tsx).toContain('"sourceHandle": "top"')
+    expect(tsx).toContain('"targetHandle": "bottom"')
+    expect(css).toContain('.react-flow__handle')
+    expect(css).toContain('opacity: 0')
+  })
+
   it('applies tokens only as --token-* custom properties, never hard-coded brand values', () => {
     const tokens = { primaryColor: '#123456', secondaryColor: '#abcdef', headingFont: 'Custom Heading', bodyFont: 'Custom Body' }
     const { tsx, css } = exportComponentCode(kitchenSinkNodes, kitchenSinkEdges, tokens)

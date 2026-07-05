@@ -54,4 +54,53 @@ describe('parseDiagram', () => {
     const { edges } = parseDiagram(json)
     expect(edges[0].data?.variant).toBe('default')
   })
+
+  it('round-trips explicit side attachments across several distinct combinations', () => {
+    const nodes = [kitchenSinkNodes[0], kitchenSinkNodes[1]]
+    const edges = [
+      { id: 'e1', source: 'default-node', target: 'active-node', type: 'heat', data: { variant: 'default' }, sourceHandle: 'left', targetHandle: 'top' },
+      { id: 'e2', source: 'default-node', target: 'active-node', type: 'heat', data: { variant: 'default' }, sourceHandle: 'bottom', targetHandle: 'right' },
+      { id: 'e3', source: 'default-node', target: 'active-node', type: 'heat', data: { variant: 'default' }, sourceHandle: 'top', targetHandle: 'bottom' },
+    ]
+    const json = serializeDiagram(nodes, edges)
+    const { edges: parsedEdges } = parseDiagram(json)
+    expect(parsedEdges.map((edge) => [edge.sourceHandle, edge.targetHandle])).toEqual([
+      ['left', 'top'],
+      ['bottom', 'right'],
+      ['top', 'bottom'],
+    ])
+  })
+
+  it('falls back each endpoint to its own legacy default independently on an unrecognized value', () => {
+    const json = JSON.stringify({
+      nodes: [
+        { id: 'a', position: { x: 0, y: 0 }, data: { label: 'a' } },
+        { id: 'b', position: { x: 100, y: 0 }, data: { label: 'b' } },
+      ],
+      edges: [{ id: 'e1', source: 'a', target: 'b', sourceHandle: 'top', targetHandle: 'north' }],
+    })
+    const { edges } = parseDiagram(json)
+    expect(edges[0].sourceHandle).toBe('top')
+    expect(edges[0].targetHandle).toBe('left')
+  })
+
+  it('assigns the legacy right/left sides to a pre-feature edge with no handle fields', () => {
+    const json = JSON.stringify({
+      nodes: [
+        { id: 'a', position: { x: 0, y: 0 }, data: { label: 'a' } },
+        { id: 'b', position: { x: 100, y: 0 }, data: { label: 'b' } },
+      ],
+      edges: [{ id: 'e1', source: 'a', target: 'b', type: 'heat', data: { variant: 'default' } }],
+    })
+    const { nodes, edges } = parseDiagram(json)
+    expect(edges[0].sourceHandle).toBe('right')
+    expect(edges[0].targetHandle).toBe('left')
+
+    // Re-exporting the imported (in-memory) diagram now carries explicit
+    // sides, upgrading the legacy file instead of silently staying implicit
+    // (FR-004, spec US4 scenario 2).
+    const reExported = JSON.parse(serializeDiagram(nodes, edges)) as { edges: Array<Record<string, unknown>> }
+    expect(reExported.edges[0].sourceHandle).toBe('right')
+    expect(reExported.edges[0].targetHandle).toBe('left')
+  })
 })

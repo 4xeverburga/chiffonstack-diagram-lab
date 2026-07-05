@@ -54,6 +54,15 @@ describe('exportSvg', () => {
     expect(svg).toContain('width="220" height="96"')
   })
 
+  it('anchors edge paths on the side each edge records, not the legacy right/left pair', () => {
+    const defaultSideEdges = [{ ...kitchenSinkEdges[0], sourceHandle: undefined, targetHandle: undefined }]
+    const explicitSideEdges = [{ ...kitchenSinkEdges[0], sourceHandle: 'top', targetHandle: 'bottom' }]
+    const defaultSvg = exportSvg(kitchenSinkNodes, defaultSideEdges, DEFAULT_DESIGN_TOKENS)
+    const explicitSvg = exportSvg(kitchenSinkNodes, explicitSideEdges, DEFAULT_DESIGN_TOKENS)
+    const pathFrom = (svg: string) => svg.match(/<path class="edge edge-default" d="([^"]+)"/)?.[1]
+    expect(pathFrom(explicitSvg)).not.toBe(pathFrom(defaultSvg))
+  })
+
   it('escapes hostile labels for safe XML text', () => {
     const hostileNodes = [hostileLabelNode(kitchenSinkNodes[0])]
     const svg = exportSvg(hostileNodes, [], DEFAULT_DESIGN_TOKENS)

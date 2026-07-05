@@ -1,5 +1,6 @@
 import type { Edge, Node } from '@xyflow/react'
 import { HEAT_VARIANTS, type HeatVariant } from './heatVariants'
+import { LEGACY_SOURCE_SIDE, LEGACY_TARGET_SIDE, resolveHandleSide } from './handleSides'
 
 // Strips React Flow's internal/runtime fields down to the canonical shape
 // (specs/001-export-suite/data-model.md). Shared by the JSON export, the
@@ -25,6 +26,12 @@ export function toPlainDiagram(nodes: Node[], edges: Edge[]) {
     target: edge.target,
     type: edge.type,
     data: edge.data,
+    // Always written explicitly (even for edges still holding the legacy
+    // right/left default), so a re-export of an imported pre-002 diagram
+    // upgrades it to explicit sides rather than staying implicit (FR-004,
+    // spec US4 scenario 2).
+    sourceHandle: resolveHandleSide(edge.sourceHandle, LEGACY_SOURCE_SIDE),
+    targetHandle: resolveHandleSide(edge.targetHandle, LEGACY_TARGET_SIDE),
   }))
 
   return { nodes: plainNodes, edges: plainEdges }
@@ -81,12 +88,18 @@ function parsePlainEdge(value: unknown, index: number): Edge {
   }
   const rawVariant = isRecord(value.data) ? value.data.variant : undefined
   const variant: HeatVariant = HEAT_VARIANTS.includes(rawVariant as HeatVariant) ? (rawVariant as HeatVariant) : 'default'
+  // Each endpoint falls back to its own legacy default independently — an
+  // edge with a valid sourceHandle but an unrecognized targetHandle keeps
+  // its valid side and only the bad endpoint is replaced (FR-008, contracts/
+  // edge-attachments.md guarantee 3).
   return {
     id: value.id,
     source: value.source,
     target: value.target,
     type: typeof value.type === 'string' ? value.type : 'heat',
     data: { variant },
+    sourceHandle: resolveHandleSide(value.sourceHandle, LEGACY_SOURCE_SIDE),
+    targetHandle: resolveHandleSide(value.targetHandle, LEGACY_TARGET_SIDE),
   }
 }
 
