@@ -27,18 +27,33 @@ function plainEdgeData(data: unknown) {
 // component export, and the bundle so `diagram.json` is byte-identical no
 // matter which export target produced it (single generator, no forks).
 export function toPlainDiagram(nodes: Node[], edges: Edge[]) {
-  const plainNodes = nodes.map((node) => ({
-    id: node.id,
-    type: node.type,
-    position: node.position,
-    data: { label: node.data.label, image: node.data.image, labelSize: resolveTextSize(node.data.labelSize) },
-    className: node.className,
-    // Present only once the user has manually resized the node (NodeResizer
-    // in LabelNode.tsx) — undefined otherwise, so JSON.stringify drops it and
-    // untouched nodes keep the auto-sizing behavior on re-import.
-    width: node.width,
-    height: node.height,
-  }))
+  const plainNodes = nodes.map((node) => {
+    const imageAspect = typeof node.data.imageAspect === 'number' && Number.isFinite(node.data.imageAspect) && node.data.imageAspect > 0
+      ? node.data.imageAspect
+      : undefined
+    return {
+      id: node.id,
+      type: node.type,
+      position: node.position,
+      data: {
+        label: node.data.label,
+        image: node.data.image,
+        labelSize: resolveTextSize(node.data.labelSize),
+        // Only carried alongside an image — undefined here drops the key
+        // via JSON.stringify, keeping legacy/no-image nodes byte-identical
+        // to pre-005 output (contracts/image-fit.md guarantee 3).
+        imageAspect: node.data.image ? imageAspect : undefined,
+      },
+      className: node.className,
+      // Present only once the user has manually resized the node
+      // (NodeResizer in LabelNode.tsx) or an image fit set it
+      // (useDiagramMutations.ts's setNodeImage) — undefined otherwise, so
+      // JSON.stringify drops it and untouched nodes keep the auto-sizing
+      // behavior on re-import.
+      width: node.width,
+      height: node.height,
+    }
+  })
 
   const plainEdges = edges.map((edge) => ({
     id: edge.id,
@@ -87,11 +102,20 @@ function parsePlainNode(value: unknown, index: number): Node {
     throw new Error(`Diagram Lab: node "${value.id}" is missing a string "data.label".`)
   }
   const image = typeof value.data.image === 'string' ? value.data.image : undefined
+  // imageAspect is dropped (not just left undefined) unless it's a finite,
+  // positive number carried alongside a present image — a value without an
+  // image, or an invalid one, is meaningless and never throws (FR-008,
+  // contracts/image-fit.md guarantee 3).
+  const rawImageAspect = value.data.imageAspect
+  const imageAspect =
+    image && typeof rawImageAspect === 'number' && Number.isFinite(rawImageAspect) && rawImageAspect > 0
+      ? rawImageAspect
+      : undefined
   const node: Node = {
     id: value.id,
     type: typeof value.type === 'string' ? value.type : 'labelNode',
     position: { x: value.position.x, y: value.position.y },
-    data: { label: value.data.label, image, labelSize: resolveTextSize(value.data.labelSize) },
+    data: { label: value.data.label, image, labelSize: resolveTextSize(value.data.labelSize), imageAspect },
     className: typeof value.className === 'string' ? value.className : undefined,
   }
   if (typeof value.width === 'number') node.width = value.width

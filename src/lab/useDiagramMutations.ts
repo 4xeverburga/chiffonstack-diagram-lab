@@ -4,10 +4,43 @@ import type { Edge, Node } from '@xyflow/react'
 import { classNameForKind, type NodeKind } from './nodeKinds'
 import type { HeatVariant } from './heatVariants'
 import { nextThickness, resolveDirection, resolveThickness, type EdgeThickness } from './edgeStyle'
-import type { TextSize } from './textSizes'
+import { computeImageFit } from './imageFit'
+import { resolveTextSize, TEXT_SIZE_METRICS, type TextSize } from './textSizes'
 
 type SetNodes = Dispatch<SetStateAction<Node[]>>
 type SetEdges = Dispatch<SetStateAction<Edge[]>>
+
+// Pure per-node transform behind setNodeImage, extracted so the
+// upload/replace/remove/re-fit lifecycle (spec 005, US1/US4) is unit-
+// testable without mounting the hook. Setting an image with its natural
+// dimensions (re)fits the node to that image's aspect ratio — manual-size
+// semantics: persisted width/height, ratio locked via data.imageAspect,
+// overriding any prior manual size (research.md R3/R5). Passing
+// `image = undefined` clears the fit and returns the node to auto-sizing
+// (FR-005).
+export function applyNodeImage(
+  node: Node,
+  image: string | undefined,
+  naturalWidth: number | undefined,
+  naturalHeight: number | undefined,
+): Node {
+  if (image && naturalWidth && naturalHeight) {
+    const labelBand = TEXT_SIZE_METRICS[resolveTextSize(node.data.labelSize)].labelBand
+    const fit = computeImageFit(naturalWidth, naturalHeight, labelBand)
+    return {
+      ...node,
+      data: { ...node.data, image, imageAspect: fit.aspect },
+      width: fit.width,
+      height: fit.height,
+    }
+  }
+  const nextData = { ...node.data, image } as Record<string, unknown>
+  delete nextData.imageAspect
+  const nextNode = { ...node, data: nextData }
+  delete nextNode.width
+  delete nextNode.height
+  return nextNode
+}
 
 // Every node/edge mutation callback the editor UI (Inspector, EdgeToolbar)
 // dispatches, extracted from App.tsx so it stays under the constitution's
@@ -34,10 +67,8 @@ export function useDiagramMutations(setNodes: SetNodes, setEdges: SetEdges) {
   )
 
   const setNodeImage = useCallback(
-    (id: string, image: string | undefined) => {
-      setNodes((current) =>
-        current.map((node) => (node.id === id ? { ...node, data: { ...node.data, image } } : node)),
-      )
+    (id: string, image: string | undefined, naturalWidth: number | undefined, naturalHeight: number | undefined) => {
+      setNodes((current) => current.map((node) => (node.id === id ? applyNodeImage(node, image, naturalWidth, naturalHeight) : node)))
     },
     [setNodes],
   )

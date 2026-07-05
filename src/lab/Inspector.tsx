@@ -13,7 +13,7 @@ type InspectorProps = {
   selectedEdge: Edge | undefined
   onRenameNode: (id: string, label: string) => void
   onSetNodeKind: (id: string, kind: NodeKind) => void
-  onSetNodeImage: (id: string, image: string | undefined) => void
+  onSetNodeImage: (id: string, image: string | undefined, naturalWidth: number | undefined, naturalHeight: number | undefined) => void
   onSetNodeLabelSize: (id: string, size: TextSize) => void
   onSetEdgeVariant: (id: string, variant: HeatVariant) => void
   onSetEdgeThickness: (id: string, thickness: EdgeThickness) => void
@@ -49,8 +49,8 @@ export function Inspector({
       event.target.value = ''
       if (!file) return
       readImageFile(file)
-        .then(({ dataUri, byteSize }) => {
-          onSetNodeImage(selectedNode.id, dataUri)
+        .then(({ dataUri, byteSize, naturalWidth, naturalHeight }) => {
+          onSetNodeImage(selectedNode.id, dataUri, naturalWidth, naturalHeight)
           setSizeWarningBytes(byteSize > IMAGE_SIZE_WARNING_BYTES ? byteSize : undefined)
         })
         .catch((error: unknown) => {
@@ -103,7 +103,7 @@ export function Inspector({
               <button
                 type="button"
                 className="lab-danger"
-                onClick={() => onSetNodeImage(selectedNode.id, undefined)}
+                onClick={() => onSetNodeImage(selectedNode.id, undefined, undefined, undefined)}
               >
                 Remove image
               </button>

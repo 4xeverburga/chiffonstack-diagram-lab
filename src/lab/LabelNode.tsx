@@ -1,6 +1,7 @@
-import { Handle, NodeResizer, type NodeProps } from '@xyflow/react'
+import { Handle, NodeResizer, useReactFlow, type NodeProps, type OnResize } from '@xyflow/react'
 import { HANDLE_SIDES, HANDLE_SIDE_POSITION } from './handleSides'
-import { resolveTextSize } from './textSizes'
+import { heightForRatioLockedWidth } from './imageFit'
+import { resolveTextSize, TEXT_SIZE_METRICS } from './textSizes'
 
 // Custom node used for every diagram box: keeps the existing className-driven
 // look (node / node-active / node-dim). Renaming and image assignment happen
@@ -19,10 +20,28 @@ import { resolveTextSize } from './textSizes'
 // that same id is the serialized sourceHandle/targetHandle value (handleSides.ts).
 // Visibility (hidden at rest, revealed on hover/selection/connecting) is
 // pure CSS in App.css — nothing here decides when a handle is shown.
-export function LabelNode({ data, selected }: NodeProps) {
+export function LabelNode({ id, data, selected }: NodeProps) {
+  const { updateNode } = useReactFlow()
   const label = typeof data.label === 'string' ? data.label : ''
   const image = typeof data.image === 'string' ? data.image : undefined
   const labelSize = resolveTextSize(data.labelSize)
+  const imageAspect =
+    typeof data.imageAspect === 'number' && Number.isFinite(data.imageAspect) && data.imageAspect > 0
+      ? data.imageAspect
+      : undefined
+
+  // Width-driven ratio lock (research.md R4): React Flow's own
+  // keepAspectRatio prop locks the raw box ratio, which drifts the image
+  // area's ratio as the fixed label band scales, letterboxing the image.
+  // Deriving height from the dragged width on every resize step keeps the
+  // image area's ratio exact at any size (FR-003). Nodes without an
+  // imageAspect keep the default unconstrained resize.
+  const onResize: OnResize | undefined = imageAspect
+    ? (_event, params) => {
+        const labelBand = TEXT_SIZE_METRICS[labelSize].labelBand
+        updateNode(id, { width: params.width, height: heightForRatioLockedWidth(params.width, imageAspect, labelBand) })
+      }
+    : undefined
 
   return (
     <>
@@ -32,6 +51,7 @@ export function LabelNode({ data, selected }: NodeProps) {
         minHeight={40}
         handleClassName="node-resize-handle"
         lineClassName="node-resize-line"
+        onResize={onResize}
       />
       {HANDLE_SIDES.map((side) => (
         <Handle key={side} id={side} type="source" position={HANDLE_SIDE_POSITION[side]} />

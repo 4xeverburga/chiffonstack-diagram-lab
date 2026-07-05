@@ -45,6 +45,19 @@ describe('computeNodeBoxes', () => {
     const boxes = computeNodeBoxes([withSize])
     expect(boxes.get('n')).toMatchObject({ width: 100, height: 50 })
   })
+
+  it('honors an image-fitted node\'s persisted width/height regardless of imageAspect (spec 005)', () => {
+    const fitted = {
+      id: 'n',
+      type: 'labelNode',
+      position: { x: 0, y: 0 },
+      data: { label: 'logo', image: 'data:image/png;base64,AAAA', imageAspect: 2 },
+      width: 200,
+      height: 120,
+    }
+    const boxes = computeNodeBoxes([fitted])
+    expect(boxes.get('n')).toMatchObject({ width: 200, height: 120 })
+  })
 })
 
 describe('computeEdgePaths', () => {
