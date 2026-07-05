@@ -22,3 +22,11 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Vendored impeccable skill tooling (harness installs) + local config.
+# Ignore the vendored subdirs specifically so .github/workflows stays tracked.
+.claude/
+.github/skills/
+.github/hooks/
+.opencode
+.impeccable/
