@@ -321,12 +321,13 @@
   font-family: var(--token-body-font, var(--mono));
   font-size: 13px;
   text-align: center;
-  /* Nodes are resizable (see NodeResizer in LabelNode.tsx) — once the user
-     drags a resize handle, React Flow applies an explicit width/height to
-     this same element. box-sizing keeps padding/border inside that size
-     instead of growing past it. No overflow:hidden here — the connection
-     Handles are positioned straddling this element's edges and would get
-     clipped; overflow is instead scoped to .node-content below. */
+  /* Resizable only for nodes with an image attached (see NodeResizer's
+     isVisible in LabelNode.tsx) — once the user drags a resize handle,
+     React Flow applies an explicit width/height to this same element.
+     box-sizing keeps padding/border inside that size instead of growing
+     past it. No overflow:hidden here — the connection Handles are
+     positioned straddling this element's edges and would get clipped;
+     overflow is instead scoped to .node-content below. */
   box-sizing: border-box;
 }
 
