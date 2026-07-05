@@ -71,6 +71,59 @@ describe('parseDiagram', () => {
     expect(resized?.height).toBe(96)
   })
 
+  it('round-trips imageAspect alongside width/height for a fitted image node', () => {
+    const json = JSON.stringify({
+      nodes: [
+        {
+          id: 'a',
+          position: { x: 0, y: 0 },
+          data: { label: 'a', image: 'data:image/png;base64,AAAA', imageAspect: 2 },
+          width: 200,
+          height: 120,
+        },
+      ],
+      edges: [],
+    })
+    const { nodes } = parseDiagram(json)
+    expect(nodes[0].data.imageAspect).toBe(2)
+    expect(nodes[0].width).toBe(200)
+    expect(nodes[0].height).toBe(120)
+    const reexported = JSON.parse(serializeDiagram(nodes, []))
+    expect(reexported.nodes[0].data.imageAspect).toBe(2)
+    expect(reexported.nodes[0].width).toBe(200)
+    expect(reexported.nodes[0].height).toBe(120)
+  })
+
+  it('imports a legacy image node with no imageAspect unchanged', () => {
+    const json = serializeDiagram(kitchenSinkNodes, kitchenSinkEdges)
+    const { nodes } = parseDiagram(json)
+    const legacyImage = nodes.find((node) => node.id === 'image-node')
+    expect(legacyImage?.data.imageAspect).toBeUndefined()
+    expect(legacyImage?.data.image).toBeDefined()
+  })
+
+  it('drops a non-numeric, non-finite, or non-positive imageAspect without affecting the rest of the node', () => {
+    for (const badValue of ['2', Infinity, -1, 0, NaN]) {
+      const json = JSON.stringify({
+        nodes: [{ id: 'a', position: { x: 0, y: 0 }, data: { label: 'a', image: 'data:image/png;base64,AAAA', imageAspect: badValue } }],
+        edges: [],
+      })
+      const { nodes } = parseDiagram(json)
+      expect(nodes[0].data.imageAspect).toBeUndefined()
+      expect(nodes[0].data.label).toBe('a')
+      expect(nodes[0].data.image).toBe('data:image/png;base64,AAAA')
+    }
+  })
+
+  it('drops imageAspect present without data.image', () => {
+    const json = JSON.stringify({
+      nodes: [{ id: 'a', position: { x: 0, y: 0 }, data: { label: 'a', imageAspect: 2 } }],
+      edges: [],
+    })
+    const { nodes } = parseDiagram(json)
+    expect(nodes[0].data.imageAspect).toBeUndefined()
+  })
+
   it('throws a descriptive error on invalid JSON', () => {
     expect(() => parseDiagram('not json')).toThrow('not valid JSON')
   })

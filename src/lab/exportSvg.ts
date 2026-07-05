@@ -3,7 +3,7 @@ import type { DesignTokens } from './designTokens'
 import { classNameForKind, kindForClassName } from './nodeKinds'
 import { edgeStyleClassNames, THICKNESS_STROKE_WIDTH } from './edgeStyle'
 import { CANVAS_MARGIN, computeContentSize, computeEdgePaths, computeNodeBoxes, nodeImage, nodeLabel } from './exportGeometry'
-import { resolveTextSize, TEXT_SIZE_METRICS } from './textSizes'
+import { labelBandFor, resolveTextSize, TEXT_SIZE_METRICS } from './textSizes'
 
 const GENERIC_FONT_KEYWORDS = new Set([
   'serif',
@@ -79,7 +79,7 @@ export function exportSvg(nodes: Node[], edges: Edge[], tokens: DesignTokens): s
       const label = nodeLabel(node)
       const image = nodeImage(node)
       const labelSize = resolveTextSize(node.data.labelSize)
-      const labelBandHeight = TEXT_SIZE_METRICS[labelSize].labelBand
+      const labelBandHeight = labelBandFor(label, labelSize)
 
       const labelY = image ? box.y + box.height - labelBandHeight / 2 : box.y + box.height / 2
       const imageMarkup = image

@@ -29,3 +29,11 @@ export const TEXT_SIZE_METRICS: Record<TextSize, TextSizeMetrics> = {
 export function resolveTextSize(value: unknown): TextSize {
   return TEXT_SIZES.includes(value as TextSize) ? (value as TextSize) : DEFAULT_TEXT_SIZE
 }
+
+// A blank label reserves no vertical space: image-fitted nodes hug the
+// image tightly instead of leaving a gap sized for label text that isn't
+// there (whether it never had one, or was since cleared). Whitespace-only
+// labels count as blank — they render nothing visible either.
+export function labelBandFor(label: string, size: TextSize): number {
+  return label.trim().length > 0 ? TEXT_SIZE_METRICS[size].labelBand : 0
+}

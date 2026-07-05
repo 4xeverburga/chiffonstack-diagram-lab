@@ -93,6 +93,24 @@ describe('exportSvg', () => {
     expect(imageHeight(svgLarge)).toBeGreaterThan(imageHeight(svgSmall))
   })
 
+  it('does not reserve a label-band gap for an image node with no label', () => {
+    const PIXEL_PNG =
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
+    const labeledNode = { id: 'img-labeled', type: 'labelNode', position: { x: 0, y: 0 }, data: { label: 'caption', image: PIXEL_PNG } }
+    const blankNode = { id: 'img-blank', type: 'labelNode', position: { x: 0, y: 0 }, data: { label: '', image: PIXEL_PNG } }
+    const svgLabeled = exportSvg([labeledNode], [], DEFAULT_DESIGN_TOKENS)
+    const svgBlank = exportSvg([blankNode], [], DEFAULT_DESIGN_TOKENS)
+    const imageHeight = (svg: string) => Number(svg.match(/<image[^>]*height="([\d.]+)"/)?.[1])
+    const nodeBoxHeight = (svg: string) => Number(svg.match(/<rect[^>]*height="([\d.]+)"/)?.[1])
+    // Same source image, no persisted width/height on either node, so both
+    // fall back to exportGeometry's auto-size heuristic (same total box
+    // height either way — that heuristic doesn't vary by label presence),
+    // but the blank-label node's image should fill that box completely
+    // instead of being inset by a label band with nothing to show for it.
+    expect(imageHeight(svgBlank)).toBe(nodeBoxHeight(svgBlank) - 6)
+    expect(imageHeight(svgBlank)).toBeGreaterThan(imageHeight(svgLabeled))
+  })
+
   it('anchors edge paths on the side each edge records, not the legacy right/left pair', () => {
     const defaultSideEdges = [{ ...kitchenSinkEdges[0], sourceHandle: undefined, targetHandle: undefined }]
     const explicitSideEdges = [{ ...kitchenSinkEdges[0], sourceHandle: 'top', targetHandle: 'bottom' }]
