@@ -3,6 +3,33 @@ import { HEAT_VARIANTS, type HeatVariant } from './heatVariants'
 import { LEGACY_SOURCE_SIDE, LEGACY_TARGET_SIDE, resolveHandleSide } from './handleSides'
 import { resolveDirection, resolveThickness } from './edgeStyle'
 import { resolveTextSize } from './textSizes'
+import type { SimRole } from '../engine/ports'
+
+// A node's simulation role (FR-001) is the only new field this feature
+// adds to the canonical node shape. Absent (undefined) for every node
+// nobody has assigned a role to, so pre-008 diagrams — and this feature's
+// own placeholder/dim/active nodes — round-trip byte-identical to before
+// (legacy-diagram parity, US3). Invalid/malformed input silently drops the
+// role rather than throwing, matching the tolerance already applied to
+// edge variant/thickness/direction and image aspect below.
+function plainSimRole(value: unknown): SimRole | undefined {
+  if (!isRecord(value)) return undefined
+  if (value.role === 'generator' && typeof value.ratePerSec === 'number' && Number.isFinite(value.ratePerSec) && value.ratePerSec >= 0) {
+    return { role: 'generator', ratePerSec: value.ratePerSec }
+  }
+  if (
+    value.role === 'processor' &&
+    typeof value.serviceRatePerSec === 'number' &&
+    Number.isFinite(value.serviceRatePerSec) &&
+    value.serviceRatePerSec > 0
+  ) {
+    return { role: 'processor', serviceRatePerSec: value.serviceRatePerSec }
+  }
+  if (value.role === 'sink') {
+    return { role: 'sink' }
+  }
+  return undefined
+}
 
 // The canonical edge `data` is exactly these three fields. Both the
 // serializer and the parser build `data` through this whitelist, so
@@ -43,6 +70,7 @@ export function toPlainDiagram(nodes: Node[], edges: Edge[]) {
         // via JSON.stringify, keeping legacy/no-image nodes byte-identical
         // to pre-005 output (contracts/image-fit.md guarantee 3).
         imageAspect: node.data.image ? imageAspect : undefined,
+        sim: plainSimRole(node.data.sim),
       },
       className: node.className,
       // Present only once the user has manually resized the node
@@ -111,11 +139,12 @@ function parsePlainNode(value: unknown, index: number): Node {
     image && typeof rawImageAspect === 'number' && Number.isFinite(rawImageAspect) && rawImageAspect > 0
       ? rawImageAspect
       : undefined
+  const sim = plainSimRole(value.data.sim)
   const node: Node = {
     id: value.id,
     type: typeof value.type === 'string' ? value.type : 'labelNode',
     position: { x: value.position.x, y: value.position.y },
-    data: { label: value.data.label, image, labelSize: resolveTextSize(value.data.labelSize), imageAspect },
+    data: { label: value.data.label, image, labelSize: resolveTextSize(value.data.labelSize), imageAspect, sim },
     className: typeof value.className === 'string' ? value.className : undefined,
   }
   if (typeof value.width === 'number') node.width = value.width

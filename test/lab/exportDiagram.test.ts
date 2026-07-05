@@ -1,7 +1,15 @@
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { parseDiagram, serializeDiagram, toPlainDiagram } from '../../src/lab/exportDiagram'
 import { kitchenSinkEdges, kitchenSinkNodes } from './fixtures/kitchenSink'
 import { HOSTILE_LABEL, hostileLabelNode } from './fixtures/hostileLabel'
+
+const legacyDiagramJson = readFileSync(
+  path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'fixtures', 'legacy-diagram.json'),
+  'utf-8',
+)
 
 describe('parseDiagram', () => {
   it('round-trips a serialized diagram back into React Flow nodes/edges', () => {
@@ -249,5 +257,75 @@ describe('parseDiagram', () => {
     const reExported = JSON.parse(serializeDiagram(nodes, edges)) as { edges: Array<Record<string, unknown>> }
     expect(reExported.edges[0].sourceHandle).toBe('right')
     expect(reExported.edges[0].targetHandle).toBe('left')
+  })
+
+  // --- Simulation role (008-simulation-engine-skeleton, US3) ---
+
+  it('round-trips a generator/processor/sink role and its rate for each', () => {
+    const nodes = [
+      { id: 'gen', type: 'labelNode', position: { x: 0, y: 0 }, data: { label: 'gen', sim: { role: 'generator', ratePerSec: 100 } } },
+      { id: 'proc', type: 'labelNode', position: { x: 100, y: 0 }, data: { label: 'proc', sim: { role: 'processor', serviceRatePerSec: 200 } } },
+      { id: 'sink', type: 'labelNode', position: { x: 200, y: 0 }, data: { label: 'sink', sim: { role: 'sink' } } },
+    ]
+    const json = serializeDiagram(nodes, [])
+    const { nodes: parsedNodes } = parseDiagram(json)
+    expect(parsedNodes.find((node) => node.id === 'gen')?.data.sim).toEqual({ role: 'generator', ratePerSec: 100 })
+    expect(parsedNodes.find((node) => node.id === 'proc')?.data.sim).toEqual({ role: 'processor', serviceRatePerSec: 200 })
+    expect(parsedNodes.find((node) => node.id === 'sink')?.data.sim).toEqual({ role: 'sink' })
+  })
+
+  it('omits data.sim entirely for a node with no simulation role', () => {
+    const json = JSON.parse(serializeDiagram(kitchenSinkNodes, kitchenSinkEdges)) as { nodes: Array<{ data: Record<string, unknown> }> }
+    for (const node of json.nodes) {
+      expect('sim' in node.data).toBe(false)
+    }
+  })
+
+  it('never serializes a node\'s transient simMetrics', () => {
+    const nodes = [
+      {
+        id: 'gen',
+        type: 'labelNode',
+        position: { x: 0, y: 0 },
+        data: { label: 'gen', sim: { role: 'generator', ratePerSec: 100 }, simMetrics: { throughputPerSec: 100, queueDepth: 0 } },
+      },
+    ]
+    const json = JSON.parse(serializeDiagram(nodes, [])) as { nodes: Array<{ data: Record<string, unknown> }> }
+    expect('simMetrics' in json.nodes[0].data).toBe(false)
+  })
+
+  it('never serializes an edge\'s transient simMetrics', () => {
+    const nodes = [kitchenSinkNodes[0], kitchenSinkNodes[1]]
+    const edges = [
+      {
+        id: 'e1',
+        source: 'default-node',
+        target: 'active-node',
+        type: 'heat',
+        data: { variant: 'heat-flow', simMetrics: { throughputPerSec: 50 } },
+      },
+    ]
+    const json = JSON.parse(serializeDiagram(nodes, edges)) as { edges: Array<{ data: Record<string, unknown> }> }
+    expect('simMetrics' in json.edges[0].data).toBe(false)
+  })
+
+  it('drops an invalid sim role (bad rate, unrecognized role) rather than throwing', () => {
+    const json = JSON.stringify({
+      nodes: [
+        { id: 'a', position: { x: 0, y: 0 }, data: { label: 'a', sim: { role: 'generator', ratePerSec: -1 } } },
+        { id: 'b', position: { x: 100, y: 0 }, data: { label: 'b', sim: { role: 'processor', serviceRatePerSec: 0 } } },
+        { id: 'c', position: { x: 200, y: 0 }, data: { label: 'c', sim: { role: 'not-a-real-role' } } },
+      ],
+      edges: [],
+    })
+    const { nodes } = parseDiagram(json)
+    expect(nodes.every((node) => node.data.sim === undefined)).toBe(true)
+  })
+
+  it('imports the pre-008 legacy fixture without error and with no simulation role on any node', () => {
+    const { nodes, edges } = parseDiagram(legacyDiagramJson)
+    expect(nodes).toHaveLength(3)
+    expect(edges).toHaveLength(2)
+    expect(nodes.every((node) => node.data.sim === undefined)).toBe(true)
   })
 })
