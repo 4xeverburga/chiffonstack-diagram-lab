@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Node } from '@xyflow/react'
-import { applyNodeImage } from '../../src/lab/useDiagramMutations'
+import { applyNodeImage, refitLabelBand } from '../../src/lab/useDiagramMutations'
 
 function baseNode(overrides: Partial<Node> = {}): Node {
   return {
@@ -53,5 +53,46 @@ describe('applyNodeImage', () => {
     const next = applyNodeImage(node, 'data:image/png;base64,AAAA', 400, 200)
     expect(next.data.label).toBe('keep me')
     expect(next.data.labelSize).toBe('large')
+  })
+
+  it('fits a node with no label to the image alone, with no label-band gap reserved', () => {
+    const labeled = applyNodeImage(baseNode({ data: { label: 'caption' } }), 'data:image/png;base64,AAAA', 400, 200)
+    const blank = applyNodeImage(baseNode({ data: { label: '' } }), 'data:image/png;base64,AAAA', 400, 200)
+    // Same image, same fitted width, but the blank-label node should be
+    // shorter — no label band added underneath the image.
+    expect(blank.width).toBe(labeled.width)
+    expect(blank.height).toBeLessThan(labeled.height as number)
+  })
+
+  it('treats a whitespace-only label the same as a blank one (no label-band gap)', () => {
+    const blank = applyNodeImage(baseNode({ data: { label: '' } }), 'data:image/png;base64,AAAA', 400, 200)
+    const whitespace = applyNodeImage(baseNode({ data: { label: '   ' } }), 'data:image/png;base64,AAAA', 400, 200)
+    expect(whitespace.height).toBe(blank.height)
+  })
+})
+
+describe('refitLabelBand', () => {
+  it('shrinks an image-fitted node when its label is cleared', () => {
+    const fitted = applyNodeImage(baseNode({ data: { label: 'caption' } }), 'data:image/png;base64,AAAA', 400, 200)
+    const cleared = refitLabelBand({ ...fitted, data: { ...fitted.data, label: '' } })
+    expect(cleared.width).toBe(fitted.width)
+    expect(cleared.height).toBeLessThan(fitted.height as number)
+  })
+
+  it('grows an image-fitted node back when a label is typed in', () => {
+    const fitted = applyNodeImage(baseNode({ data: { label: '' } }), 'data:image/png;base64,AAAA', 400, 200)
+    const labeled = refitLabelBand({ ...fitted, data: { ...fitted.data, label: 'caption' } })
+    expect(labeled.height).toBeGreaterThan(fitted.height as number)
+  })
+
+  it('re-derives height when labelSize changes on an image-fitted node', () => {
+    const fitted = applyNodeImage(baseNode({ data: { label: 'caption', labelSize: 'normal' } }), 'data:image/png;base64,AAAA', 400, 200)
+    const larger = refitLabelBand({ ...fitted, data: { ...fitted.data, labelSize: 'large' } })
+    expect(larger.height).toBeGreaterThan(fitted.height as number)
+  })
+
+  it('is a no-op for nodes that are not image-fitted', () => {
+    const plain = baseNode({ width: 120, height: 60 })
+    expect(refitLabelBand(plain)).toEqual(plain)
   })
 })

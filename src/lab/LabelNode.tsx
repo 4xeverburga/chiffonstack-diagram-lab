@@ -1,7 +1,7 @@
 import { Handle, NodeResizer, useReactFlow, type NodeProps, type OnResize } from '@xyflow/react'
 import { HANDLE_SIDES, HANDLE_SIDE_POSITION } from './handleSides'
 import { heightForRatioLockedWidth } from './imageFit'
-import { resolveTextSize, TEXT_SIZE_METRICS } from './textSizes'
+import { labelBandFor, resolveTextSize } from './textSizes'
 
 // Custom node used for every diagram box: keeps the existing className-driven
 // look (node / node-active / node-dim). Renaming and image assignment happen
@@ -38,7 +38,7 @@ export function LabelNode({ id, data, selected }: NodeProps) {
   // imageAspect keep the default unconstrained resize.
   const onResize: OnResize | undefined = imageAspect
     ? (_event, params) => {
-        const labelBand = TEXT_SIZE_METRICS[labelSize].labelBand
+        const labelBand = labelBandFor(label, labelSize)
         updateNode(id, { width: params.width, height: heightForRatioLockedWidth(params.width, imageAspect, labelBand) })
       }
     : undefined
@@ -58,7 +58,7 @@ export function LabelNode({ id, data, selected }: NodeProps) {
       ))}
       <div className="node-content">
         {image ? <img className="node-image" src={image} alt="" /> : null}
-        <span className={`node-label node-label-${labelSize}`}>{label}</span>
+        {label.trim() ? <span className={`node-label node-label-${labelSize}`}>{label}</span> : null}
       </div>
     </>
   )

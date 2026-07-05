@@ -4,11 +4,36 @@ import type { Edge, Node } from '@xyflow/react'
 import { classNameForKind, type NodeKind } from './nodeKinds'
 import type { HeatVariant } from './heatVariants'
 import { nextThickness, resolveDirection, resolveThickness, type EdgeThickness } from './edgeStyle'
-import { computeImageFit } from './imageFit'
-import { resolveTextSize, TEXT_SIZE_METRICS, type TextSize } from './textSizes'
+import { computeImageFit, heightForRatioLockedWidth } from './imageFit'
+import { labelBandFor, resolveTextSize, type TextSize } from './textSizes'
 
 type SetNodes = Dispatch<SetStateAction<Node[]>>
 type SetEdges = Dispatch<SetStateAction<Edge[]>>
+
+function nodeLabelText(node: Node): string {
+  return typeof node.data.label === 'string' ? node.data.label : ''
+}
+
+function nodeImageAspect(node: Node): number | undefined {
+  return typeof node.data.imageAspect === 'number' && Number.isFinite(node.data.imageAspect) && node.data.imageAspect > 0
+    ? node.data.imageAspect
+    : undefined
+}
+
+// A label's text and size only ever affect the label band beneath the
+// image, so an already image-fitted node (data.imageAspect set) can keep
+// its width and just re-derive height whenever the label changes — via
+// renameNode/setNodeLabelSize below. Without this, clearing a label (or
+// picking a different labelSize) leaves the box sized for a label that no
+// longer matches what's rendered. No-op for nodes that aren't image-fitted.
+// Exported (like applyNodeImage) so this is unit-testable without mounting
+// the hook.
+export function refitLabelBand(node: Node): Node {
+  const aspect = nodeImageAspect(node)
+  if (aspect === undefined || typeof node.width !== 'number') return node
+  const labelBand = labelBandFor(nodeLabelText(node), resolveTextSize(node.data.labelSize))
+  return { ...node, height: Math.round(heightForRatioLockedWidth(node.width, aspect, labelBand)) }
+}
 
 // Pure per-node transform behind setNodeImage, extracted so the
 // upload/replace/remove/re-fit lifecycle (spec 005, US1/US4) is unit-
@@ -25,7 +50,7 @@ export function applyNodeImage(
   naturalHeight: number | undefined,
 ): Node {
   if (image && naturalWidth && naturalHeight) {
-    const labelBand = TEXT_SIZE_METRICS[resolveTextSize(node.data.labelSize)].labelBand
+    const labelBand = labelBandFor(nodeLabelText(node), resolveTextSize(node.data.labelSize))
     const fit = computeImageFit(naturalWidth, naturalHeight, labelBand)
     return {
       ...node,
@@ -52,7 +77,9 @@ export function applyNodeImage(
 export function useDiagramMutations(setNodes: SetNodes, setEdges: SetEdges) {
   const renameNode = useCallback(
     (id: string, label: string) => {
-      setNodes((current) => current.map((node) => (node.id === id ? { ...node, data: { ...node.data, label } } : node)))
+      setNodes((current) =>
+        current.map((node) => (node.id === id ? refitLabelBand({ ...node, data: { ...node.data, label } }) : node)),
+      )
     },
     [setNodes],
   )
@@ -76,7 +103,7 @@ export function useDiagramMutations(setNodes: SetNodes, setEdges: SetEdges) {
   const setNodeLabelSize = useCallback(
     (id: string, labelSize: TextSize) => {
       setNodes((current) =>
-        current.map((node) => (node.id === id ? { ...node, data: { ...node.data, labelSize } } : node)),
+        current.map((node) => (node.id === id ? refitLabelBand({ ...node, data: { ...node.data, labelSize } }) : node)),
       )
     },
     [setNodes],

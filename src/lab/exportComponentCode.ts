@@ -70,7 +70,7 @@ function DiagramLabelNode({ data }: NodeProps) {
       <Handle id="right" type="source" position={Position.Right} />
       <div className="node-content">
         {image ? <img className="node-image" src={image} alt="" /> : null}
-        <span className={\`node-label node-label-\${labelSize}\`}>{label}</span>
+        {label.trim() ? <span className={\`node-label node-label-\${labelSize}\`}>{label}</span> : null}
       </div>
     </>
   )
@@ -203,10 +203,6 @@ export default function Diagram() {
   width: auto;
   max-width: 100%;
   object-fit: contain;
-  border-radius: 6px;
-  background: #fff;
-  padding: 3px;
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.12);
 }
 
 .chiffon-diagram .node-active {
