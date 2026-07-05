@@ -1,7 +1,8 @@
-import type { ChangeEvent } from 'react'
+import { useState, type ChangeEvent } from 'react'
 import type { Edge, Node } from '@xyflow/react'
 import { classNameForKind, type NodeKind } from './nodeKinds'
 import { HEAT_VARIANTS, type HeatVariant } from './heatVariants'
+import { IMAGE_SIZE_WARNING_BYTES, IMAGE_UPLOAD_ACCEPT, readImageFile } from './imageUpload'
 
 const NODE_KINDS: NodeKind[] = ['default', 'active', 'dim']
 
@@ -26,19 +27,26 @@ export function Inspector({
   onSetEdgeVariant,
   onDeleteEdge,
 }: InspectorProps) {
+  // Must stay unconditional (Rules of Hooks) even though it's only read in
+  // the node branch below; resets naturally on remount via the node's `key`.
+  const [sizeWarningBytes, setSizeWarningBytes] = useState<number | undefined>(undefined)
+
   if (selectedNode) {
     const label = typeof selectedNode.data.label === 'string' ? selectedNode.data.label : ''
     const image = typeof selectedNode.data.image === 'string' ? selectedNode.data.image : undefined
 
     const handleImageChange = (event: ChangeEvent<HTMLInputElement>) => {
       const file = event.target.files?.[0]
-      if (!file) return
-      const reader = new FileReader()
-      reader.onload = () => {
-        if (typeof reader.result === 'string') onSetNodeImage(selectedNode.id, reader.result)
-      }
-      reader.readAsDataURL(file)
       event.target.value = ''
+      if (!file) return
+      readImageFile(file)
+        .then(({ dataUri, byteSize }) => {
+          onSetNodeImage(selectedNode.id, dataUri)
+          setSizeWarningBytes(byteSize > IMAGE_SIZE_WARNING_BYTES ? byteSize : undefined)
+        })
+        .catch((error: unknown) => {
+          console.error('Failed to read image file', error)
+        })
     }
 
     return (
@@ -77,8 +85,16 @@ export function Inspector({
               </button>
             </div>
           ) : (
-            <input type="file" accept="image/png,image/svg+xml" onChange={handleImageChange} />
+            <input type="file" accept={IMAGE_UPLOAD_ACCEPT} onChange={handleImageChange} />
           )}
+          {sizeWarningBytes !== undefined ? (
+            <div className="lab-warning">
+              <span>Large image ({Math.round(sizeWarningBytes / 1000)} KB): this is embedded in the diagram JSON and every export — consider compressing.</span>
+              <button type="button" className="lab-warning-dismiss" onClick={() => setSizeWarningBytes(undefined)}>
+                Dismiss
+              </button>
+            </div>
+          ) : null}
         </div>
       </aside>
     )

@@ -1,7 +1,16 @@
 <!--
 Sync Impact Report
-- Version change: 1.1.0 → 1.2.0
-- Modified principles:
+- Version change: 1.2.0 → 1.3.0
+- Modified principles (1.3.0):
+  - IV. Contributor-Legible Codebase — added file-size discipline (~250-line
+    soft cap, 300-line split-or-justify), the functional-core/imperative-shell
+    architecture rule, and mandatory unit tests for pure logic
+  - Development Workflow & Quality Gates — lint/build/test gates now enforced
+    by GitHub Actions CI on every push/PR; red CI blocks merge
+- Bump rationale (1.3.0): MINOR — materially expanded Principle IV and the
+  workflow gates; nothing previously compliant becomes non-compliant (largest
+  current file is 274 lines, under the cap)
+- Previous amendment (1.1.0 → 1.2.0):
   - I. Export Fidelity Is the Product — diagram JSON self-containment made explicit
     (node images embedded as base64 data URIs; no external asset references); image
     track resolved from "SVG, GIF" to a single animated SVG export
@@ -99,11 +108,21 @@ anti-reference. Self-containment is what differentiates the tool.
 
 The codebase MUST stay legible to a first-time contributor:
 
-- Small single-purpose modules, one job each (as with `exportCode`, `exportDiagram`,
-  `designTokens`, `nodeKinds`, `heatVariants`).
+- Small single-purpose modules, one job each (as with `exportDiagram`,
+  `designTokens`, `nodeKinds`, `heatVariants`). Source files SHOULD stay under
+  ~250 lines; a file crossing 300 lines MUST be split by responsibility (or the
+  exception justified in the PR). Growth pressure is a design signal — extract a
+  module or hook, don't accrete.
+- **Functional core, imperative shell**: export generators and diagram logic are
+  pure functions (`data in → data out`, no React, no browser APIs, no hidden
+  state); React components stay a thin shell that wires state to those functions
+  and performs side effects (clipboard, downloads, file reads) at the edge.
 - No default parameter values — every argument passed explicitly at the call site
   (per `CLAUDE.md`). Behavior MUST NOT depend on an omitted argument.
 - TypeScript throughout; `oxlint` MUST pass clean before merge.
+- Pure logic (generators, serialization, geometry, escaping) MUST have unit
+  tests; the UI shell is covered by the manual round-trip gate, not mandatory
+  component tests.
 - Comments explain constraints the code cannot show, not what the next line does.
 
 Rationale: an open-source tool lives or dies by whether outsiders can confidently
@@ -151,7 +170,9 @@ consistent and keeps the JSON format the stable center of the product.
 
 ## Development Workflow & Quality Gates
 
-- `npm run lint` (oxlint) and `npm run build` (tsc + vite build) MUST pass before merge.
+- `npm run lint` (oxlint), `npm run build` (tsc + vite build), and the unit test
+  suite MUST pass before merge — enforced by GitHub Actions CI on every push and
+  pull request, not just locally. A red CI blocks merge.
 - Export-affecting changes MUST be verified by round-tripping: export JSON → re-import →
   visually confirm parity; render each affected export target standalone (React Flow
   code in a bare app, the SVG opened directly in a browser and via an `<img>` tag) →
@@ -177,4 +198,4 @@ consistent and keeps the JSON format the stable center of the product.
 - **Compliance review**: the `/speckit-plan` Constitution Check is the standing gate;
   re-check after design (Phase 1) as the plan template requires.
 
-**Version**: 1.2.0 | **Ratified**: 2026-07-04 | **Last Amended**: 2026-07-04
+**Version**: 1.3.0 | **Ratified**: 2026-07-04 | **Last Amended**: 2026-07-04

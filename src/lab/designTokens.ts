@@ -1,5 +1,6 @@
 // Design tokens the user brings from their own project so the exported code
-// (see exportCode.ts) matches their brand instead of this tool's defaults.
+// (see exportComponentCode.ts, exportSvg.ts) matches their brand instead of
+// this tool's defaults.
 export type DesignTokens = {
   primaryColor: string
   secondaryColor: string

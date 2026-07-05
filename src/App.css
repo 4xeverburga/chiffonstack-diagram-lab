@@ -31,6 +31,10 @@
   border-color: #ff4715;
 }
 
+.lab-upload-input {
+  display: none;
+}
+
 .lab-body {
   display: flex;
   flex: 1 1 auto;
@@ -274,13 +278,39 @@
   background: var(--bg);
 }
 
+.lab-warning {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid #d68a00;
+  background: #fff6e5;
+  color: #7a5200;
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.lab-warning-dismiss {
+  flex: 0 0 auto;
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid #d68a00;
+  background: transparent;
+  color: #7a5200;
+  cursor: pointer;
+}
+
 /* React Flow node treatments. Nodes/edges keep the normal arrow cursor at
    rest — React Flow's own `.dragging` classes (higher specificity) still
    switch to the grab/grabbing hand while a node or the canvas is actually
    being dragged. Border/font colors read from the `--token-*` custom
    properties set on `.lab-canvas` (see App.tsx), so editing the sidebar's
-   design tokens updates the canvas in real time — the same values feed the
-   "Export code" output, so the preview always matches what gets exported. */
+   design tokens updates the canvas in real time — the same values feed every
+   export target, so the preview always matches what gets exported. */
 .react-flow__node.node {
   cursor: default;
   padding: 10px 14px;

@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent } from 'react'
+import {
+  useCallback,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type CSSProperties,
+  type DragEvent,
+} from 'react'
 import {
   ReactFlow,
   ReactFlowProvider,
@@ -23,8 +31,7 @@ import type { HeatVariant } from './lab/heatVariants'
 import { Sidebar, DRAG_MIME_TYPE } from './lab/Sidebar'
 import { Inspector } from './lab/Inspector'
 import { classNameForKind, type NodeKind } from './lab/nodeKinds'
-import { copyDiagramToClipboard } from './lab/exportDiagram'
-import { copyDiagramCodeToClipboard } from './lab/exportCode'
+import { useExportActions } from './lab/useExportActions'
 import { DEFAULT_DESIGN_TOKENS, type DesignTokens } from './lab/designTokens'
 
 // Starter topology matching the ChiffonStack teardown diagram language
@@ -56,10 +63,10 @@ function LabEditor() {
   const [tokens, setTokens] = useState<DesignTokens>(DEFAULT_DESIGN_TOKENS)
 
   // Heat edges color their gradient from the live primary token, so the
-  // canvas preview always matches what "Export code" would produce. Carried
-  // through each edge's `data` (rather than closing over it in edgeTypes) so
-  // edgeTypes stays a stable reference and React Flow doesn't remount edges
-  // on every color change.
+  // canvas preview always matches what every export target would produce.
+  // Carried through each edge's `data` (rather than closing over it in
+  // edgeTypes) so edgeTypes stays a stable reference and React Flow doesn't
+  // remount edges on every color change.
   const renderedEdges = useMemo(
     () => edges.map((edge) => ({ ...edge, data: { ...edge.data, primaryColor: tokens.primaryColor } })),
     [edges, tokens.primaryColor],
@@ -74,9 +81,33 @@ function LabEditor() {
     '--token-body-font': tokens.bodyFont,
   } as CSSProperties
 
-  const [jsonExportStatus, setJsonExportStatus] = useState<'idle' | 'copied' | 'error'>('idle')
-  const [codeExportStatus, setCodeExportStatus] = useState<'idle' | 'copied' | 'error'>('idle')
+  // Replaces the whole diagram (rather than merging) so an uploaded
+  // diagram.json deterministically reproduces what was exported
+  // (contracts/diagram-json.md round-trip guarantee). Clears the selection
+  // too, since the previously selected node/edge id may no longer exist.
+  const handleImportDiagram = useCallback(
+    (importedNodes: Node[], importedEdges: Edge[]) => {
+      setNodes(importedNodes)
+      setEdges(importedEdges)
+      setSelection({ nodes: [], edges: [] })
+    },
+    [setNodes, setEdges],
+  )
+
+  const {
+    handleExportJson,
+    handleExportSvg,
+    handleExportComponent,
+    handleDownloadBundle,
+    handleUploadJson,
+    jsonExportLabel,
+    svgExportLabel,
+    componentExportLabel,
+    bundleExportLabel,
+    uploadLabel,
+  } = useExportActions(nodes, edges, tokens, handleImportDiagram)
   const canvasRef = useRef<HTMLDivElement>(null)
+  const uploadInputRef = useRef<HTMLInputElement>(null)
   const idCounter = useRef(0)
   const { screenToFlowPosition } = useReactFlow()
 
@@ -135,6 +166,20 @@ function LabEditor() {
     event.dataTransfer.dropEffect = 'move'
   }, [])
 
+  const handleClickUpload = useCallback(() => {
+    uploadInputRef.current?.click()
+  }, [])
+
+  const handleUploadFileChange = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0]
+      event.target.value = ''
+      if (!file) return
+      handleUploadJson(file)
+    },
+    [handleUploadJson],
+  )
+
   const handleSetNodeKind = useCallback(
     (id: string, kind: NodeKind) => {
       setNodes((current) =>
@@ -167,36 +212,6 @@ function LabEditor() {
     [setEdges],
   )
 
-  const handleExportJson = useCallback(() => {
-    copyDiagramToClipboard(nodes, edges)
-      .then(() => setJsonExportStatus('copied'))
-      .catch((error: unknown) => {
-        console.error('Failed to copy diagram JSON', error)
-        setJsonExportStatus('error')
-      })
-  }, [nodes, edges])
-
-  const handleExportCode = useCallback(() => {
-    copyDiagramCodeToClipboard(nodes, edges, tokens)
-      .then(() => setCodeExportStatus('copied'))
-      .catch((error: unknown) => {
-        console.error('Failed to copy diagram code', error)
-        setCodeExportStatus('error')
-      })
-  }, [nodes, edges, tokens])
-
-  useEffect(() => {
-    if (jsonExportStatus === 'idle') return
-    const timer = setTimeout(() => setJsonExportStatus('idle'), 1800)
-    return () => clearTimeout(timer)
-  }, [jsonExportStatus])
-
-  useEffect(() => {
-    if (codeExportStatus === 'idle') return
-    const timer = setTimeout(() => setCodeExportStatus('idle'), 1800)
-    return () => clearTimeout(timer)
-  }, [codeExportStatus])
-
   // Look up the live node/edge by id rather than using the objects from the
   // `onSelectionChange` event directly — React Flow doesn't re-fire that
   // event when a selected node/edge's own data changes, so holding onto the
@@ -207,22 +222,33 @@ function LabEditor() {
   const selectedNode = selectedNodeId ? nodes.find((node) => node.id === selectedNodeId) : undefined
   const selectedEdge = selectedEdgeId ? edges.find((edge) => edge.id === selectedEdgeId) : undefined
 
-  const jsonExportLabel =
-    jsonExportStatus === 'copied' ? 'Copied!' : jsonExportStatus === 'error' ? 'Copy failed' : 'Export JSON'
-  const codeExportLabel =
-    codeExportStatus === 'copied' ? 'Copied!' : codeExportStatus === 'error' ? 'Copy failed' : 'Export code'
-
   return (
     <div className="lab">
       <header className="lab-bar">
         <span className="lab-title">Diagram Lab</span>
         <span className="lab-meta">React Flow authoring tool for system topology diagrams</span>
-        <button type="button" className="lab-export" onClick={handleExportCode}>
-          {codeExportLabel}
+        <button type="button" className="lab-export" onClick={handleExportSvg}>
+          {svgExportLabel}
+        </button>
+        <button type="button" className="lab-export" onClick={handleExportComponent}>
+          {componentExportLabel}
+        </button>
+        <button type="button" className="lab-export" onClick={handleDownloadBundle}>
+          {bundleExportLabel}
         </button>
         <button type="button" className="lab-export" onClick={handleExportJson}>
           {jsonExportLabel}
         </button>
+        <button type="button" className="lab-export" onClick={handleClickUpload}>
+          {uploadLabel}
+        </button>
+        <input
+          ref={uploadInputRef}
+          type="file"
+          accept="application/json"
+          className="lab-upload-input"
+          onChange={handleUploadFileChange}
+        />
       </header>
       <div className="lab-body">
         <Sidebar onAddNode={handleAddFromSidebar} tokens={tokens} onChangeTokens={setTokens} />
