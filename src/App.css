@@ -407,27 +407,27 @@
 
 /* Connection handles (LabelNode.tsx renders one per side: top/bottom/left/
    right) are hidden at rest and revealed only during interaction, so the
-   canvas stays as clean as the exports it produces (US2, FR-002). Opacity 0
-   rather than display:none — the handle keeps taking up its spot on the
-   node's edge and stays a valid drop target, it's just invisible; pointer
-   events stay on so hovering straight into a drag still works
-   (research.md R4). */
+   canvas stays as clean as the exports it produces (US2, FR-002). The real
+   `.react-flow__handle` element is kept fully transparent at all times —
+   pointer events stay on so hovering straight into a drag still works
+   (research.md R4) and it stays a valid drop target — but it never paints
+   anything itself. Visibility is drawn by its `::after` pseudo-element
+   instead (below), which is purely decorative and can't be picked up by
+   @xyflow/system's `querySelectorAll('.source'/'.target')` handle-bounds
+   scan, so it has zero effect on edge routing. */
 .react-flow__handle {
-  opacity: 0;
+  background: transparent;
+  border: none;
   pointer-events: all;
 }
 
 /* React Flow centers each handle ON the node border by default (straddling
    half in / half out), because edge routing anchors to the handle's OUTER
    edge, not its center (@xyflow/system getHandlePosition: Position.Right
-   uses handle.x + handle.width, i.e. the handle's own right edge).
-   With a visible handle dot that half-out straddle is invisible — the dot
-   visually bridges the seam. With handles hidden at rest (below), that same
-   straddle shows up as a real gap between the edge line and the node.
-   Pulling each handle fully inside the node (flush with the border instead
-   of straddling it) puts its outer edge exactly on the border, closing the
-   gap, without changing where a visible/hovered handle sits relative to the
-   node corner. */
+   uses handle.x + handle.width, i.e. the handle's own right edge). Pulling
+   the real handle element fully inside the node (flush with the border
+   instead of straddling it) puts that outer edge exactly on the border,
+   closing the connection-line gap. */
 .react-flow__handle-top {
   transform: translate(-50%, 0%);
 }
@@ -444,10 +444,41 @@
   transform: translate(0%, -50%);
 }
 
-.react-flow__node:hover .react-flow__handle,
-.react-flow__node.selected .react-flow__handle,
-.react-flow__node.handles-visible .react-flow__handle,
-.lab-canvas.connecting .react-flow__handle {
+/* The visible dot: same size/shape as the real handle (`inset: 0` fills it
+   exactly), shifted back out by the straddle amount the real handle gave up
+   above, so it reappears in the classic half-in/half-out spot on the node
+   border — same look as stock React Flow, just recolored to the secondary
+   token instead of the library default. */
+.react-flow__handle::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 100%;
+  background: var(--token-secondary, #d8d4cf);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.react-flow__handle-top::after {
+  transform: translate(0%, -50%);
+}
+
+.react-flow__handle-bottom::after {
+  transform: translate(0%, 50%);
+}
+
+.react-flow__handle-left::after {
+  transform: translate(-50%, 0%);
+}
+
+.react-flow__handle-right::after {
+  transform: translate(50%, 0%);
+}
+
+.react-flow__node:hover .react-flow__handle::after,
+.react-flow__node.selected .react-flow__handle::after,
+.react-flow__node.handles-visible .react-flow__handle::after,
+.lab-canvas.connecting .react-flow__handle::after {
   opacity: 1;
 }
 
