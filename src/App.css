@@ -259,6 +259,21 @@
   border-color: #ff0024;
 }
 
+.lab-node-image-preview {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lab-node-image-preview img {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+}
+
 /* React Flow node treatments. Nodes/edges keep the normal arrow cursor at
    rest — React Flow's own `.dragging` classes (higher specificity) still
    switch to the grab/grabbing hand while a node or the canvas is actually
@@ -268,6 +283,9 @@
    "Export code" output, so the preview always matches what gets exported. */
 .react-flow__node.node {
   cursor: default;
+  display: flex;
+  align-items: center;
+  gap: 6px;
   padding: 8px 14px;
   border-radius: 8px;
   border: 1px solid var(--token-secondary, var(--border));
@@ -275,6 +293,14 @@
   color: var(--text-h);
   font-family: var(--token-body-font, var(--mono));
   font-size: 13px;
+}
+
+.node-image {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+  border-radius: 4px;
 }
 
 .react-flow__node.node-active {

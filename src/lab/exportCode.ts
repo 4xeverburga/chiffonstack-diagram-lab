@@ -11,13 +11,19 @@ const NODE_HEIGHT = 40
 const CHAR_WIDTH = 7.5
 const NODE_PADDING_X = 28
 const CANVAS_MARGIN = 32
+const ICON_SIZE = 20
+const ICON_GAP = 6
 
 function nodeLabel(node: Node): string {
   return typeof node.data.label === 'string' ? node.data.label : ''
 }
 
-function nodeWidth(label: string): number {
-  return Math.max(80, Math.round(label.length * CHAR_WIDTH) + NODE_PADDING_X)
+function nodeImage(node: Node): string | undefined {
+  return typeof node.data.image === 'string' ? node.data.image : undefined
+}
+
+function nodeWidth(label: string, hasImage: boolean): number {
+  return Math.max(80, Math.round(label.length * CHAR_WIDTH) + NODE_PADDING_X + (hasImage ? ICON_SIZE + ICON_GAP : 0))
 }
 
 function escapeHtml(value: string): string {
@@ -40,7 +46,9 @@ export function generateDiagramCode(nodes: Node[], edges: Edge[], tokens: Design
     return '<!-- Diagram Lab: add nodes to the canvas before exporting code. -->'
   }
 
-  const dims = new Map(nodes.map((node) => [node.id, { width: nodeWidth(nodeLabel(node)), height: NODE_HEIGHT }]))
+  const dims = new Map(
+    nodes.map((node) => [node.id, { width: nodeWidth(nodeLabel(node), Boolean(nodeImage(node))), height: NODE_HEIGHT }]),
+  )
   const minX = Math.min(...nodes.map((node) => node.position.x))
   const minY = Math.min(...nodes.map((node) => node.position.y))
 
@@ -62,6 +70,7 @@ export function generateDiagramCode(nodes: Node[], edges: Edge[], tokens: Design
         'display:flex',
         'align-items:center',
         'justify-content:center',
+        'gap:6px',
         `border:1px ${isDim ? 'dashed' : 'solid'} ${borderColor}`,
         'border-radius:8px',
         `font-family:${tokens.bodyFont}`,
@@ -71,7 +80,11 @@ export function generateDiagramCode(nodes: Node[], edges: Edge[], tokens: Design
       ]
         .filter(Boolean)
         .join('; ')
-      return `    <div style="${style}">${escapeHtml(nodeLabel(node))}</div>`
+      const image = nodeImage(node)
+      const imageTag = image
+        ? `<img src="${escapeHtml(image)}" alt="" style="width:${ICON_SIZE}px; height:${ICON_SIZE}px; object-fit:contain; border-radius:4px; flex:0 0 auto;" />`
+        : ''
+      return `    <div style="${style}">${imageTag}<span>${escapeHtml(nodeLabel(node))}</span></div>`
     })
     .join('\n')
 

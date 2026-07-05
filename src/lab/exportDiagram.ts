@@ -8,7 +8,7 @@ export function serializeDiagram(nodes: Node[], edges: Edge[]): string {
     id: node.id,
     type: node.type,
     position: node.position,
-    data: { label: node.data.label },
+    data: { label: node.data.label, image: node.data.image },
     className: node.className,
   }))
 

@@ -1,3 +1,4 @@
+import type { ChangeEvent } from 'react'
 import type { Edge, Node } from '@xyflow/react'
 import { classNameForKind, type NodeKind } from './nodeKinds'
 import { HEAT_VARIANTS, type HeatVariant } from './heatVariants'
@@ -9,6 +10,7 @@ type InspectorProps = {
   selectedEdge: Edge | undefined
   onRenameNode: (id: string, label: string) => void
   onSetNodeKind: (id: string, kind: NodeKind) => void
+  onSetNodeImage: (id: string, image: string | undefined) => void
   onSetEdgeVariant: (id: string, variant: HeatVariant) => void
   onDeleteEdge: (id: string) => void
 }
@@ -20,11 +22,25 @@ export function Inspector({
   selectedEdge,
   onRenameNode,
   onSetNodeKind,
+  onSetNodeImage,
   onSetEdgeVariant,
   onDeleteEdge,
 }: InspectorProps) {
   if (selectedNode) {
     const label = typeof selectedNode.data.label === 'string' ? selectedNode.data.label : ''
+    const image = typeof selectedNode.data.image === 'string' ? selectedNode.data.image : undefined
+
+    const handleImageChange = (event: ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0]
+      if (!file) return
+      const reader = new FileReader()
+      reader.onload = () => {
+        if (typeof reader.result === 'string') onSetNodeImage(selectedNode.id, reader.result)
+      }
+      reader.readAsDataURL(file)
+      event.target.value = ''
+    }
+
     return (
       <aside key={`node-${selectedNode.id}`} className="lab-inspector lab-inspector-flash">
         <h2 className="lab-panel-title">Node</h2>
@@ -46,6 +62,23 @@ export function Inspector({
               </button>
             ))}
           </div>
+        </div>
+        <div className="lab-field">
+          <span>Image</span>
+          {image ? (
+            <div className="lab-node-image-preview">
+              <img src={image} alt="" />
+              <button
+                type="button"
+                className="lab-danger"
+                onClick={() => onSetNodeImage(selectedNode.id, undefined)}
+              >
+                Remove image
+              </button>
+            </div>
+          ) : (
+            <input type="file" accept="image/png,image/svg+xml" onChange={handleImageChange} />
+          )}
         </div>
       </aside>
     )

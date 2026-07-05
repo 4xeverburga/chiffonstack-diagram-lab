@@ -144,6 +144,15 @@ function LabEditor() {
     [setNodes],
   )
 
+  const handleSetNodeImage = useCallback(
+    (id: string, image: string | undefined) => {
+      setNodes((current) =>
+        current.map((node) => (node.id === id ? { ...node, data: { ...node.data, image } } : node)),
+      )
+    },
+    [setNodes],
+  )
+
   const handleSetEdgeVariant = useCallback(
     (id: string, variant: HeatVariant) => {
       setEdges((current) => current.map((edge) => (edge.id === id ? { ...edge, data: { variant } } : edge)))
@@ -188,8 +197,15 @@ function LabEditor() {
     return () => clearTimeout(timer)
   }, [codeExportStatus])
 
-  const selectedNode = selection.nodes[0]
-  const selectedEdge = selection.edges[0]
+  // Look up the live node/edge by id rather than using the objects from the
+  // `onSelectionChange` event directly — React Flow doesn't re-fire that
+  // event when a selected node/edge's own data changes, so holding onto the
+  // event's objects would show the Inspector stale data (e.g. a label/image
+  // edit wouldn't be reflected back into its own field).
+  const selectedNodeId = selection.nodes[0]?.id
+  const selectedEdgeId = selection.edges[0]?.id
+  const selectedNode = selectedNodeId ? nodes.find((node) => node.id === selectedNodeId) : undefined
+  const selectedEdge = selectedEdgeId ? edges.find((edge) => edge.id === selectedEdgeId) : undefined
 
   const jsonExportLabel =
     jsonExportStatus === 'copied' ? 'Copied!' : jsonExportStatus === 'error' ? 'Copy failed' : 'Export JSON'
@@ -238,6 +254,7 @@ function LabEditor() {
           selectedEdge={selectedEdge}
           onRenameNode={handleRenameNode}
           onSetNodeKind={handleSetNodeKind}
+          onSetNodeImage={handleSetNodeImage}
           onSetEdgeVariant={handleSetEdgeVariant}
           onDeleteEdge={handleDeleteEdge}
         />
