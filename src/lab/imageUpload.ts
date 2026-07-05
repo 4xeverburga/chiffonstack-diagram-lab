@@ -27,16 +27,26 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
 // createImageBitmap is the primary path (available in browsers and in
 // Vitest's jsdom/happy-dom-less default Node environment is not — tests
 // stub this module, see imageUpload test doubles); Image() + an object URL
-// is the fallback for environments without createImageBitmap. Rejects on
-// decode failure — the caller (Inspector.tsx) surfaces the error and
-// leaves the node unchanged (FR-008).
+// is the fallback for environments without createImageBitmap — AND for
+// files createImageBitmap fails to decode even though it exists: some
+// browsers' createImageBitmap rejects SVG blobs with
+// "InvalidStateError: The source image could not be decoded" (regardless
+// of the SVG having explicit width/height), while `new Image()` decodes
+// the exact same SVG fine. Falling through on rejection, not just on
+// createImageBitmap being absent, is what makes SVG uploads work at all.
+// Rejects only once every path is exhausted — the caller (Inspector.tsx)
+// surfaces the error and leaves the node unchanged (FR-008).
 async function probeNaturalSize(file: File): Promise<{ naturalWidth: number; naturalHeight: number }> {
   if (typeof createImageBitmap === 'function') {
-    const bitmap = await createImageBitmap(file)
-    const naturalWidth = bitmap.width
-    const naturalHeight = bitmap.height
-    bitmap.close?.()
-    return { naturalWidth, naturalHeight }
+    try {
+      const bitmap = await createImageBitmap(file)
+      const naturalWidth = bitmap.width
+      const naturalHeight = bitmap.height
+      bitmap.close?.()
+      return { naturalWidth, naturalHeight }
+    } catch {
+      // Fall through to the Image() path below.
+    }
   }
   if (typeof Image === 'function') {
     const objectUrl = URL.createObjectURL(file)
