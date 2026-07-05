@@ -475,12 +475,15 @@
    spec 006 US1). Editor-only chrome — never reaches an export. Left at the
    EdgeLabelRenderer default of pointer-events: none since it's purely
    visual and must never intercept the drag it's tracking. Uses the live
-   secondary design token so it matches the rest of the editor chrome. */
+   secondary design token so it matches the rest of the editor chrome.
+   No z-index set: the edgelabel-renderer portal sits earlier in the DOM
+   than React Flow's node layer, so with both at their default z-index
+   the guide naturally paints behind every node instead of over its
+   text/background. */
 .lab-alignment-guide {
   position: absolute;
   background: var(--token-secondary);
   opacity: 0.9;
-  z-index: 5;
 }
 
 /* Floating quick actions for the selected edge (EdgeToolbar.tsx).
