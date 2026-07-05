@@ -13,6 +13,14 @@ import { labelBandFor, resolveTextSize } from './textSizes'
 // onNodesChange pipeline (already wired in App.tsx via useNodesState) picks
 // up the resulting width/height changes automatically.
 //
+// Gated to image nodes only: label text has no size-with-box behavior (its
+// font-size only ever changes via the labelSize step in textSizes.ts), so
+// resizing a text-only node just stretches an empty box around static text —
+// a pointless, confusing affordance that invites the user to expect the text
+// to scale. Image nodes are the only case where resizing does something
+// visible (a bigger box means a bigger image, see onResize/imageFit.ts
+// below), so the handles are only shown when an image is present.
+//
 // Four handles (top/bottom/left/right), each `type="source"`: combined with
 // `connectionMode="loose"` on the canvas's <ReactFlow> (App.tsx), any handle
 // can both originate and receive a connection (FR-001, research.md R1) — a
@@ -46,7 +54,7 @@ export function LabelNode({ id, data, selected }: NodeProps) {
   return (
     <>
       <NodeResizer
-        isVisible={selected}
+        isVisible={selected && Boolean(image)}
         minWidth={64}
         minHeight={40}
         handleClassName="node-resize-handle"
