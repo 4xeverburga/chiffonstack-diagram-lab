@@ -6,6 +6,7 @@ import { EDGE_THICKNESSES, resolveDirection, resolveThickness, type EdgeThicknes
 import { IMAGE_SIZE_WARNING_BYTES, IMAGE_UPLOAD_ACCEPT, readImageFile } from './imageUpload'
 import { resolveTextSize, TEXT_SIZES, type TextSize } from './textSizes'
 import type { NodeMetrics, SimRole } from '../engine/ports'
+import type { RunStatus } from '../sim/workerProtocol'
 
 const NODE_KINDS: NodeKind[] = ['default', 'active', 'dim']
 
@@ -19,6 +20,7 @@ function simRoleChoice(sim: SimRole | undefined): SimRoleChoice {
 type SimRoleFieldsProps = {
   node: Node
   metrics: NodeMetrics | undefined
+  runStatus: RunStatus
   onSetNodeSimRole: (id: string, sim: SimRole | undefined) => void
 }
 
@@ -26,8 +28,14 @@ type SimRoleFieldsProps = {
 // whenever the selected node changes — Inspector renders this with
 // `key={node.id}`, which remounts it (and so resets its hooks) instead of
 // carrying stale draft text over from a previously selected node.
-function SimRoleFields({ node, metrics, onSetNodeSimRole }: SimRoleFieldsProps) {
+function SimRoleFields({ node, metrics, runStatus, onSetNodeSimRole }: SimRoleFieldsProps) {
   const sim = (node.data as { sim?: SimRole } | undefined)?.sim
+  // Editing roles/rates while running would otherwise send an
+  // updateTopology message that auto-pauses the run on every keystroke
+  // (contracts/engine-ports.md's auto-pause rule was meant for structural
+  // add/delete edits, not live rate tuning) — simpler and less surprising
+  // to just require pausing first.
+  const isRunning = runStatus === 'running'
   const [rateText, setRateText] = useState(() =>
     sim?.role === 'generator' ? String(sim.ratePerSec) : sim?.role === 'processor' ? String(sim.serviceRatePerSec) : '',
   )
@@ -85,6 +93,7 @@ function SimRoleFields({ node, metrics, onSetNodeSimRole }: SimRoleFieldsProps) 
           <button
             key={choice}
             type="button"
+            disabled={isRunning}
             className={`chip ${simRoleChoice(sim) === choice ? 'chip-active' : ''}`}
             onClick={() => handleRoleChange(choice)}
           >
@@ -92,17 +101,18 @@ function SimRoleFields({ node, metrics, onSetNodeSimRole }: SimRoleFieldsProps) 
           </button>
         ))}
       </div>
+      {isRunning ? <p className="sim-placeholder-note">Pause the simulation to edit roles or rates.</p> : null}
       {sim?.role === 'generator' ? (
         <label className="lab-field">
           <span>Rate (req/s)</span>
-          <input type="number" min={0} step="any" value={rateText} onChange={handleRateChange} />
+          <input type="number" min={0} step="any" value={rateText} onChange={handleRateChange} disabled={isRunning} />
         </label>
       ) : null}
       {sim?.role === 'processor' ? (
         <>
           <label className="lab-field">
             <span>Service rate (req/s)</span>
-            <input type="number" min={0} step="any" value={rateText} onChange={handleRateChange} />
+            <input type="number" min={0} step="any" value={rateText} onChange={handleRateChange} disabled={isRunning} />
           </label>
           <p className="sim-placeholder-note">
             Placeholder (fixed rate) — no real technology model behind this node yet.
@@ -129,6 +139,7 @@ type InspectorProps = {
   selectedNode: Node | undefined
   selectedEdge: Edge | undefined
   selectedNodeMetrics: NodeMetrics | undefined
+  runStatus: RunStatus
   onRenameNode: (id: string, label: string) => void
   onSetNodeKind: (id: string, kind: NodeKind) => void
   onSetNodeImage: (id: string, image: string | undefined, naturalWidth: number | undefined, naturalHeight: number | undefined) => void
@@ -146,6 +157,7 @@ export function Inspector({
   selectedNode,
   selectedEdge,
   selectedNodeMetrics,
+  runStatus,
   onRenameNode,
   onSetNodeKind,
   onSetNodeImage,
@@ -241,7 +253,7 @@ export function Inspector({
             </div>
           ) : null}
         </div>
-        <SimRoleFields node={selectedNode} metrics={selectedNodeMetrics} onSetNodeSimRole={onSetNodeSimRole} />
+        <SimRoleFields node={selectedNode} metrics={selectedNodeMetrics} runStatus={runStatus} onSetNodeSimRole={onSetNodeSimRole} />
       </aside>
     )
   }

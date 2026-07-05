@@ -78,10 +78,23 @@ export function HeatEdge({
       ? undefined
       : (() => {
           const { durationSec, dashDensity } = committedAnimation
+          const dashLength = 6
           const gap = 2 + (1 - dashDensity) * 10
           return {
             '--sim-flow-duration': `${durationSec}s`,
-            '--sim-flow-dash': `6 ${gap}`,
+            '--sim-flow-dash': `${dashLength} ${gap}`,
+            // The @keyframes heat-flow loop in App.css travels exactly this
+            // distance every iteration — it must be a multiple of the
+            // current dash pattern's total repeat length (dash + gap) or
+            // the loop visibly snaps to a different phase every cycle once
+            // a throughput-driven gap stops evenly dividing a hardcoded
+            // distance. Computed here (not via CSS calc()) because
+            // wrapping an unwrapped/unitless custom property in calc() for
+            // an SVG-ish property like stroke-dashoffset doesn't reliably
+            // resolve in the browser — verified live: getComputedStyle
+            // returned the literal unresolved string "calc(24px)" instead
+            // of a number, which silently broke the whole animation.
+            '--sim-flow-loop-distance': `${(dashLength + gap) * 2}`,
           } as CSSProperties
         })()
 

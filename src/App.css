@@ -643,7 +643,15 @@
 
 @keyframes heat-flow {
   from {
-    stroke-dashoffset: 24;
+    /* Must be an exact multiple of the current dash pattern's total repeat
+       length (dash + gap) or the loop visibly snaps every iteration once
+       --sim-flow-dash's gap varies with throughput (24 is only a seamless
+       distance for the static default "6 6" pattern, not for arbitrary
+       simulated gaps). --sim-flow-loop-distance carries the correct,
+       already-doubled distance for the current pattern (set alongside
+       --sim-flow-dash in HeatEdge.tsx); the 24 fallback keeps the exact
+       pre-pivot visual speed when no simulation is running. */
+    stroke-dashoffset: var(--sim-flow-loop-distance, 24);
   }
   to {
     stroke-dashoffset: 0;
