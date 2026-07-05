@@ -262,21 +262,24 @@
 /* React Flow node treatments. Nodes/edges keep the normal arrow cursor at
    rest — React Flow's own `.dragging` classes (higher specificity) still
    switch to the grab/grabbing hand while a node or the canvas is actually
-   being dragged. */
+   being dragged. Border/font colors read from the `--token-*` custom
+   properties set on `.lab-canvas` (see App.tsx), so editing the sidebar's
+   design tokens updates the canvas in real time — the same values feed the
+   "Export code" output, so the preview always matches what gets exported. */
 .react-flow__node.node {
   cursor: default;
   padding: 8px 14px;
   border-radius: 8px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--token-secondary, var(--border));
   background: var(--bg);
   color: var(--text-h);
-  font-family: var(--mono);
+  font-family: var(--token-body-font, var(--mono));
   font-size: 13px;
 }
 
 .react-flow__node.node-active {
-  border-color: #ff8e05;
-  box-shadow: 0 0 0 1px rgba(255, 71, 21, 0.4);
+  border-color: var(--token-primary, #ff8e05);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--token-primary, #ff4715) 40%, transparent);
 }
 
 .react-flow__node.node-dim {
@@ -296,7 +299,7 @@
   stroke-width: 2.5;
   stroke-dasharray: 6 6;
   animation: heat-flow 0.7s linear infinite;
-  filter: drop-shadow(0 0 3px rgba(255, 71, 21, 0.55));
+  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--token-primary, #ff4715) 55%, transparent));
 }
 
 .lab-edge-heat-static {
@@ -304,12 +307,12 @@
 }
 
 .lab-edge-dashed {
-  stroke: var(--border);
+  stroke: var(--token-secondary, var(--border));
   stroke-dasharray: 4 4;
 }
 
 .lab-edge-default {
-  stroke: var(--border);
+  stroke: var(--token-secondary, var(--border));
 }
 
 @keyframes heat-flow {

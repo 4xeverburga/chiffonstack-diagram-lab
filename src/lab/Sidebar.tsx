@@ -24,7 +24,8 @@ type SidebarProps = {
 
 // Langflow-style "add node" palette: drag a kind onto the canvas, or click to
 // drop it at the canvas center. Also hosts the design-token inputs (brand
-// colors/fonts) consumed by the "Export code" output.
+// colors/fonts), which restyle the live canvas immediately and feed the
+// "Export code" output.
 export function Sidebar({ onAddNode, tokens, onChangeTokens }: SidebarProps) {
   const onDragStart = (event: DragEvent<HTMLButtonElement>, kind: NodeKind) => {
     event.dataTransfer.setData(DRAG_MIME_TYPE, kind)
@@ -100,7 +101,7 @@ export function Sidebar({ onAddNode, tokens, onChangeTokens }: SidebarProps) {
           placeholder="e.g. Hanken Grotesk, sans-serif"
         />
       </label>
-      <p className="lab-sidebar-note">Used to style the "Export code" output to match your project.</p>
+      <p className="lab-sidebar-note">Updates the canvas live and styles the "Export code" output.</p>
     </aside>
   )
 }

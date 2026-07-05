@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type DragEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent } from 'react'
 import {
   ReactFlow,
   ReactFlowProvider,
@@ -46,14 +46,34 @@ const initialEdges: Edge[] = [
   { id: 'router-fallback', source: 'router', target: 'fallback', type: 'heat', data: { variant: 'dashed' } },
 ]
 
-const edgeTypes = { heat: HeatEdge }
 const nodeTypes = { labelNode: LabelNode }
+const edgeTypes = { heat: HeatEdge }
 
 function LabEditor() {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes)
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)
   const [selection, setSelection] = useState<OnSelectionChangeParams>({ nodes: [], edges: [] })
   const [tokens, setTokens] = useState<DesignTokens>(DEFAULT_DESIGN_TOKENS)
+
+  // Heat edges color their gradient from the live primary token, so the
+  // canvas preview always matches what "Export code" would produce. Carried
+  // through each edge's `data` (rather than closing over it in edgeTypes) so
+  // edgeTypes stays a stable reference and React Flow doesn't remount edges
+  // on every color change.
+  const renderedEdges = useMemo(
+    () => edges.map((edge) => ({ ...edge, data: { ...edge.data, primaryColor: tokens.primaryColor } })),
+    [edges, tokens.primaryColor],
+  )
+
+  // Exposed as CSS custom properties on the canvas wrapper so node/edge
+  // styling in App.css can reference the live tokens directly.
+  const canvasTokenStyle = {
+    '--token-primary': tokens.primaryColor,
+    '--token-secondary': tokens.secondaryColor,
+    '--token-heading-font': tokens.headingFont,
+    '--token-body-font': tokens.bodyFont,
+  } as CSSProperties
+
   const [jsonExportStatus, setJsonExportStatus] = useState<'idle' | 'copied' | 'error'>('idle')
   const [codeExportStatus, setCodeExportStatus] = useState<'idle' | 'copied' | 'error'>('idle')
   const canvasRef = useRef<HTMLDivElement>(null)
@@ -190,10 +210,16 @@ function LabEditor() {
       </header>
       <div className="lab-body">
         <Sidebar onAddNode={handleAddFromSidebar} tokens={tokens} onChangeTokens={setTokens} />
-        <div className="lab-canvas" ref={canvasRef} onDrop={onDrop} onDragOver={onDragOver}>
+        <div
+          className="lab-canvas"
+          ref={canvasRef}
+          onDrop={onDrop}
+          onDragOver={onDragOver}
+          style={canvasTokenStyle}
+        >
           <ReactFlow
             nodes={nodes}
-            edges={edges}
+            edges={renderedEdges}
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
             onNodesChange={onNodesChange}
