@@ -30,12 +30,15 @@ type SimRoleFieldsProps = {
 // carrying stale draft text over from a previously selected node.
 function SimRoleFields({ node, metrics, runStatus, onSetNodeSimRole }: SimRoleFieldsProps) {
   const sim = (node.data as { sim?: SimRole } | undefined)?.sim
-  // Editing roles/rates while running would otherwise send an
-  // updateTopology message that auto-pauses the run on every keystroke
-  // (contracts/engine-ports.md's auto-pause rule was meant for structural
-  // add/delete edits, not live rate tuning) — simpler and less surprising
-  // to just require pausing first.
-  const isRunning = runStatus === 'running'
+  // Editing roles/rates is only allowed in edit mode (idle) — pausing
+  // isn't enough. Two reasons: (1) sending updateTopology while running
+  // triggers the auto-pause rule on every keystroke
+  // (contracts/engine-ports.md — meant for structural add/delete edits,
+  // not live rate tuning), and (2) resuming a paused run with a changed
+  // rate but preserved virtual time/queue state is a different, murkier
+  // feature than "start a fresh run with this rate" — simplest and least
+  // surprising is to require a full Reset back to idle before editing.
+  const canEditSim = runStatus === 'idle'
   const [rateText, setRateText] = useState(() =>
     sim?.role === 'generator' ? String(sim.ratePerSec) : sim?.role === 'processor' ? String(sim.serviceRatePerSec) : '',
   )
@@ -93,7 +96,7 @@ function SimRoleFields({ node, metrics, runStatus, onSetNodeSimRole }: SimRoleFi
           <button
             key={choice}
             type="button"
-            disabled={isRunning}
+            disabled={!canEditSim}
             className={`chip ${simRoleChoice(sim) === choice ? 'chip-active' : ''}`}
             onClick={() => handleRoleChange(choice)}
           >
@@ -101,18 +104,18 @@ function SimRoleFields({ node, metrics, runStatus, onSetNodeSimRole }: SimRoleFi
           </button>
         ))}
       </div>
-      {isRunning ? <p className="sim-placeholder-note">Pause the simulation to edit roles or rates.</p> : null}
+      {!canEditSim ? <p className="sim-placeholder-note">Reset the simulation to edit roles or rates.</p> : null}
       {sim?.role === 'generator' ? (
         <label className="lab-field">
           <span>Rate (req/s)</span>
-          <input type="number" min={0} step="any" value={rateText} onChange={handleRateChange} disabled={isRunning} />
+          <input type="number" min={0} step="any" value={rateText} onChange={handleRateChange} disabled={!canEditSim} />
         </label>
       ) : null}
       {sim?.role === 'processor' ? (
         <>
           <label className="lab-field">
             <span>Service rate (req/s)</span>
-            <input type="number" min={0} step="any" value={rateText} onChange={handleRateChange} disabled={isRunning} />
+            <input type="number" min={0} step="any" value={rateText} onChange={handleRateChange} disabled={!canEditSim} />
           </label>
           <p className="sim-placeholder-note">
             Placeholder (fixed rate) — no real technology model behind this node yet.
