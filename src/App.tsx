@@ -36,6 +36,7 @@ import { initialEdges, initialNodes } from './lab/initialDiagram'
 import { useDiagramMutations } from './lab/useDiagramMutations'
 import { downloadDiagram, parseDiagram } from './lab/exportDiagram'
 import { useHandleVisibility, withHandlesVisibleClass } from './lab/useHandleVisibility'
+import { applyKafkaStatusClass } from './lab/kafkaStatusTreatment'
 import { useLayoutHelpers } from './lab/useLayoutHelpers'
 import { AlignmentGuides } from './lab/AlignmentGuides'
 import { DEFAULT_DESIGN_TOKENS, type DesignTokens } from './lab/designTokens'
@@ -124,14 +125,28 @@ function LabEditor() {
   // (US2, FR-002). Hover and in-progress connection drags are handled by
   // App.css alone. See withHandlesVisibleClass for why this must be
   // idempotent rather than a blind append.
+  //
+  // A saturated/degraded Kafka node also gets a token-derived status
+  // treatment class (FR-006, feature 010) — same idempotent-recompute
+  // requirement and for the same reason (NodeResizer's onResize round-trips
+  // through updateNode), so applyKafkaStatusClass follows the exact same
+  // strip-then-reapply pattern as withHandlesVisibleClass. The resolved
+  // node's full NodeMetrics also ride on `data.simMetrics` (transient,
+  // never serialized — exportDiagram.ts whitelists node.data) so LabelNode
+  // can render its always-visible status badge AND the hover-triggered
+  // NodeInfoButton's detail popover from one source, without a second
+  // selector round-trip per node.
   const handlesVisibleNodeIds = useHandleVisibility(selection)
   const renderedNodes = useMemo(
     () =>
       nodes.map((node) => {
-        const className = withHandlesVisibleClass(node.className, handlesVisibleNodeIds.has(node.id))
-        return className === (node.className ?? '') ? node : { ...node, className }
+        const nodeMetrics = latestWindow ? selectNodeMetrics(latestWindow, node.id) : undefined
+        const withHandles = withHandlesVisibleClass(node.className, handlesVisibleNodeIds.has(node.id))
+        const className = applyKafkaStatusClass(withHandles, nodeMetrics?.kafka?.status)
+        const next = className === (node.className ?? '') ? node : { ...node, className }
+        return next.data.simMetrics === nodeMetrics ? next : { ...next, data: { ...next.data, simMetrics: nodeMetrics } }
       }),
-    [nodes, handlesVisibleNodeIds],
+    [nodes, handlesVisibleNodeIds, latestWindow],
   )
 
   // Exposed as CSS custom properties on the canvas wrapper so node/edge

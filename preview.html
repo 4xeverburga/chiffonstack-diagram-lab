@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SUGAR — Design/UI Preview</title>
+  </head>
+  <body>
+    <!-- Dev-only design/UI preview (npm run dev -> /preview.html). Not part
+         of the production build: see vite.config.ts, which only lists
+         index.html as a build input. Renders the real app components
+         (src/Preview.tsx) with mock data instead of a hand-copied static
+         mockup. -->
+    <div id="root"></div>
+    <script type="module" src="/src/previewMain.tsx"></script>
+  </body>
+</html>

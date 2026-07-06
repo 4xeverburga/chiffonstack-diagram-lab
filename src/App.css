@@ -118,6 +118,129 @@
   margin: 0;
 }
 
+.lab-field-checkbox {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Kafka metrics readout (feature 010, US2/FR-004/FR-005). */
+.sim-kafka-metrics {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.sim-status-badge {
+  align-self: flex-start;
+  font-family: var(--mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--token-secondary, var(--border));
+  color: var(--text-h);
+}
+
+.sim-status-badge-saturated {
+  border-color: var(--token-primary, #ff4715);
+  border-style: solid;
+}
+
+.sim-status-badge-degraded {
+  border-color: var(--token-primary, #ff4715);
+  border-style: dotted;
+}
+
+.sim-kafka-meter {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text);
+}
+
+/* The binding meter is distinguished by weight/border, not color alone
+   (spec Edge Cases — low-contrast token accessibility fallback). */
+.sim-kafka-meter-binding {
+  font-weight: 600;
+  color: var(--text-h);
+  border-bottom: 1px solid var(--token-primary, #ff4715);
+}
+
+/* Formula & sources panel (feature 010, US4/FR-008/FR-009) — bottom of the
+   Inspector, per the fixed layout decision in spec.md's Assumptions. */
+.lab-formula-panel {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.lab-formula-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.lab-formula {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text);
+  padding: 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
+
+.lab-formula-binding {
+  border-color: var(--token-primary, #ff4715);
+}
+
+.lab-formula-name {
+  font-weight: 600;
+  color: var(--text-h);
+  margin-bottom: 4px;
+}
+
+.lab-formula-expression {
+  color: var(--text);
+  margin-bottom: 4px;
+  word-break: break-word;
+}
+
+.lab-formula-inputs {
+  list-style: none;
+  margin: 0 0 4px;
+  padding: 0;
+  color: var(--text);
+  opacity: 0.85;
+}
+
+.lab-formula-sources {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.lab-formula-sources a {
+  color: var(--token-primary, #ff4715);
+}
+
+.lab-formula-disclaimer {
+  margin-top: 10px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text);
+  opacity: 0.75;
+}
+
 .lab-body {
   display: flex;
   flex: 1 1 auto;
@@ -489,6 +612,148 @@
   border-style: dashed;
 }
 
+/* Canvas status treatment for saturated/degraded Kafka nodes (feature 010,
+   FR-006). HARD RULE: the node itself is an invariant element — its
+   border-width/border-style/size/footprint never change for any
+   simulated status, exactly like every other node on the canvas. A
+   discrete `::after` ring (a prior iteration) was rejected: even sitting
+   outside the node's box, its hard edge still read visually as "this
+   node is bigger than the others." Status is instead conveyed entirely
+   by (a) a border-COLOR change on the node (still 1px, still solid — a
+   color swap, not a shape change) and (b) a blurred, no-spread
+   `box-shadow` glow that fades to transparent rather than forming a
+   second crisp rectangle — a CSS stand-in for a soft light emission, not
+   an outline. The non-color signal (still not "color alone") is the
+   glow's ANIMATION PATTERN: saturated breathes smoothly, degraded
+   flickers abruptly (`steps()` easing) and faster — "more urgent" reads
+   as such even color-blind, with zero change to the node's visual
+   bounding box. Applied via kafkaStatusTreatment.ts's idempotent class
+   derivation — see App.tsx's renderedNodes useMemo. */
+.react-flow__node.sim-status-saturated,
+.react-flow__node.sim-status-degraded {
+  border-color: var(--token-primary, #ff4715);
+}
+
+.react-flow__node.sim-status-saturated {
+  animation: sim-status-glow-saturated 1.6s ease-in-out infinite;
+}
+
+.react-flow__node.sim-status-degraded {
+  animation: sim-status-glow-degraded 0.7s steps(2, jump-end) infinite;
+}
+
+@keyframes sim-status-glow-saturated {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--token-primary, #ff4715) 0%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 10px 1px color-mix(in srgb, var(--token-primary, #ff4715) 45%, transparent);
+  }
+}
+
+@keyframes sim-status-glow-degraded {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--token-primary, #ff4715) 0%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 6px 2px color-mix(in srgb, var(--token-primary, #ff4715) 55%, transparent);
+  }
+}
+
+
+/* Hover-triggered detail popover (NodeInfoButton.tsx) beside every
+   simulated node: the canvas keeps its FR-006-required always-visible
+   signal (the border color/style/blink treatment above), while richer
+   detail (rates, saturation meters, lag, binding constraint, the
+   producer's dual-unit reading) lives one hover away instead of
+   permanently occupying canvas space. z-index 1002 deliberately outranks
+   React Flow's own selected-node z-index:1000 (confirmed via
+   getComputedStyle — the library inlines it on whichever node is
+   currently selected), so the popover is never clipped by a neighboring
+   selected node. */
+.node-info-button-wrapper {
+  position: absolute;
+  top: -9px;
+  right: -9px;
+}
+
+.node-info-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid var(--token-secondary, var(--border));
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 10px;
+  font-style: italic;
+  /* Deliberately the node's own resting cursor, not `help` — hovering
+     canvas chrome shouldn't change the pointer, same as every other
+     canvas control. */
+  cursor: default;
+}
+
+.node-info-button:hover,
+.node-info-button:focus-visible {
+  border-color: var(--token-primary, #ff4715);
+  color: var(--text-h);
+}
+
+.node-info-popover {
+  display: none;
+  position: absolute;
+  /* Expands UP and to the RIGHT from the button (bottom/left-anchored),
+     never down or left — down would grow the popover directly over the
+     node it describes, hiding the very thing being inspected, and left
+     reads against the grain for anyone scanning left-to-right. */
+  bottom: 20px;
+  left: 0;
+  z-index: 1002;
+  min-width: 170px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--token-secondary, var(--border));
+  background: var(--bg);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  font-family: var(--mono);
+  font-size: 11px;
+  /* Explicit unitless line-height: without it, this inherits :root's
+     `font: 18px/145%` as an already-resolved 26.1px absolute length (CSS
+     percentage line-heights compute once, against the ancestor's own
+     font-size, then inherit as that fixed px value) — 2.4x too tall for
+     an 11px row, and much more obvious once scaled up by the canvas's own
+     zoom transform (nodes/their children live inside
+     `.react-flow__viewport`, which is scaled directly). */
+  line-height: 1.4;
+  color: var(--text);
+}
+
+.node-info-button-wrapper:hover .node-info-popover,
+.node-info-button-wrapper:focus-within .node-info-popover {
+  display: block;
+}
+
+.node-info-popover-title {
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-h);
+  margin-bottom: 6px;
+}
+
+.node-info-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  white-space: nowrap;
+}
+
 /* Connection handles (LabelNode.tsx renders one per side: top/bottom/left/
    right) are hidden at rest and revealed only during interaction, so the
    canvas stays as clean as the exports it produces (US2, FR-002). The real
@@ -688,6 +953,11 @@
   }
 
   .lab-inspector-flash {
+    animation: none;
+  }
+
+  .react-flow__node.sim-status-saturated,
+  .react-flow__node.sim-status-degraded {
     animation: none;
   }
 }

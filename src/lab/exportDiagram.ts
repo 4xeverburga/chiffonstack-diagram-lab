@@ -28,6 +28,57 @@ function plainSimRole(value: unknown): SimRole | undefined {
   if (value.role === 'sink') {
     return { role: 'sink' }
   }
+  if (
+    value.role === 'producer' &&
+    typeof value.messageRatePerSec === 'number' &&
+    Number.isFinite(value.messageRatePerSec) &&
+    value.messageRatePerSec >= 0 &&
+    typeof value.averagePayloadBytes === 'number' &&
+    Number.isFinite(value.averagePayloadBytes) &&
+    value.averagePayloadBytes > 0
+  ) {
+    return {
+      role: 'producer',
+      messageRatePerSec: value.messageRatePerSec,
+      averagePayloadBytes: value.averagePayloadBytes,
+    }
+  }
+  if (
+    value.role === 'consumer' &&
+    typeof value.consumeRatePerSec === 'number' &&
+    Number.isFinite(value.consumeRatePerSec) &&
+    value.consumeRatePerSec >= 0
+  ) {
+    return { role: 'consumer', consumeRatePerSec: value.consumeRatePerSec }
+  }
+  if (
+    value.role === 'kafka' &&
+    (value.hardwareProfile === 'm6i.large' ||
+      value.hardwareProfile === 'm6i.xlarge' ||
+      value.hardwareProfile === 'm6i.2xlarge' ||
+      value.hardwareProfile === 'm6i.4xlarge') &&
+    typeof value.partitions === 'number' &&
+    Number.isFinite(value.partitions) &&
+    value.partitions >= 1 &&
+    typeof value.replicationFactor === 'number' &&
+    Number.isFinite(value.replicationFactor) &&
+    value.replicationFactor >= 1 &&
+    typeof value.tlsEnabled === 'boolean' &&
+    (value.compression === 'none' || value.compression === 'zstd') &&
+    typeof value.retentionBytes === 'number' &&
+    Number.isFinite(value.retentionBytes) &&
+    value.retentionBytes >= 0
+  ) {
+    return {
+      role: 'kafka',
+      hardwareProfile: value.hardwareProfile,
+      partitions: value.partitions,
+      replicationFactor: value.replicationFactor,
+      tlsEnabled: value.tlsEnabled,
+      compression: value.compression,
+      retentionBytes: value.retentionBytes,
+    }
+  }
   return undefined
 }
 

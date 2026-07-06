@@ -16,6 +16,7 @@ import {
   type SimTopology,
   type TrafficSourcePort,
 } from './ports'
+import { computeKafkaWindowMetrics, ensureKafkaRuntimes } from './kafka/model'
 
 type GeneratorEvent = { nodeId: string }
 
@@ -44,6 +45,7 @@ export function createSimulation(
   let timeIntoWindowMs = 0
   const queue = new EventQueue<GeneratorEvent>()
   const processorRuntimes = new Map<string, ProcessorRuntime>()
+  const kafkaRuntimes = new Map<string, { lagBytes: number }>()
   const routingRuntimes = new Map<string, RoutingRuntime>()
   let nodeDepartureAccumulator = new Map<string, number>()
   let edgeCrossingAccumulator = new Map<string, number>()
@@ -51,6 +53,7 @@ export function createSimulation(
   function resetRuntimeState(): void {
     queue.clear()
     processorRuntimes.clear()
+    kafkaRuntimes.clear()
     routingRuntimes.clear()
     nodeDepartureAccumulator = new Map()
     edgeCrossingAccumulator = new Map()
@@ -61,6 +64,7 @@ export function createSimulation(
       if (sim?.role === 'processor') processorRuntimes.set(nodeId, { backlog: 0 })
       routingRuntimes.set(nodeId, { lastEdgeIndex: -1 })
     }
+    ensureKafkaRuntimes(graph, kafkaRuntimes)
   }
 
   function nextGeneratorDelayMs(ratePerSec: number): number {
@@ -161,6 +165,19 @@ export function createSimulation(
       nodeQueueDepths,
       edgeCrossings: edgeCrossingAccumulator,
     })
+    const kafkaWindow = computeKafkaWindowMetrics(graph, windowSizeMs, kafkaRuntimes)
+    for (const [nodeId, nodeMetrics] of kafkaWindow.nodeMetricsById) {
+      window.nodes[nodeId] = {
+        ...(window.nodes[nodeId] ?? { throughputPerSec: 0, queueDepth: 0 }),
+        ...nodeMetrics,
+      }
+    }
+    for (const [edgeId, edgeMetrics] of kafkaWindow.edgeMetricsById) {
+      window.edges[edgeId] = {
+        ...(window.edges[edgeId] ?? { throughputPerSec: 0 }),
+        ...edgeMetrics,
+      }
+    }
     nodeDepartureAccumulator = new Map()
     edgeCrossingAccumulator = new Map()
     metricsSink.emitWindow(window)
