@@ -1,69 +1,104 @@
 import type { Edge, Node } from '@xyflow/react'
 
-// Starter topology matching the ChiffonStack teardown diagram language
-// (see DESIGN.md §4 Case-Study Teardown / §7 Isotype & Logo).
+// Starter topology: a small e-commerce-style checkout system, chosen to
+// exercise every host/queue-model concept at once so Start is immediately
+// clickable without first authoring a diagram from scratch:
+//   web-client (client pool)
+//     -> api-gateway (manual-mode transactional API)
+//          -> orders-queue (zero-config queue)
+//               -> orders-worker (calculated-mode worker)
+//                    -> postgres-db (manual-mode database, also read
+//                         directly by api-gateway — a converging host
+//                         fed by two edges, demonstrating the
+//                         traffic-weighted inbound compute-weight
+//                         average)
+//          -> payments-api (external_api — bottomless third-party call)
+//          -> static-assets (a plain, non-simulated node — proves plain
+//               nodes/edges keep coexisting with simulated ones)
 // Author your layout here — drag new nodes in from the sidebar, wire them
 // up, then export. Every default edge carries explicit handle ids and
 // styling fields so the starter diagram renders deterministically and
 // exercises the canonical shape end to end.
-//
-// user/router/db carry the host/queue-model chain quickstart.md's P1
-// walkthrough exercises: a client pool -> a manual-mode transactional API
-// (500 req/s saturation) -> a manual-mode database host, so Start is
-// immediately clickable without first manually assigning roles. tool/
-// fallback stay plain visual nodes (no `sim`), same as before this
-// feature — their edges carry no `simConfig` either, so buildSimTopology
-// excludes them from the simulated subgraph entirely.
 export const initialNodes: Node[] = [
   {
-    id: 'user',
+    id: 'web-client',
     type: 'labelNode',
-    position: { x: 0, y: 80 },
-    data: { label: 'user', sim: { kind: 'host', profile: 'client_pool', requestRatePerSec: 100 } },
+    position: { x: 0, y: 200 },
+    data: { label: 'web client', sim: { kind: 'host', profile: 'client_pool', requestRatePerSec: 150 } },
     className: 'node',
   },
   {
-    id: 'router',
+    id: 'api-gateway',
     type: 'labelNode',
-    position: { x: 220, y: 80 },
+    position: { x: 260, y: 200 },
     data: {
-      label: 'router',
+      label: 'api gateway',
       sim: {
         kind: 'host',
         profile: 'transactional_api',
         configMode: 'manual',
-        manualBaselineLatencyMs: 10,
-        manualSaturationRPS: 500,
-        manualMaxRPS: 550,
+        manualBaselineLatencyMs: 8,
+        manualSaturationRPS: 600,
+        manualMaxRPS: 650,
       },
     },
     className: 'node node-active',
   },
   {
-    id: 'tool',
+    id: 'orders-queue',
     type: 'labelNode',
-    position: { x: 460, y: 0 },
+    position: { x: 560, y: 40 },
+    data: { label: 'orders queue', sim: { kind: 'queue' } },
+    className: 'node',
+  },
+  {
+    id: 'orders-worker',
+    type: 'labelNode',
+    position: { x: 820, y: 40 },
     data: {
-      label: 'tool',
+      label: 'orders worker',
+      sim: { kind: 'host', profile: 'worker_consumer', configMode: 'calculated', cpuProcessingTimeMs: 20, maxWorkerThreads: 12 },
+    },
+    className: 'node',
+  },
+  {
+    id: 'postgres-db',
+    type: 'labelNode',
+    position: { x: 1080, y: 160 },
+    data: {
+      label: 'postgres db',
       sim: {
         kind: 'host',
         profile: 'database_server',
         configMode: 'manual',
-        manualBaselineLatencyMs: 5,
-        manualSaturationRPS: 1000,
-        manualMaxRPS: 1100,
+        manualBaselineLatencyMs: 3,
+        manualSaturationRPS: 2000,
+        manualMaxRPS: 2200,
       },
     },
     className: 'node',
   },
-  { id: 'fallback', type: 'labelNode', position: { x: 460, y: 160 }, data: { label: 'fallback' }, className: 'node node-dim' },
+  {
+    id: 'payments-api',
+    type: 'labelNode',
+    position: { x: 560, y: 320 },
+    data: { label: 'payments api', sim: { kind: 'host', profile: 'external_api', manualBaselineLatencyMs: 120 } },
+    className: 'node',
+  },
+  {
+    id: 'static-assets',
+    type: 'labelNode',
+    position: { x: 260, y: 380 },
+    data: { label: 'static assets' },
+    className: 'node node-dim',
+  },
 ]
 
 export const initialEdges: Edge[] = [
   {
-    id: 'user-router',
-    source: 'user',
-    target: 'router',
+    id: 'web-client-api-gateway',
+    source: 'web-client',
+    target: 'api-gateway',
     type: 'heat',
     data: {
       variant: 'heat-flow',
@@ -73,34 +108,74 @@ export const initialEdges: Edge[] = [
     targetHandle: 'left',
   },
   {
-    id: 'router-tool',
-    source: 'router',
-    target: 'tool',
+    id: 'api-gateway-orders-queue',
+    source: 'api-gateway',
+    target: 'orders-queue',
+    type: 'heat',
+    data: {
+      variant: 'heat-flow',
+      simConfig: { trafficShareRatio: 0.6, averagePayloadSizeKB: 3, targetComputeWeightMultiplier: 1, pathIoLatencyMs: 1 },
+    },
+    sourceHandle: 'top',
+    targetHandle: 'left',
+  },
+  {
+    id: 'api-gateway-payments-api',
+    source: 'api-gateway',
+    target: 'payments-api',
     type: 'heat',
     data: {
       variant: 'heat-static',
-      simConfig: { trafficShareRatio: 1, averagePayloadSizeKB: 1, targetComputeWeightMultiplier: 1, pathIoLatencyMs: 2 },
+      simConfig: { trafficShareRatio: 0.25, averagePayloadSizeKB: 1, targetComputeWeightMultiplier: 1, pathIoLatencyMs: 0 },
+    },
+    sourceHandle: 'bottom',
+    targetHandle: 'left',
+  },
+  {
+    id: 'api-gateway-postgres-db',
+    source: 'api-gateway',
+    target: 'postgres-db',
+    type: 'heat',
+    data: {
+      variant: 'heat-static',
+      simConfig: { trafficShareRatio: 0.15, averagePayloadSizeKB: 1, targetComputeWeightMultiplier: 1, pathIoLatencyMs: 0 },
+    },
+    sourceHandle: 'right',
+    targetHandle: 'bottom',
+  },
+  {
+    id: 'orders-queue-orders-worker',
+    source: 'orders-queue',
+    target: 'orders-worker',
+    type: 'heat',
+    data: {
+      variant: 'heat-flow',
+      simConfig: { trafficShareRatio: 1, averagePayloadSizeKB: 3, targetComputeWeightMultiplier: 1, pathIoLatencyMs: 2 },
     },
     sourceHandle: 'right',
     targetHandle: 'left',
   },
   {
-    id: 'router-fallback',
-    source: 'router',
-    target: 'fallback',
+    id: 'orders-worker-postgres-db',
+    source: 'orders-worker',
+    target: 'postgres-db',
     type: 'heat',
-    data: { variant: 'dashed' },
+    data: {
+      variant: 'heat-flow',
+      simConfig: { trafficShareRatio: 1, averagePayloadSizeKB: 1, targetComputeWeightMultiplier: 2, pathIoLatencyMs: 1 },
+    },
     sourceHandle: 'right',
-    targetHandle: 'left',
+    targetHandle: 'top',
   },
   {
-    id: 'tool-fallback',
-    source: 'tool',
-    target: 'fallback',
+    id: 'api-gateway-static-assets',
+    source: 'api-gateway',
+    target: 'static-assets',
     type: 'heat',
-    data: { variant: 'default' },
+    data: { variant: 'dashed' },
     sourceHandle: 'bottom',
     targetHandle: 'top',
   },
 ]
+
 
