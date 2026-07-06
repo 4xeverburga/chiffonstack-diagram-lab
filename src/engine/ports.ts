@@ -4,10 +4,53 @@
 // from React/DOM/xyflow/Zustand, and nothing outside src/engine/ imports
 // from here except through these shapes.
 
+export type KafkaCompression = 'none' | 'zstd'
+export type KafkaHardwareProfileId = 'm6i.large' | 'm6i.xlarge' | 'm6i.2xlarge' | 'm6i.4xlarge'
+
+export interface FormulaSource {
+  title: string
+  url: string
+  note?: string
+}
+
+export interface FormulaDescriptor {
+  id: string
+  name: string
+  expression: string
+  inputs: Record<string, number | string | boolean>
+  sources: FormulaSource[]
+  isBinding: boolean
+}
+
+export interface KafkaNodeMetrics {
+  ingressMBps: number
+  egressMBps: number
+  saturation: {
+    network: number
+    cpu: number
+    disk: number
+  }
+  consumerLagBytes: number
+  consumerLagMessages: number
+  pageCacheHitRatio: number
+  status: 'healthy' | 'saturated' | 'degraded'
+}
+
 /** A node's behavior in the engine, plus its configuration (data-model.md). */
 export type SimRole =
   | { role: 'generator'; ratePerSec: number }
   | { role: 'processor'; serviceRatePerSec: number }
+  | {
+      role: 'kafka'
+      hardwareProfile: KafkaHardwareProfileId
+      partitions: number
+      replicationFactor: number
+      tlsEnabled: boolean
+      compression: KafkaCompression
+      retentionBytes: number
+    }
+  | { role: 'producer'; messageRatePerSec: number; averagePayloadBytes: number }
+  | { role: 'consumer'; consumeRatePerSec: number }
   | { role: 'sink' }
 
 /** The engine's own view of the topology — no positions, labels, or visuals. */
@@ -21,11 +64,18 @@ export interface NodeMetrics {
   throughputPerSec: number
   /** Instantaneous backlog at window end. */
   queueDepth: number
+  /** Present only for Kafka-role nodes (feature 009). */
+  kafka?: KafkaNodeMetrics
+  /** Active formulas and source citations behind this node's metrics. */
+  formulaDescriptors?: FormulaDescriptor[]
 }
 
 export interface EdgeMetrics {
   /** Traffic crossing the edge during the window, scaled to per-second. */
   throughputPerSec: number
+  /** Optional dual-units view for producer/consumer <-> Kafka links. */
+  nativeThroughputPerSec?: number
+  throughputMBps?: number
 }
 
 /** One aggregated snapshot, emitted at most once per `windowSizeMs`. */

@@ -14,7 +14,9 @@ const SIM_ROLE_CHOICES = ['none', 'generator', 'processor', 'sink'] as const
 type SimRoleChoice = (typeof SIM_ROLE_CHOICES)[number]
 
 function simRoleChoice(sim: SimRole | undefined): SimRoleChoice {
-  return sim?.role ?? 'none'
+  if (!sim) return 'none'
+  if (sim.role === 'generator' || sim.role === 'processor' || sim.role === 'sink') return sim.role
+  return 'none'
 }
 
 type SimRoleFieldsProps = {
