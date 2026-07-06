@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest'
 import {
   buildTopologyGraph,
   detectCycle,
+  edgeTrafficShare,
   generatorUsesBatchMode,
   nextOutgoingEdgeIndex,
-  normalizedEdgeShares,
 } from '../../src/engine/components'
 import type { EdgeSimConfig, SimTopology } from '../../src/engine/ports'
 
@@ -66,14 +66,12 @@ describe('buildTopologyGraph', () => {
   })
 })
 
-describe('normalizedEdgeShares', () => {
-  it('gives a lone outgoing edge share 1 regardless of its configured ratio', () => {
-    const graph = buildTopologyGraph(threeNodeTopology)
-    const shares = normalizedEdgeShares(graph)
-    expect(shares.get('e1')).toBe(1)
+describe('edgeTrafficShare', () => {
+  it('returns the edge\'s own configured ratio, unmodified', () => {
+    expect(edgeTrafficShare({ config: edgeConfig({ trafficShareRatio: 0.3 }) })).toBe(0.3)
   })
 
-  it('splits proportionally to configured ratios across multiple outgoing edges', () => {
+  it('does not normalize against sibling edges — multiple edges from the same source can each carry a ratio of 1.0 (broadcast/sequential fan-out)', () => {
     const topology: SimTopology = {
       nodes: [
         { id: 'q', sim: { kind: 'queue' } },
@@ -81,30 +79,18 @@ describe('normalizedEdgeShares', () => {
         { id: 'b', sim: { kind: 'host', profile: 'external_api', manualBaselineLatencyMs: 1 } },
       ],
       edges: [
-        { id: 'qa', source: 'q', target: 'a', config: edgeConfig({ trafficShareRatio: 3 }) },
+        { id: 'qa', source: 'q', target: 'a', config: edgeConfig({ trafficShareRatio: 1 }) },
         { id: 'qb', source: 'q', target: 'b', config: edgeConfig({ trafficShareRatio: 1 }) },
       ],
     }
-    const shares = normalizedEdgeShares(buildTopologyGraph(topology))
-    expect(shares.get('qa')).toBeCloseTo(0.75)
-    expect(shares.get('qb')).toBeCloseTo(0.25)
+    const graph = buildTopologyGraph(topology)
+    expect(edgeTrafficShare(graph.edgeById.get('qa'))).toBe(1)
+    expect(edgeTrafficShare(graph.edgeById.get('qb'))).toBe(1)
   })
 
-  it('falls back to an even split when all configured ratios are zero', () => {
-    const topology: SimTopology = {
-      nodes: [
-        { id: 'q', sim: { kind: 'queue' } },
-        { id: 'a', sim: { kind: 'host', profile: 'external_api', manualBaselineLatencyMs: 1 } },
-        { id: 'b', sim: { kind: 'host', profile: 'external_api', manualBaselineLatencyMs: 1 } },
-      ],
-      edges: [
-        { id: 'qa', source: 'q', target: 'a', config: edgeConfig({ trafficShareRatio: 0 }) },
-        { id: 'qb', source: 'q', target: 'b', config: edgeConfig({ trafficShareRatio: 0 }) },
-      ],
-    }
-    const shares = normalizedEdgeShares(buildTopologyGraph(topology))
-    expect(shares.get('qa')).toBeCloseTo(0.5)
-    expect(shares.get('qb')).toBeCloseTo(0.5)
+  it('clamps a negative ratio to 0 and treats a missing edge as 0', () => {
+    expect(edgeTrafficShare({ config: edgeConfig({ trafficShareRatio: -5 }) })).toBe(0)
+    expect(edgeTrafficShare(undefined)).toBe(0)
   })
 })
 

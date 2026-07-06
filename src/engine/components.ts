@@ -20,27 +20,19 @@ export interface TopologyGraph {
   topologicalOrder: string[]
 }
 
-// Normalizes a source node's outbound trafficShareRatio values to sum to 1
-// (data-model.md SimTopology rule) — a single outgoing edge always gets
-// share 1 regardless of its own configured ratio; multiple edges split
-// proportionally to their configured ratios. An all-zero configured set
-// falls back to an even split so traffic never vanishes.
-function normalizedShares(edgeIds: string[], edgeById: TopologyGraph['edgeById']): Map<string, number> {
-  const shares = new Map<string, number>()
-  if (edgeIds.length === 0) return shares
-  if (edgeIds.length === 1) {
-    shares.set(edgeIds[0], 1)
-    return shares
-  }
-  const total = edgeIds.reduce((sum, edgeId) => sum + Math.max(0, edgeById.get(edgeId)?.config.trafficShareRatio ?? 0), 0)
-  if (total <= 0) {
-    for (const edgeId of edgeIds) shares.set(edgeId, 1 / edgeIds.length)
-    return shares
-  }
-  for (const edgeId of edgeIds) {
-    shares.set(edgeId, Math.max(0, edgeById.get(edgeId)?.config.trafficShareRatio ?? 0) / total)
-  }
-  return shares
+// Each outgoing edge's `trafficShareRatio` is an INDEPENDENT multiplier on
+// its source's output — deliberately NOT normalized across a source's
+// edges (spec.md Edge Cases, revised: real systems fan out with both
+// "split" and "broadcast" shapes at once. A ratio of 1.0 means "this call
+// happens for every upstream request" — e.g. a host that makes sequential/
+// parallel calls to two downstream services should give BOTH edges a
+// ratio of 1.0, not 0.5/0.5; multiple edges summing to more than 1 is the
+// broadcast/fan-out pattern, not an error. A conditional branch (e.g. "20%
+// of requests also hit a slow path") is expressed the same way, just with
+// a ratio below 1. Values are clamped at >= 0; an edge with ratio 0 yields
+// zero flow on that edge specifically (spec.md "Zero/absent values").
+export function edgeTrafficShare(edge: { config: { trafficShareRatio: number } } | undefined): number {
+  return Math.max(0, edge?.config.trafficShareRatio ?? 0)
 }
 
 export function buildTopologyGraph(topology: SimTopology): TopologyGraph {
@@ -73,19 +65,6 @@ export function buildTopologyGraph(topology: SimTopology): TopologyGraph {
   }
   graph.topologicalOrder = kahnTopologicalOrder(graph)
   return graph
-}
-
-/** Returns, per outgoing edge id, that edge's normalized share of its
- *  source node's total outbound traffic (research.md D5). */
-export function normalizedEdgeShares(graph: TopologyGraph): Map<string, number> {
-  const shares = new Map<string, number>()
-  for (const [nodeId, edgeIds] of graph.outgoingEdgesByNode) {
-    for (const [edgeId, share] of normalizedShares(edgeIds, graph.edgeById)) {
-      shares.set(edgeId, share)
-    }
-    void nodeId
-  }
-  return shares
 }
 
 // Kahn's algorithm over the simulated subgraph — only nodes carrying a sim

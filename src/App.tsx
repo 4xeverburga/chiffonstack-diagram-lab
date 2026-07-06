@@ -385,7 +385,6 @@ function LabEditor() {
           selectedEdge={selectedEdge}
           selectedNodeMetrics={selectedNodeMetrics}
           selectedEdgeMetrics={selectedEdgeMetrics}
-          edges={edges}
           runStatus={runStatus}
           onRenameNode={mutations.renameNode}
           onSetNodeKind={mutations.setNodeKind}

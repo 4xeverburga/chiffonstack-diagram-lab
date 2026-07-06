@@ -1,12 +1,16 @@
 // Per-window deterministic flow propagation over the simulated DAG
-// (research.md D1/D5): client pools emit, edges split by normalized share,
-// hosts compute saturation/latency/shedding, queues integrate backlog, and
-// every metric ships a sourced FormulaDescriptor (constitution II). Pure —
-// no engine state beyond what's threaded through as arguments — so a full
-// window can be exercised directly in tests without the DES event loop.
+// (research.md D1/D5): client pools emit, each outbound edge carries its
+// own independent trafficShareRatio of the source's output (NOT
+// normalized across siblings — a source's edges may sum to more than 1,
+// modeling sequential/parallel fan-out to multiple downstream services;
+// see edgeTrafficShare in components.ts), hosts compute saturation/
+// latency/shedding, queues integrate backlog, and every metric ships a
+// sourced FormulaDescriptor (constitution II). Pure — no engine state
+// beyond what's threaded through as arguments — so a full window can be
+// exercised directly in tests without the DES event loop.
 
 import { EDGE_CONGESTION_THRESHOLD, KB_PER_MB } from './config'
-import { normalizedEdgeShares, type TopologyGraph } from './components'
+import { edgeTrafficShare, type TopologyGraph } from './components'
 import { calculatedCapacityRPS, computeClientPoolMetrics, computeExternalApiMetrics, computeHostMetrics } from './hostModel'
 import { computeQueueMetrics } from './queueModel'
 import {
@@ -61,7 +65,7 @@ function hostAcceptCapacityRPS(sim: HostNodeSim): number {
 
 export function propagateWindow(input: FlowPropagationInput): FlowPropagationOutput {
   const { graph, windowSizeMs } = input
-  const outboundShares = normalizedEdgeShares(graph)
+  const shareOfEdge = (edgeId: string) => edgeTrafficShare(graph.edgeById.get(edgeId))
   const nodeMetricsById = new Map<string, NodeMetrics>()
   const edgeMetricsById = new Map<string, EdgeMetrics>()
   const edgeOutputRPS = new Map<string, number>()
@@ -89,7 +93,7 @@ export function propagateWindow(input: FlowPropagationInput): FlowPropagationOut
       for (const edgeId of outgoingEdgeIds) {
         const edge = graph.edgeById.get(edgeId)
         const targetSim = edge ? graph.simByNode.get(edge.target) : undefined
-        const share = outboundShares.get(edgeId) ?? 0
+        const share = shareOfEdge(edgeId)
         const acceptRPS = targetSim && isHostSim(targetSim) ? hostAcceptCapacityRPS(targetSim) : Number.POSITIVE_INFINITY
         const desiredMBps = Number.isFinite(acceptRPS) ? (acceptRPS * share * (edge?.config.averagePayloadSizeKB ?? 0)) / KB_PER_MB : Number.POSITIVE_INFINITY
         desiredByEdge.set(edgeId, desiredMBps)
@@ -108,7 +112,7 @@ export function propagateWindow(input: FlowPropagationInput): FlowPropagationOut
       for (const edgeId of outgoingEdgeIds) {
         const edge = graph.edgeById.get(edgeId)
         const desired = desiredByEdge.get(edgeId) ?? 0
-        const edgeShareOfOutflow = hasUnboundedEdge || totalDesiredMBps <= 0 ? (outboundShares.get(edgeId) ?? 0) : desired / totalDesiredMBps
+        const edgeShareOfOutflow = hasUnboundedEdge || totalDesiredMBps <= 0 ? shareOfEdge(edgeId) : desired / totalDesiredMBps
         const edgeMBps = queueResult.outflowMBps * edgeShareOfOutflow
         const payloadKB = edge?.config.averagePayloadSizeKB ?? 0
         edgeOutputRPS.set(edgeId, payloadKB > 0 ? (edgeMBps * KB_PER_MB) / payloadKB : 0)
@@ -133,14 +137,14 @@ export function propagateWindow(input: FlowPropagationInput): FlowPropagationOut
     // Host node.
     if (sim.profile === 'client_pool') {
       const metrics = computeClientPoolMetrics(input.clientPoolMeasuredRPS.get(nodeId) ?? 0)
-      for (const edgeId of outgoingEdgeIds) edgeOutputRPS.set(edgeId, metrics.forwardedRPS * (outboundShares.get(edgeId) ?? 0))
+      for (const edgeId of outgoingEdgeIds) edgeOutputRPS.set(edgeId, metrics.forwardedRPS * shareOfEdge(edgeId))
       nodeMetricsById.set(nodeId, { throughputPerSec: metrics.forwardedRPS, queueDepth: 0, host: metrics, formulaDescriptors: [] })
       continue
     }
 
     if (sim.profile === 'external_api') {
       const metrics = computeExternalApiMetrics(incomingRPS, sim.manualBaselineLatencyMs)
-      for (const edgeId of outgoingEdgeIds) edgeOutputRPS.set(edgeId, metrics.forwardedRPS * (outboundShares.get(edgeId) ?? 0))
+      for (const edgeId of outgoingEdgeIds) edgeOutputRPS.set(edgeId, metrics.forwardedRPS * shareOfEdge(edgeId))
       nodeMetricsById.set(nodeId, { throughputPerSec: metrics.forwardedRPS, queueDepth: 0, host: metrics, formulaDescriptors: [] })
       continue
     }
@@ -157,14 +161,14 @@ export function propagateWindow(input: FlowPropagationInput): FlowPropagationOut
     let outboundIoLatencySum = 0
     for (const edgeId of outgoingEdgeIds) {
       const edge = graph.edgeById.get(edgeId)
-      const share = outboundShares.get(edgeId) ?? 0
+      const share = shareOfEdge(edgeId)
       outboundIoWeightSum += share
       outboundIoLatencySum += share * (edge?.config.pathIoLatencyMs ?? 0)
     }
     const outboundWeightedIoLatencyMs = outboundIoWeightSum > 0 ? outboundIoLatencySum / outboundIoWeightSum : 0
 
     const metrics = computeHostMetrics({ sim, incomingRPS, inboundWeightedComputeMultiplier, outboundWeightedIoLatencyMs })
-    for (const edgeId of outgoingEdgeIds) edgeOutputRPS.set(edgeId, metrics.forwardedRPS * (outboundShares.get(edgeId) ?? 0))
+    for (const edgeId of outgoingEdgeIds) edgeOutputRPS.set(edgeId, metrics.forwardedRPS * shareOfEdge(edgeId))
 
     const capacityRPS = hostCapacityRPS(sim)
     const descriptors = [

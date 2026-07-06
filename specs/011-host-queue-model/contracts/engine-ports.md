@@ -7,7 +7,8 @@ Supersedes the payload types of `specs/008-simulation-engine-skeleton/contracts/
 ```ts
 interface TopologyPort {
   /** Replaces the simulated topology. Throws CycleError on cycles.
-   *  Normalizes per-source edge shares at load time. */
+   *  Applies each edge's trafficShareRatio independently (not
+   *  normalized against sibling edges) at load time. */
   loadTopology(topology: SimTopology): void
 }
 
@@ -43,7 +44,7 @@ interface Simulation extends TopologyPort {
 
 1. **Windowing**: `emitWindow` fires at most once per `SIM_TICK_MS` of simulated time; per-window compute is O(V+E) regardless of throughput (SC-006).
 2. **Determinism**: identical topology + seed + tick sequence ⇒ identical window stream (existing 008 guarantee, preserved).
-3. **Propagation**: windows reflect a full topological pass — client pools emit, edges split by normalized share, hosts clamp/shed, queues integrate backlog (research D1/D5).
+3. **Propagation**: windows reflect a full topological pass — client pools emit, each edge carries `sourceOutput × trafficShareRatio` (independent per edge, not normalized — a source's edges may sum to more than 1 for sequential/broadcast fan-out), hosts clamp/shed, queues integrate backlog (research D1/D5).
 4. **Finiteness**: every emitted number is finite; ρ is clamped below 1 before the latency curve (D2); zero-capacity inputs yield zeros, never NaN/Infinity.
 5. **Traceability**: every `host`/`queue`/`sim` metrics object is accompanied by formula descriptors whose sources are validated non-empty before emission (constitution II).
 6. **Worker protocol**: `src/sim/workerProtocol.ts` message kinds are unchanged; only the payload types above evolve. UI consumes windows via the existing Zustand store snapshot path.

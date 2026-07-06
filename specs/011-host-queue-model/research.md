@@ -40,7 +40,7 @@ All Technical Context unknowns resolved. Decisions numbered for citation from pl
 
 ## D5 — Propagation order: existing DFS cycle detection + topological sort
 
-**Decision**: `buildTopologyGraph` keeps its shape; add a Kahn topological ordering over the simulated subgraph computed at `loadTopology` time. Per window, propagate in that order: client pools emit `requestRatePerSec` (jittered by the Poisson source's windowed count), each edge takes `sourceOutputRPS × normalizedShare`, each host computes ρ/latency/shedding, each queue integrates backlog. Cycles already throw `CycleError` before ordering is attempted.
+**Decision**: `buildTopologyGraph` keeps its shape; add a Kahn topological ordering over the simulated subgraph computed at `loadTopology` time. Per window, propagate in that order: client pools emit `requestRatePerSec` (jittered by the Poisson source's windowed count), each edge takes `sourceOutputRPS × trafficShareRatio` (that edge's own configured ratio, applied independently — NOT normalized against sibling edges, so a source's edges may sum to more than 1 to model sequential/parallel fan-out to multiple downstream services), each host computes ρ/latency/shedding, each queue integrates backlog. Cycles already throw `CycleError` before ordering is attempted.
 
 **Rationale**: Fixes the sketch's propagation bug (client pools have no *incoming* RPS — sources emit *generated* RPS). Ordering is computed once per topology load, O(V+E) per window thereafter.
 

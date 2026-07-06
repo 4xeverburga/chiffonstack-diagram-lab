@@ -92,6 +92,28 @@ describe('propagateWindow — fan-out share splits', () => {
     expect(result.edgeMetricsById.get('pool-b')?.throughputPerSec).toBeCloseTo(300, 5)
   })
 
+  it('broadcasts to multiple downstream hosts unsplit when shares are not normalized (sequential/parallel fan-out, sum > 1)', () => {
+    const topology: SimTopology = {
+      nodes: [
+        { id: 'pool', sim: { kind: 'host', profile: 'client_pool', requestRatePerSec: 1000 } },
+        { id: 'a', sim: { kind: 'host', profile: 'external_api', manualBaselineLatencyMs: 1 } },
+        { id: 'b', sim: { kind: 'host', profile: 'external_api', manualBaselineLatencyMs: 1 } },
+      ],
+      edges: [
+        { id: 'pool-a', source: 'pool', target: 'a', config: edgeConfig({ trafficShareRatio: 1 }) },
+        { id: 'pool-b', source: 'pool', target: 'b', config: edgeConfig({ trafficShareRatio: 1 }) },
+      ],
+    }
+    const result = run(topology, new Map([['pool', 1000]]))
+    // Both edges carry the FULL upstream rate — not split 50/50 — because a
+    // host making sequential/parallel calls to two downstream services
+    // sends every request to both.
+    expect(result.edgeMetricsById.get('pool-a')?.throughputPerSec).toBeCloseTo(1000, 5)
+    expect(result.edgeMetricsById.get('pool-b')?.throughputPerSec).toBeCloseTo(1000, 5)
+    expect(result.nodeMetricsById.get('a')?.host?.incomingRPS).toBeCloseTo(1000, 5)
+    expect(result.nodeMetricsById.get('b')?.host?.incomingRPS).toBeCloseTo(1000, 5)
+  })
+
   it('congestion flags the first bottleneck first: a lightly-loaded downstream host is not congested while an upstream one is', () => {
     const topology: SimTopology = {
       nodes: [

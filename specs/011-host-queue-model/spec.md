@@ -82,11 +82,11 @@ A data engineer places a queue node between a producer host and a consumer host.
 
 ### User Story 4 - Shape traffic on edges (Priority: P2)
 
-A user selects an edge and configures how traffic flows across it: what share of the source's output it carries, the average payload size, how expensive its requests are for the target, and the path's I/O latency. Edge telemetry shows the resulting request rate, data rate, and estimated open connections.
+A user selects an edge and configures how traffic flows across it: what share of the source's output it carries, the average payload size, how expensive its requests are for the target, and the path's I/O latency. Edge telemetry shows the resulting request rate, data rate, and estimated open connections. Shares are independent per edge (not normalized against a source's other edges), so the same mechanism expresses both a probabilistic split (shares summing to 1) and a broadcast/sequential fan-out (multiple edges each at 1.0).
 
 **Why this priority**: Edge-level traffic shaping is what makes fan-out topologies expressible; it feeds Stories 1–3 but each of those is demonstrable with default edge values.
 
-**Independent Test**: One source fanned out to two targets with shares 0.7/0.3; verify edge request rates split 70/30 and MB/s follows each edge's payload size.
+**Independent Test**: One source fanned out to two targets with shares 0.7/0.3; verify edge request rates split 70/30 and MB/s follows each edge's payload size. Separately, a source with two edges both at share 1.0 must forward the full upstream rate to each (broadcast, not split).
 
 **Acceptance Scenarios**:
 
@@ -117,7 +117,7 @@ A user selects any host, queue, or edge during simulation and opens the formula 
 - **Cycles**: A topology with a loop (API → DB → API) is rejected with the existing cycle error naming the offending nodes; the simulation must not hang or feed back infinitely.
 - **Saturation ≥ 100%**: Offered load above capacity must not produce infinite/NaN latency; the saturation input to the latency curve is clamped just below 1 so latency is huge but finite, and displayed saturation may exceed 100% to show overload magnitude.
 - **Zero/absent values**: A host with zero capacity (0 threads, 0 saturation RPS), an edge with 0% share, or a payload of 0 KB must yield zero flow, not division errors.
-- **Fan-out shares that don't sum to 1**: Shares are normalized so total outbound traffic never exceeds the source's output.
+- **Fan-out shares that sum to more than 1**: This is expected, not an error — a source's outbound `trafficShareRatio` values are independent per-edge multipliers, not normalized against each other. A ratio of 1.0 on multiple edges models a host making sequential/parallel calls to several downstream services per request (each gets 100% of the source's output); ratios that sum to 1 across a set of edges model a probabilistic split/branch instead. Both patterns — and any mix of the two — are valid on the same source.
 - **Disconnected nodes**: A host or queue with no inbound edges simply reports zero traffic (unless it is a client pool, which generates its own).
 - **Existing saved diagrams**: Diagrams containing retired node roles (generator/processor/producer/consumer/sink/Kafka) must not crash the app on load — they degrade to non-simulated visual nodes (see Assumptions).
 - **Queue at the topology edge**: A queue with no downstream consumer accumulates backlog indefinitely (unbounded by design); the telemetry must remain numerically stable over long runs.
@@ -182,7 +182,7 @@ A user selects any host, queue, or edge during simulation and opens the formula 
 ## Assumptions
 
 - **Migration of saved diagrams**: Retired-role nodes in previously saved/exported diagrams degrade to plain visual (non-simulated) nodes rather than being auto-converted; users re-assign kinds manually. Chosen because pre-pivot diagrams are decorative and the product has no persistence guarantees yet.
-- **Fan-out share normalization**: If a source's outbound shares do not sum to 1, they are normalized proportionally at simulation time (rather than blocking the run), so total outbound never exceeds source output. The Inspector may hint when shares ≠ 1.
+- **Fan-out share independence**: A source's outbound `trafficShareRatio` values are NOT normalized against each other — each edge is an independent multiplier on the source's output. Shares summing to 1 across a source's edges model a probabilistic split (e.g. a load-balanced route); a ratio of 1.0 on more than one edge models sequential/parallel calls to multiple downstream services per request (broadcast fan-out). Both patterns, and any mix, coexist on the same source; there is no total to enforce.
 - **Displayed saturation above 100%** is allowed (shows overload magnitude); only the latency-curve input is clamped below 1.
 - **Worker/consumer, transactional API, and database profiles** share the same saturation/latency mathematics in this spec; profiles primarily set defaults and Inspector labeling. Behavioral differentiation between profiles is future work.
 - **Queue units**: Queue telemetry is data-rate based (MB/s, GB backlog), converted from request rates via edge payload sizes.

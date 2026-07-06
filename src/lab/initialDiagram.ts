@@ -4,15 +4,21 @@ import type { Edge, Node } from '@xyflow/react'
 // exercise every host/queue-model concept at once so Start is immediately
 // clickable without first authoring a diagram from scratch:
 //   web-client (client pool)
-//     -> api-gateway (manual-mode transactional API)
-//          -> orders-queue (zero-config queue)
-//               -> orders-worker (calculated-mode worker)
+//     -> api-gateway (manual-mode transactional API), which SEQUENTIALLY
+//        calls two downstream services on every request — both edges
+//        carry trafficShareRatio 1.0, since shares are independent
+//        per-edge multipliers, not normalized to sum to 1 (a fan-out
+//        can be a SPLIT, a BROADCAST, or a mix of both at once):
+//          -> orders-queue (zero-config queue, share 1.0 — always writes
+//               the order) -> orders-worker (calculated-mode worker)
 //                    -> postgres-db (manual-mode database, also read
-//                         directly by api-gateway — a converging host
-//                         fed by two edges, demonstrating the
-//                         traffic-weighted inbound compute-weight
+//                         directly by api-gateway, share 1.0 — a
+//                         converging host fed by two edges, demonstrating
+//                         the traffic-weighted inbound compute-weight
 //                         average)
-//          -> payments-api (external_api — bottomless third-party call)
+//          -> payments-api (external_api — bottomless third-party call),
+//               a CONDITIONAL branch: only ~25% of requests are card
+//               payments that need it (share 0.25)
 //          -> static-assets (a plain, non-simulated node — proves plain
 //               nodes/edges keep coexisting with simulated ones)
 // Author your layout here — drag new nodes in from the sidebar, wire them
@@ -114,7 +120,12 @@ export const initialEdges: Edge[] = [
     type: 'heat',
     data: {
       variant: 'heat-flow',
-      simConfig: { trafficShareRatio: 0.6, averagePayloadSizeKB: 3, targetComputeWeightMultiplier: 1, pathIoLatencyMs: 1 },
+      // Every request writes an order — always fires (share 1.0), same as
+      // the direct postgres-db read below: a host's outgoing shares are
+      // independent multipliers, not normalized to sum to 1, so two edges
+      // can each carry 100% of the source's output (sequential/broadcast
+      // calls to multiple downstream services per request).
+      simConfig: { trafficShareRatio: 1, averagePayloadSizeKB: 3, targetComputeWeightMultiplier: 1, pathIoLatencyMs: 1 },
     },
     sourceHandle: 'top',
     targetHandle: 'left',
@@ -126,6 +137,8 @@ export const initialEdges: Edge[] = [
     type: 'heat',
     data: {
       variant: 'heat-static',
+      // A conditional branch: only ~25% of requests are card payments that
+      // need this call.
       simConfig: { trafficShareRatio: 0.25, averagePayloadSizeKB: 1, targetComputeWeightMultiplier: 1, pathIoLatencyMs: 0 },
     },
     sourceHandle: 'bottom',
@@ -138,7 +151,9 @@ export const initialEdges: Edge[] = [
     type: 'heat',
     data: {
       variant: 'heat-static',
-      simConfig: { trafficShareRatio: 0.15, averagePayloadSizeKB: 1, targetComputeWeightMultiplier: 1, pathIoLatencyMs: 0 },
+      // Every request also does a synchronous session/user lookup — always
+      // fires (share 1.0), sequential with the orders-queue write above.
+      simConfig: { trafficShareRatio: 1, averagePayloadSizeKB: 1, targetComputeWeightMultiplier: 1, pathIoLatencyMs: 0 },
     },
     sourceHandle: 'right',
     targetHandle: 'bottom',

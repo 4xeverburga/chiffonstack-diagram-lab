@@ -46,7 +46,7 @@ type QueueNodeSim = { kind: 'queue' }   // zero configuration parameters (FR-010
 
 ```ts
 interface EdgeSimConfig {
-  trafficShareRatio: number            // ≥ 0; normalized per source at load time
+  trafficShareRatio: number            // ≥ 0; independent per-edge multiplier, NOT normalized against sibling edges
   averagePayloadSizeKB: number         // ≥ 0; drives RPS ↔ MB/s
   targetComputeWeightMultiplier: number // > 0; weights calculated-mode ρ
   pathIoLatencyMs: number              // ≥ 0; downstream I/O wait + Little's law input
@@ -62,7 +62,7 @@ interface SimTopology {
 }
 ```
 
-Rules: cycles rejected with `CycleError` (existing). Shares normalized per source when Σ ≠ 1. Retired roles never reach the engine (dropped at import, D7).
+Rules: cycles rejected with `CycleError` (existing). Each edge's `trafficShareRatio` is applied independently — a source's outbound shares are never normalized against each other, so they may sum to less than, exactly, or more than 1 (a sum > 1 models sequential/parallel calls to multiple downstream services per request; see research.md D5). Retired roles never reach the engine (dropped at import, D7).
 
 **Closed parameter enumeration (FR-020 / constitution I)**: the user-facing inputs are exactly the fields above — nothing else. `SIM_*`/threshold tunables in `src/engine/config.ts` are internal.
 
@@ -97,7 +97,7 @@ interface QueueNodeMetrics {
 
 ```ts
 interface EdgeSimMetrics {
-  currentRPS: number          // sourceOutput × normalizedShare
+  currentRPS: number          // sourceOutput × trafficShareRatio (not normalized)
   currentMBps: number         // currentRPS × payloadKB / 1024
   activeConnections: number   // Little's law: currentRPS × (latencySec of target path)
   isCongested: boolean        // target saturation > CONGESTION_THRESHOLD

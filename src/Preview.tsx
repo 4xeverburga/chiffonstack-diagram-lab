@@ -187,7 +187,6 @@ function Preview() {
           selectedEdge={undefined}
           selectedNodeMetrics={INSPECTOR_METRICS}
           selectedEdgeMetrics={undefined}
-          edges={[]}
           runStatus="idle"
           onRenameNode={noop}
           onSetNodeKind={noop}

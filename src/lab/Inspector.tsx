@@ -124,7 +124,6 @@ type InspectorProps = {
   selectedEdge: Edge | undefined
   selectedNodeMetrics: NodeMetrics | undefined
   selectedEdgeMetrics: EdgeMetrics | undefined
-  edges: Edge[]
   runStatus: RunStatus
   onRenameNode: (id: string, label: string) => void
   onSetNodeKind: (id: string, kind: NodeKind) => void
@@ -145,7 +144,6 @@ export function Inspector({
   selectedEdge,
   selectedNodeMetrics,
   selectedEdgeMetrics,
-  edges,
   runStatus,
   onRenameNode,
   onSetNodeKind,
@@ -254,9 +252,6 @@ export function Inspector({
     const direction = resolveDirection((selectedEdge.data as { direction?: unknown } | undefined)?.direction)
     const simConfig = (selectedEdge.data as { simConfig?: EdgeSimConfig } | undefined)?.simConfig
     const canEditSimConfig = runStatus === 'idle'
-    const siblingShareTotal = edges
-      .filter((edge) => edge.source === selectedEdge.source)
-      .reduce((sum, edge) => sum + ((edge.data as { simConfig?: EdgeSimConfig } | undefined)?.simConfig?.trafficShareRatio ?? 0), 0)
     return (
       <aside key={`edge-${selectedEdge.id}`} className="lab-inspector lab-inspector-flash">
         <h2 className="lab-panel-title">Edge</h2>
@@ -310,7 +305,6 @@ export function Inspector({
             <EdgeConfigFields
               config={simConfig}
               disabled={!canEditSimConfig}
-              siblingShareTotal={siblingShareTotal}
               onChange={(next) => onSetEdgeSimConfig(selectedEdge.id, next)}
             />
           ) : (
