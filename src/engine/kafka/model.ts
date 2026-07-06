@@ -1,5 +1,5 @@
-import type { TopologyGraph } from './components'
-import { resolveKafkaHardwareProfile } from './kafkaCatalog'
+import type { TopologyGraph } from '../components'
+import { resolveKafkaHardwareProfile } from './catalog'
 import {
   buildKafkaFormulaDescriptors,
   BYTES_PER_MB,
@@ -14,8 +14,8 @@ import {
   producerIngressMBps,
   saturationRatio,
   validateFormulaDescriptorsHaveSources,
-} from './kafkaFormulas'
-import type { EdgeMetrics, KafkaNodeMetrics, NodeMetrics, SimRole } from './ports'
+} from './formulas'
+import type { EdgeMetrics, KafkaNodeMetrics, NodeMetrics, SimRole } from '../ports'
 
 interface KafkaRuntime {
   lagBytes: number

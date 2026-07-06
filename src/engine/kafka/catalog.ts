@@ -1,4 +1,4 @@
-import type { FormulaSource } from './ports'
+import type { FormulaSource } from '../ports'
 
 export type KafkaHardwareProfileId = 'm6i.large' | 'm6i.xlarge' | 'm6i.2xlarge' | 'm6i.4xlarge'
 

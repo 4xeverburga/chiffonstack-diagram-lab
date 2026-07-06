@@ -1,0 +1,332 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SUGAR — UI Audit (Sidebar / Canvas / Inspector)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link
+  href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Quicksand:wght@500;600&family=Hanken+Grotesk:wght@400;500;600&display=swap"
+  rel="stylesheet"
+/>
+<!-- Real app stylesheets, linked directly so this mock renders with the actual
+     production CSS (colors, spacing, borders) instead of a hand-guessed copy. -->
+<link rel="stylesheet" href="./src/index.css" />
+<link rel="stylesheet" href="./src/App.css" />
+
+<style>
+  /* ---- Audit-only chrome. Not part of the product — clearly separated so
+     it never gets mistaken for real UI. ---- */
+  .audit-banner {
+    font-family: var(--mono, monospace);
+    font-size: 12px;
+    background: #08060d;
+    color: #fff;
+    padding: 10px 20px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .audit-banner b { color: #ff8e5c; }
+  .audit-banner .tag {
+    border: 1px solid #444;
+    border-radius: 999px;
+    padding: 2px 10px;
+    color: #d8d4cf;
+  }
+  .audit-app-frame {
+    height: calc(100svh - 41px);
+  }
+  .audit-count {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    font-family: var(--mono, monospace);
+    font-size: 10px;
+    background: #ff4715;
+    color: #fff;
+    padding: 1px 6px;
+    border-radius: 999px;
+    z-index: 5;
+  }
+  .lab-inspector { position: relative; }
+
+  /* Minimal mock topology painted directly on the canvas — not real React
+     Flow nodes/edges, just static boxes positioned to match the app's
+     `.react-flow__node.node` classes/visual treatment for an accurate look. */
+  .mock-topology { position: absolute; inset: 0; }
+  .mock-node {
+    position: absolute;
+    width: 132px;
+  }
+  .mock-edges { position: absolute; inset: 0; width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+
+<div class="audit-banner">
+  <span><b>UI AUDIT</b> — real Sidebar / Canvas / Inspector markup + CSS, populated with a worst-case node (Kafka, selected) to show how dense the right panel gets.</span>
+  <span class="tag">Inspector: 8 stacked sections in 220px</span>
+  <span class="tag">Sidebar: 2 unrelated concerns (palette + brand tokens)</span>
+  <span class="tag">Topbar: 6 controls in one row</span>
+</div>
+
+<div class="lab audit-app-frame">
+  <header class="lab-bar">
+    <span class="lab-title">Diagram Lab</span>
+    <span class="lab-meta">React Flow authoring tool for system topology diagrams</span>
+    <div class="sim-controls">
+      <div class="sim-controls-buttons">
+        <button type="button">Start</button>
+        <button type="button" disabled>Pause</button>
+        <button type="button">Reset</button>
+      </div>
+      <label class="sim-scale-select">
+        <span>Peak traffic</span>
+        <select>
+          <option>Small (10s req/s)</option>
+          <option selected>Medium (100s req/s)</option>
+          <option>Large (1000s req/s)</option>
+        </select>
+      </label>
+    </div>
+    <button type="button" class="lab-export">Export JSON</button>
+    <button type="button" class="lab-export">Upload JSON</button>
+  </header>
+
+  <div class="lab-body">
+    <!-- ===================== SIDEBAR ===================== -->
+    <aside class="lab-sidebar">
+      <h2 class="lab-panel-title">Add node</h2>
+      <ul class="lab-palette">
+        <li>
+          <button type="button" class="palette-item">
+            <span class="palette-swatch" style="background:#fff;border:1px solid #e5e4e7"></span>
+            <span class="palette-copy">
+              <span class="palette-label">Node</span>
+              <span class="palette-hint">Neutral system node</span>
+            </span>
+          </button>
+        </li>
+        <li>
+          <button type="button" class="palette-item">
+            <span class="palette-swatch" style="background:#fff;border:1px solid #ff4715"></span>
+            <span class="palette-copy">
+              <span class="palette-label">Active node</span>
+              <span class="palette-hint">Heat-highlighted, the live path</span>
+            </span>
+          </button>
+        </li>
+        <li>
+          <button type="button" class="palette-item">
+            <span class="palette-swatch" style="background:#fff;border:1px dashed #6b6375"></span>
+            <span class="palette-copy">
+              <span class="palette-label">Dim node</span>
+              <span class="palette-hint">Faded, fallback / secondary path</span>
+            </span>
+          </button>
+        </li>
+      </ul>
+      <p class="lab-sidebar-note">Drag onto the canvas, or click to drop at center.</p>
+
+      <h2 class="lab-panel-title lab-panel-title-spaced">Design tokens</h2>
+      <label class="lab-field">
+        <span>Primary color</span>
+        <div class="lab-color-field">
+          <input type="color" value="#ff4715" />
+          <input value="#ff4715" />
+        </div>
+      </label>
+      <label class="lab-field">
+        <span>Secondary color</span>
+        <div class="lab-color-field">
+          <input type="color" value="#d8d4cf" />
+          <input value="#d8d4cf" />
+        </div>
+      </label>
+      <label class="lab-field">
+        <span>Heading font</span>
+        <input value="Quicksand Variable, system-ui, sans-serif" />
+      </label>
+      <label class="lab-field">
+        <span>Body font</span>
+        <input value="JetBrains Mono Variable, ui-monospace, monospace" />
+      </label>
+      <p class="lab-sidebar-note">Updates the canvas live and styles every export.</p>
+    </aside>
+
+    <!-- ===================== CANVAS ===================== -->
+    <div class="lab-canvas">
+      <div class="mock-topology">
+        <svg class="mock-edges">
+          <line x1="150" y1="90" x2="330" y2="90" stroke="#d8d4cf" stroke-width="2" />
+          <line x1="470" y1="90" x2="650" y2="90" stroke="#ff4715" stroke-width="2" />
+          <line x1="330" y1="130" x2="330" y2="220" stroke="#d8d4cf" stroke-width="2" stroke-dasharray="4 3" />
+        </svg>
+        <div class="mock-node react-flow__node node" style="left:20px; top:60px;">
+          <div class="node-content"><span class="node-label">producer-01</span></div>
+        </div>
+        <div class="mock-node react-flow__node node node-active sim-status-saturated" style="left:340px; top:60px;">
+          <div class="node-content"><span class="node-label">kafka-broker-01</span></div>
+        </div>
+        <div class="mock-node react-flow__node node" style="left:660px; top:60px;">
+          <div class="node-content"><span class="node-label">consumer-01</span></div>
+        </div>
+        <div class="mock-node react-flow__node node node-dim" style="left:270px; top:230px;">
+          <div class="node-content"><span class="node-label">sink-analytics</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== INSPECTOR ===================== -->
+    <aside class="lab-inspector">
+      <span class="audit-count">8 sections</span>
+      <h2 class="lab-panel-title">Node</h2>
+
+      <label class="lab-field">
+        <span>Label</span>
+        <input value="kafka-broker-01" />
+      </label>
+
+      <div class="lab-field">
+        <span>Style</span>
+        <div class="lab-button-row">
+          <button type="button" class="chip chip-active">default</button>
+          <button type="button" class="chip">active</button>
+          <button type="button" class="chip">dim</button>
+        </div>
+      </div>
+
+      <div class="lab-field">
+        <span>Size</span>
+        <div class="lab-button-row">
+          <button type="button" class="chip">small</button>
+          <button type="button" class="chip chip-active">normal</button>
+          <button type="button" class="chip">large</button>
+        </div>
+      </div>
+
+      <div class="lab-field">
+        <span>Image</span>
+        <input type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp" />
+      </div>
+
+      <div class="lab-field">
+        <span>Simulation role</span>
+        <div class="lab-button-row">
+          <button type="button" class="chip">plain</button>
+          <button type="button" class="chip">generator</button>
+          <button type="button" class="chip">processor</button>
+          <button type="button" class="chip">sink</button>
+          <button type="button" class="chip chip-active">kafka</button>
+          <button type="button" class="chip">producer</button>
+          <button type="button" class="chip">consumer</button>
+        </div>
+
+        <label class="lab-field">
+          <span>Hardware profile</span>
+          <select>
+            <option selected>m6i.large — 2 vCPU, 8 GiB RAM, 750 MB/s net, 200 MB/s disk</option>
+            <option>m6i.xlarge — 4 vCPU, 16 GiB RAM, 1250 MB/s net, 200 MB/s disk</option>
+          </select>
+        </label>
+        <label class="lab-field">
+          <span>Partitions</span>
+          <input type="number" value="3" />
+        </label>
+        <label class="lab-field">
+          <span>Replication factor</span>
+          <input type="number" value="2" />
+        </label>
+        <label class="lab-field lab-field-checkbox">
+          <input type="checkbox" />
+          <span>TLS enabled</span>
+        </label>
+        <div class="lab-field">
+          <span>Compression</span>
+          <div class="lab-button-row">
+            <button type="button" class="chip chip-active">none</button>
+            <button type="button" class="chip">zstd</button>
+          </div>
+        </div>
+        <label class="lab-field">
+          <span>Retention (bytes)</span>
+          <input type="number" value="1000000000" />
+        </label>
+
+        <div class="sim-metrics-readout">
+          <span>Throughput: 2,048.0 req/s</span>
+        </div>
+
+        <div class="sim-kafka-metrics">
+          <div class="sim-status-badge sim-status-badge-saturated">saturated</div>
+          <div class="sim-metrics-readout">
+            <span>Ingress: 512.00 MB/s</span>
+            <span>Egress: 480.00 MB/s</span>
+          </div>
+          <div class="sim-kafka-meter">
+            <span>Network saturation</span>
+            <span>62%</span>
+          </div>
+          <div class="sim-kafka-meter">
+            <span>CPU saturation</span>
+            <span>55%</span>
+          </div>
+          <div class="sim-kafka-meter sim-kafka-meter-binding">
+            <span>Disk saturation (binding)</span>
+            <span>94%</span>
+          </div>
+          <div class="sim-metrics-readout">
+            <span>Consumer lag: 128,000 msgs (131,072,000 bytes)</span>
+            <span>Page cache hit ratio: 78%</span>
+          </div>
+        </div>
+
+        <div class="lab-formula-panel">
+          <h3 class="lab-panel-title">Formulas &amp; sources</h3>
+          <ul class="lab-formula-list">
+            <li class="lab-formula lab-formula-binding">
+              <div class="lab-formula-name">Disk throughput (binding)</div>
+              <div class="lab-formula-expression">disk_util = (retention_bytes / disk_capacity_bytes) × 100</div>
+              <ul class="lab-formula-inputs">
+                <li>retention_bytes: 1,000,000,000</li>
+                <li>disk_capacity_bytes: 214,748,364,800</li>
+              </ul>
+              <div class="lab-formula-sources">
+                <a href="#" target="_blank" rel="noopener noreferrer">AWS m6i spec sheet</a>
+              </div>
+            </li>
+            <li class="lab-formula">
+              <div class="lab-formula-name">Network throughput</div>
+              <div class="lab-formula-expression">net_util = (throughput_MBps / nic_capacity_MBps) × 100</div>
+              <ul class="lab-formula-inputs">
+                <li>throughput_MBps: 465.00</li>
+                <li>nic_capacity_MBps: 750</li>
+              </ul>
+              <div class="lab-formula-sources">
+                <a href="#" target="_blank" rel="noopener noreferrer">AWS network baseline</a>
+              </div>
+            </li>
+            <li class="lab-formula">
+              <div class="lab-formula-name">CPU utilization</div>
+              <div class="lab-formula-expression">cpu_util = (msg_rate / max_msgs_per_core) × 100 / vcpu</div>
+              <ul class="lab-formula-inputs">
+                <li>msg_rate: 2,048</li>
+                <li>vcpu: 2</li>
+              </ul>
+              <div class="lab-formula-sources">
+                <a href="#" target="_blank" rel="noopener noreferrer">Kafka broker sizing guide</a>
+              </div>
+            </li>
+          </ul>
+          <p class="lab-formula-disclaimer">Simulated numbers are directionally correct for comparing scenarios, not guarantees of real-world performance.</p>
+        </div>
+      </div>
+    </aside>
+  </div>
+</div>
+
+</body>
+</html>

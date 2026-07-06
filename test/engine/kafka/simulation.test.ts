@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { createSimulation } from '../../src/engine/simulation'
-import { mulberry32, PoissonTrafficSource } from '../../src/engine/poisson'
-import type { MetricsSinkPort, MetricsWindow, SimTopology } from '../../src/engine/ports'
+import { createSimulation } from '../../../src/engine/simulation'
+import { mulberry32, PoissonTrafficSource } from '../../../src/engine/poisson'
+import type { MetricsSinkPort, MetricsWindow, SimTopology } from '../../../src/engine/ports'
 
 function collectingSink(): { sink: MetricsSinkPort; windows: MetricsWindow[] } {
   const windows: MetricsWindow[] = []
