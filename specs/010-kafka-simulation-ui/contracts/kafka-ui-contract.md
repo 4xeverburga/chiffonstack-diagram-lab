@@ -1,122 +1,58 @@
 
-# Contract: Kafka UI ↔ Engine Metrics/Formula Shapes
+# Contract: Kafka UI ↔ Engine (consuming feature 009)
 
-This is the shared contract between feature 010 (this feature, UI-only)
-and feature 009 (engine model, developed in parallel). It is the concrete
-version of the shapes the spec's Assumptions section calls "owned by 009's
-spec" — since 009 doesn't exist yet at the time this plan was written, this
-feature defines the initial version; both features read this document as
-the source of truth going forward, and any change to it after both have
-landed ships as the spec's "small dedicated contract PR."
+**Revised**: feature 009 (`009-kafka-simulation-model`) is merged into this
+branch. The real, authoritative contract lives at
+[specs/009-kafka-simulation-model/contracts/engine-kafka-ports.md](../../009-kafka-simulation-model/contracts/engine-kafka-ports.md)
+and the implementation at `src/engine/ports.ts`, `kafkaCatalog.ts`,
+`kafkaFormulas.ts`, `kafkaModel.ts`. This document no longer defines those
+types (the original draft version did, since 009 didn't exist yet) — it
+now only documents how feature 010 reads them.
 
-## Types (defined in `src/engine/kafkaContracts.ts`, pure TS, no logic)
+## What this feature reads (all already implemented, read-only)
 
-```ts
-export type KafkaStatus = 'healthy' | 'saturated' | 'degraded'
-export type BindingConstraint = 'network' | 'cpu' | 'disk' | undefined
+- `SimRole`'s `kafka`/`producer`/`consumer` variants — `src/engine/ports.ts`.
+- `KAFKA_HARDWARE_PROFILES` / `resolveKafkaHardwareProfile` — `src/engine/kafkaCatalog.ts`.
+- `NodeMetrics.kafka: KafkaNodeMetrics | undefined` and
+  `NodeMetrics.formulaDescriptors: FormulaDescriptor[] | undefined` — via
+  `src/sim/store.ts`'s `selectNodeMetrics(latestWindow, nodeId)`, the same
+  selector 008's UI already uses for plain metrics.
+- `EdgeMetrics.nativeThroughputPerSec` / `.throughputMBps` — via
+  `selectEdgeMetrics(latestWindow, edgeId)`, already merged onto every
+  rendered edge's `data.simMetrics` in `App.tsx`.
 
-export interface KafkaNodeMetrics {
-  ingressPerSec: number
-  egressPerSec: number
-  networkSaturation: number
-  cpuSaturation: number
-  diskSaturation: number
-  consumerLagCount: number
-  pageCacheHitRatio: number
-  status: KafkaStatus
-  bindingConstraint: BindingConstraint
-}
+**No new resolver, fixture, or engine module is introduced by this
+feature.** Every UI component that needs Kafka data calls the existing
+selectors directly (exactly like 008's `SimRoleFields`/`HeatEdge` already
+do for non-Kafka metrics) — there is nothing left to bridge.
 
-export interface FormulaSource {
-  title: string
-  url: string
-  note?: string
-}
-
-export interface FormulaDescriptor {
-  id: string
-  name: string
-  expression: string
-  inputs: Record<string, number | string>
-  binding: boolean
-  sources: FormulaSource[]   // non-empty — Principle II gate
-}
-```
-
-## Hardware profile catalog (defined in `src/engine/hardwareProfiles.ts`)
+## What this feature adds (`src/lab/`, pure UI-side logic)
 
 ```ts
-export interface HardwareProfile {
-  id: string
-  label: string
-  vCpu: number
-  ramGB: number
-  networkGbps: number
-  diskType: 'ssd' | 'hdd' | 'nvme'
-  diskIops: number
-}
+// src/lab/kafkaRoleValidation.ts — per-field validators mirroring 009's own
+// engine-side rules (partitions/replicationFactor >= 1, averagePayloadBytes > 0, etc.)
+function validatePartitions(text: string): { value: number } | { error: string }
+// ...one such function per new field (see data-model.md)
 
-export const HARDWARE_PROFILES: HardwareProfile[]
+// src/lab/kafkaBindingResource.ts — the one piece of derived logic this
+// feature owns: which resource (network/cpu/disk) is currently binding,
+// read from formulaDescriptors[].isBinding rather than a dedicated field
+// (009's KafkaNodeMetrics has none) — this is what makes the metrics panel
+// and FormulaPanel agree (FR-005).
+function deriveBindingResource(formulaDescriptors: FormulaDescriptor[] | undefined): 'network' | 'cpu' | 'disk' | undefined
+
+// src/lab/kafkaStatusTreatment.ts — idempotent className derivation,
+// following the exact pattern already used by withHandlesVisibleClass.
+function applyKafkaStatusClass(existingClassName: string | undefined, status: KafkaNodeMetrics['status'] | undefined): string
 ```
 
-## Engine-side extension point (`src/engine/ports.ts`)
+## Non-contract (still explicitly out of scope for this feature)
 
-`NodeMetrics` gains two optional fields that only feature 009 populates for
-real:
-
-```ts
-export interface NodeMetrics {
-  throughputPerSec: number
-  queueDepth: number
-  kafka?: KafkaNodeMetrics
-  formulas?: FormulaDescriptor[]
-}
-```
-
-**Obligation on feature 009**: when a `kafka`-role node's window is
-emitted, populate `kafka` and `formulas` following the shapes above,
-keeping `status`/`bindingConstraint` consistent with which
-`formulas[].binding` are true (data-model.md's invariant). No UI change is
-required on 010's side when this happens — see the resolver contract below.
-
-## UI-side read contract (`src/lab/kafkaNodeData.ts`)
-
-```ts
-export function resolveKafkaMetrics(
-  nodeId: string,
-  latestWindow: MetricsWindow | undefined,
-): KafkaNodeMetrics | undefined
-
-export function resolveFormulas(
-  nodeId: string,
-  latestWindow: MetricsWindow | undefined,
-): FormulaDescriptor[]
-```
-
-- Precedence: live window field, else the static fixture
-  (`src/lab/kafkaFixture.ts`), else `undefined`/`[]`.
-- **This function pair is the entire integration surface with 009.** No
-  other file in `src/lab/` may read `KAFKA_FIXTURE` directly, and no other
-  file may read `latestWindow?.nodes[id]?.kafka` directly — every
-  metrics/formula/status/dual-unit consumer goes through these two
-  functions. This is what makes FR-010/SC-005 ("no UI rework on 009
-  integration") mechanically true rather than aspirational.
-
-## Fixture data contract (`src/lab/kafkaFixture.ts`)
-
-- Keys are stable node ids: `healthy-kafka`, `network-saturated-kafka`,
-  `cpu-saturated-kafka`, `disk-cliff-kafka`, `degraded-kafka`.
-- Every entry MUST have ≥1 `FormulaSource` per `FormulaDescriptor` and a
-  `status`/`bindingConstraint`/`binding` set that agrees (see
-  data-model.md invariant) — enforced by a self-check unit test
-  (`test/lab/kafkaFixture.test.ts`).
-- `test/fixtures/kafka-demo-topology.json` uses exactly these node ids so
-  importing it via the existing topology-import feature demonstrates every
-  regime without any code change.
-
-## Non-contract (explicitly out of scope for this document)
-
-- The actual formulas that compute real `KafkaNodeMetrics`/`FormulaDescriptor`
-  values from `SimRole` config and simulated traffic — feature 009's job.
+- Any change to `kafkaModel.ts`/`kafkaFormulas.ts`/`kafkaCatalog.ts`
+  (009's territory).
 - Any change to `SimTopology`, `TopologyPort`, `TrafficSourcePort`,
-  `MetricsSinkPort`, or the DES loop itself — untouched by this feature.
+  `MetricsSinkPort`, or the DES loop itself.
+- Adding a `bindingConstraint` field to `KafkaNodeMetrics` — see
+  data-model.md's binding-resource derivation for why this is handled
+  UI-side instead.
+

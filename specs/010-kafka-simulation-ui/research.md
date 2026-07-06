@@ -1,130 +1,143 @@
 
 # Research: Kafka Simulation UI
 
-No NEEDS CLARIFICATION markers remained in the Technical Context; this
-document records the decisions behind each design choice, in particular how
-a UI-only feature can be developed and demoed against a contract whose
-producer (feature 009) doesn't exist yet.
+**Revised** after merging feature 009 (`009-kafka-simulation-model`) into
+this branch. The original version of this document researched how to build
+against a not-yet-existing contract; 009 now exists, so several of those
+decisions (fixture-first architecture, an invented contract) are replaced
+below with "consume the real thing" decisions. Kept: the idempotent
+status-treatment pitfall note, the validation-pattern reuse, and the
+formula-panel design — those hold regardless of where the data comes from.
 
-## D1. Contract ownership while the producer doesn't exist yet
+## D1. Consume 009's real contract directly — no fixture, no resolver layer
 
-- **Decision**: `KafkaNodeMetrics`, `FormulaDescriptor`, `FormulaSource`, and
-  `HardwareProfile` are defined now, by this feature, as pure type/data
-  declarations in `src/engine/` (no logic). Feature 009 consumes and extends
-  them (adding the formulas that populate `KafkaNodeMetrics`/`FormulaDescriptor`
-  for real) rather than redefining them. Any breaking change to the shapes
-  after both features have landed goes through the small dedicated contract
-  PR the spec's Assumptions section already calls for.
-- **Rationale**: someone has to go first, and the UI is what needs the
-  shapes concretely typed today (Inspector fields, meters, the formula
-  panel). Placing them in `src/engine/` rather than `src/lab/` keeps them
-  importable by the eventual engine code without a 009-side move, and
-  keeps them under the same oxlint purity rule that already guards
-  `src/engine/**` (Principle IV) — so "contract types, no formulas yet" is
-  mechanically true, not just a comment.
-- **Alternatives considered**: define the contract in `src/lab/` (engine
-  would need to import UI-side types — backwards from Principle IV);
-  duplicate the shapes in both features and reconcile later (guarantees a
-  merge conflict and a period where the two are silently out of sync).
+- **Decision**: this feature reads `NodeMetrics.kafka`,
+  `NodeMetrics.formulaDescriptors`, and `EdgeMetrics.nativeThroughputPerSec`/
+  `.throughputMBps` directly through the existing `src/sim/store.ts`
+  selectors (`selectNodeMetrics`, `selectEdgeMetrics`) that 008 already
+  built and 009 already populates for Kafka-role nodes/edges. No new
+  resolver module, no static fixture dataset.
+- **Rationale**: the entire reason the original research proposed a
+  fixture-then-live resolver was that 009 didn't exist yet at planning
+  time. It now does (merged into this branch), computing real
+  `KafkaNodeMetrics`/`FormulaDescriptor` values from real `SimRole` config
+  via `src/engine/kafkaModel.ts`. Building a fixture layer now would be
+  pure waste — an extra layer to maintain that duplicates what the real
+  engine already does correctly (and unit-tests: see
+  `test/engine/kafkaFormulas.test.ts`, `test/engine/kafkaSimulation.test.ts`).
+- **Alternatives considered**: keep the fixture for UI-only unit/component
+  tests even though live data exists (rejected — Vitest can construct a
+  minimal `NodeMetrics`/`FormulaDescriptor` object inline per test, which is
+  simpler than maintaining a shared fixture module for a handful of tests).
 
-## D2. Fixture-to-live swap: one resolver function, not a UI branch
+## D2. Hardware profile picker reads 009's real catalog, not an invented one
 
-- **Decision**: `MetricsWindow.nodes[id]` gains two optional fields,
-  `kafka?: KafkaNodeMetrics` and `formulas?: FormulaDescriptor[]`, always
-  `undefined` until 009 populates them. `src/lab/kafkaNodeData.ts` exposes
-  `resolveKafkaMetrics(nodeId, latestWindow)` and `resolveFormulas(nodeId,
-  latestWindow)`: each first reads the live window field and falls back to
-  the static fixture (`kafkaFixture.ts`) keyed by node id. Every UI
-  component (metrics readout, status treatment, formula panel) is written
-  once, calling only the resolver — never branching on "are we in fixture
-  mode".
-- **Rationale**: this is the literal mechanism behind FR-010/SC-005 ("no UI
-  rework" when 009 lands) — the day 009 starts emitting real
-  `kafka`/`formulas` fields, the live branch simply stops being `undefined`
-  and the fixture branch stops being reached, with zero component changes.
-  It also means the fixture is real production code (small, typed,
-  reviewable) rather than a dev-only shim that has to be torn out later.
-- **Alternatives considered**: a build-time flag / mock service worker
-  swapping "fixture mode" vs "live mode" (extra moving part, and risks the
-  two modes silently diverging in shape); passing fixture data as props
-  from a special demo route (doesn't exercise the real selection/Inspector
-  path the spec's Independent Tests require).
+- **Decision**: the Inspector's Kafka hardware-profile picker iterates
+  `Object.values(KAFKA_HARDWARE_PROFILES)` from `src/engine/kafkaCatalog.ts`
+  (4 fixed AWS `m6i.*` entries: `vcpu`, `ramGiB`, `networkMBps`, `diskMBps`,
+  each with per-field `sources`), storing only the chosen
+  `hardwareProfile: KafkaHardwareProfileId` on the node's `SimRole`
+  (matching the real field name — not `hardwareProfileId`).
+- **Rationale**: 009 already built and sourced this catalog; inventing a
+  parallel one (the original research's D3) would create two
+  hardware-profile catalogs to keep in sync for no benefit.
+- **Alternatives considered**: n/a — this is strictly "use what exists."
 
-## D3. Hardware profile catalog: small static list, not user-editable yet
+## D3. Dual-unit edges: read 009's already-computed values, no new conversion function
 
-- **Decision**: `src/engine/hardwareProfiles.ts` exports a fixed
-  `HARDWARE_PROFILES: HardwareProfile[]` (~5 entries spanning small to
-  large instances) with `vCpu`, `ramGB`, `networkGbps`, `diskType`,
-  `diskIops`. The Inspector's Kafka picker lists them with these specs
-  visible (FR-001 acceptance scenario 1); the node stores the chosen
-  `hardwareProfileId`, not a copy of the specs (so a later catalog edit
-  updates every node that references it).
-- **Rationale**: FR-001 only requires a picker with visible specs, not
-  catalog management UI; a static list is the smallest thing that satisfies
-  it and gives 009 concrete numbers to plug into its bandwidth/vCPU
-  formulas later.
-- **Alternatives considered**: free-form vCPU/RAM/network number inputs
-  (fails "hardware profile picker" wording and loses the "real hardware
-  profiles" product framing in PRODUCT.md); user-defined catalog editing
-  (explicitly out of scope — not in any FR).
+- **Decision**: `HeatEdge` (or its label) shows both units directly from
+  `edge.data.simMetrics.nativeThroughputPerSec` (req/s) and
+  `.throughputMBps` (MB/s) — both already computed by
+  `kafkaModel.ts`'s `computeKafkaWindowMetrics` and merged onto edges by
+  the existing `selectEdgeMetrics` call already wired in `App.tsx`'s
+  `renderedEdges` `useMemo`. Displayed when both fields are present
+  (`EdgeMetrics.nativeThroughputPerSec`/`.throughputMBps` are optional,
+  populated only for producer/consumer↔kafka edges per 009's contract).
+- **Rationale**: the original research (D5) planned a
+  `convertReqPerSecToMBPerSec` utility because, at the time, no engine
+  computed this. 009 already computes and ships both units per edge —
+  building a second conversion path would risk disagreeing with the
+  engine's own numbers.
+- **Alternatives considered**: recomputing MB/s in the UI from a producer
+  node's `averagePayloadBytes` (rejected — duplicates 009's math and could
+  drift from it; reading the engine's own emitted value is the single
+  source of truth).
 
 ## D4. Status badge & canvas treatment: token-derived, shape-redundant
 
-- **Decision**: exactly three statuses (`healthy`/`saturated`/`degraded`).
-  `healthy` applies no extra treatment. `saturated` and `degraded` each add
-  one idempotent CSS class (derived only from the existing `--token-primary`/
+- **Decision**: exactly three statuses (`healthy`/`saturated`/`degraded`,
+  `NodeMetrics.kafka.status` — 009's real field). `healthy` applies no
+  extra treatment. `saturated` and `degraded` each add one idempotent CSS
+  class (derived only from the existing `--token-primary`/
   `--token-secondary` custom properties plus opacity/border-style, no new
   token) *and* a small text badge (not color-only), so both remain
   distinguishable under low-contrast user tokens (spec Edge Cases,
-  accessibility fallback). The binding-constraint highlight in the metrics
-  panel and the formula panel always agree (FR-005) because both read the
-  same `bindingConstraint` field off the same resolved `KafkaNodeMetrics`.
+  accessibility fallback).
 - **Rationale**: FR-006 forbids a new node visual component and forbids
   color-only signaling; reusing `--token-primary`/`--token-secondary` with
   different border-style/opacity per status plus a text badge satisfies
   both constraints without inventing anything.
-- **Known pitfall to avoid (from prior 008-era bug)**: deriving a node's
-  status className by appending to whatever `node.className` currently is,
-  on the same node objects passed into `<ReactFlow nodes={...}>`, can bake
-  the class in permanently — `useReactFlow().updateNode` spreads onto the
+- **Known pitfall to avoid (from prior 008-era bug, and the exact pattern
+  the codebase already uses correctly)**: deriving a node's status
+  className by appending to whatever `node.className` currently is, on the
+  same node objects passed into `<ReactFlow nodes={...}>`, can bake the
+  class in permanently — `useReactFlow().updateNode` spreads onto the
   *current* store node, so any later `updateNode` call (e.g. from
-  `NodeResizer`) re-adopts a stale class. The derivation in
-  `kafkaStatusTreatment.ts` MUST be idempotent: strip any previously-applied
-  status token from `className` before deciding whether to add the current
-  one, every render, regardless of what's already there.
+  `NodeResizer`) re-adopts a stale class. `src/lab/useHandleVisibility.ts`'s
+  `withHandlesVisibleClass` already solves exactly this problem for the
+  "handles-visible" class (strip the token, then reapply if needed, every
+  render) — `kafkaStatusTreatment.ts` MUST follow that same pattern
+  verbatim, and its call site belongs in the same `renderedNodes`
+  `useMemo` in `App.tsx` that already calls `withHandlesVisibleClass`.
 - **Alternatives considered**: a wrapper `<div>` around the node content
   (extra DOM layer, still needs the same idempotency care, no real
   benefit); driving status via inline style only (fails the
   not-color-alone requirement on its own — still needs the badge).
 
-## D5. Dual-unit edges: pure conversion, no new "formula"
+## D5. Binding-constraint agreement: derive it from `formulaDescriptors`, not a separate field
 
-- **Decision**: `src/engine/unitConversion.ts` exports
-  `convertReqPerSecToMBPerSec(reqPerSec, avgPayloadBytes)` — pure
-  multiplication, no service model. `HeatEdge` (or its label) shows both
-  units when the edge's source node is a `producer` (has
-  `avgPayloadBytes`) and its target is a `kafka` node, reading edge
-  throughput from the same resolver pattern as node metrics (fixture
-  fallback pre-009).
-- **Rationale**: the constitution explicitly exempts "edge unit converters
-  RPS ↔ MB/s" from Principle I's formula-sourcing gate ("infrastructure,
-  not models") — no source citation is owed for unit math, but it still
-  gets a unit test per Principle VI (pure logic must be tested).
-- **Alternatives considered**: folding the conversion into
-  `KafkaNodeMetrics` itself (mixes a generic, source-exempt utility into a
-  Kafka-specific, sourced contract — wrong ownership).
+- **Decision**: 009's `KafkaNodeMetrics` has no `bindingConstraint` field —
+  binding is expressed per-formula via `FormulaDescriptor.isBinding`
+  (ids: `kafka.network.ingress-ceiling`, `kafka.cpu.ingress-ceiling`,
+  `kafka.disk.ingress-ceiling`, `kafka.disk-cliff.threshold`,
+  `kafka.disk-cliff.read-ceiling`). `src/lab/kafkaBindingResource.ts`
+  exports a small pure function that scans a node's
+  `formulaDescriptors` and returns `'network' | 'cpu' | 'disk' | undefined`:
+  disk-cliff formulas being binding maps to `'disk'`; otherwise whichever
+  of the three ingress-ceiling formulas has `isBinding: true` maps to its
+  resource.
+  Both the metrics panel's meter highlight and `FormulaPanel`'s
+  highlighted row read this single function's output (plus each
+  formula's own `isBinding` for its row), which is what makes FR-005's
+  "always agree" true by construction rather than by coincidence.
+- **Rationale**: this is the one place the real contract genuinely differs
+  in shape (not just field names) from the original research's guess (D1
+  there invented a top-level `bindingConstraint` enum). Deriving it from
+  the real `formulaDescriptors` keeps this feature's UI-only scope intact
+  — no engine change requested to add a field 009 didn't design in.
+- **Alternatives considered**: asking 009 to add a `bindingConstraint`
+  field to `KafkaNodeMetrics` (would require reopening 009's already-merged
+  contract for a UI convenience; the derivation is a five-line pure
+  function, cheaper and non-invasive).
 
 ## D6. Validation pattern: reuse 008's inline-reject, never-clamp shape
 
-- **Decision**: every new Inspector field (partitions, replication factor,
-  retention, payload size, capacity, rate) follows the exact local-state +
+- **Decision**: every new Inspector field (partitions, replicationFactor,
+  retentionBytes, `producer.messageRatePerSec`/`averagePayloadBytes`,
+  `consumer.consumeRatePerSec`) follows the exact local-state +
   inline-error pattern already used by `SimRoleFields` in `Inspector.tsx`
   (draft text state, validate on change, reject with a message and keep
-  the last valid value, never silently clamp).
+  the last valid value, never silently clamp). Validators live in
+  `src/lab/kafkaRoleValidation.ts` as pure functions so SC-002's "validation
+  test matrix" is a real unit-test file, not just manual QA.
 - **Rationale**: FR-002/SC-002 require zero silent clamping, and 008
   already built and battle-tested this exact interaction — reusing it is
   both the constitution's consistency preference (spec Assumptions:
   "reuse the interaction patterns established by 008") and the least code.
+  009's own validation rules (`partitions`/`replicationFactor` ≥ 1,
+  `averagePayloadBytes` > 0 — see
+  `specs/009-kafka-simulation-model/contracts/engine-kafka-ports.md` §1)
+  are the source of truth for what each validator checks.
 - **Alternatives considered**: a generic form-validation library (new
   dependency for a pattern the repo already owns).
 
@@ -132,35 +145,44 @@ producer (feature 009) doesn't exist yet.
 
 - **Decision**: `FormulaPanel.tsx` is a new component mounted at the
   bottom of `Inspector.tsx`'s node branch (below the role/metrics fields),
-  rendering `resolveFormulas(nodeId, latestWindow)`. Each entry shows name,
-  expression (plain string, e.g. `"networkSaturation = (ingress + egress) /
-  profile.networkGbps"`), current `inputs` as a small key/value list, a
-  binding-highlight style when `binding === true`, and its `sources` as
+  rendering `selectedNodeMetrics?.formulaDescriptors ?? []`. Each entry
+  shows name, expression (real strings from `kafkaFormulas.ts`, e.g.
+  `"networkIngressCeilingMBps = profile.networkMBps / replicationFactor"`),
+  current `inputs` as a small key/value list, a binding highlight when
+  `isBinding === true`, and its `sources` as
   `<a target="_blank" rel="noopener noreferrer">` links. Empty state
-  (no role, or 008 placeholder role) renders an explanatory sentence
-  instead of an empty list, plus the standing disclaimer always renders,
-  in every state.
+  (no role, or 008 placeholder processor role) renders an explanatory
+  sentence instead of an empty list, plus the standing disclaimer always
+  renders, in every state.
 - **Rationale**: directly implements FR-008/FR-009 and SC-004; `rel`
   attributes on the external links are an OWASP-relevant default (prevents
   `window.opener` reverse-tabnabbing) even though the spec doesn't spell
-  out that detail.
+  out that detail. 009 already guarantees non-empty `sources` at the
+  engine level (`validateFormulaDescriptorsHaveSources` throws if any
+  descriptor ships without one), so the panel can render `sources` without
+  its own defensive fallback for that case.
 - **Alternatives considered**: a modal/drawer instead of an always-visible
   sidebar section (spec fixes the location: "bottom of the right
   sidebar" is a user decision, not open for reinterpretation).
 
 ## D8. Testing strategy
 
-- **Decision**: Vitest unit tests for every pure function (unit
-  conversion, status/binding derivation incl. idempotency, the
-  fixture-fallback resolver's precedence, and a fixture self-check that
-  every regime has a non-empty `sources` array and a `status`/
-  `bindingConstraint` pair that agree). Visual/layout concerns (badge
-  legibility, panel scrolling, canvas status treatment appearance) are
-  manual quickstart.md steps, matching 008's split (engine/pure logic
-  tested, UI shell manually verified).
+- **Decision**: Vitest unit tests for every pure function this feature
+  adds (role validators, status-treatment idempotency, the
+  formulaDescriptors→binding-resource mapping, `FormulaPanel`'s pure
+  view-model helper). Visual/layout concerns (badge legibility, panel
+  scrolling, canvas status treatment appearance) are manual quickstart.md
+  steps run against the real simulation (configure rates/profiles that
+  drive each regime), matching 008's split (engine/pure logic tested, UI
+  shell manually verified) — and no longer needing fixture data at all,
+  since 009 is real.
 - **Rationale**: constitution Principle VI only mandates unit tests for
   pure logic, not component tests for the UI shell; this mirrors 008's
-  already-accepted precedent exactly.
+  already-accepted precedent exactly. 009's own engine tests
+  (`test/engine/kafkaFormulas.test.ts`, `kafkaSimulation.test.ts`) already
+  cover the physics; this feature's tests only need to cover its own
+  render-adjacent pure logic.
 - **Alternatives considered**: React Testing Library component tests for
   Inspector/FormulaPanel (would be net-new test infrastructure the repo
   doesn't have yet — out of scope, no FR requires it).
+

@@ -1,17 +1,17 @@
 
 # Data Model: Kafka Simulation UI
 
-Entity shapes for feature 010. Shared-contract types (no behavior) live in
-`src/engine/`; everything that reads/derives/renders UI state from them
-lives in `src/lab/`. Serialization rules follow the existing whitelist
-pattern in `exportDiagram.ts` (008 precedent).
+**Revised** after merging feature 009. All engine-side shapes below are
+real (`src/engine/ports.ts`, `kafkaCatalog.ts`, `kafkaFormulas.ts`,
+`kafkaModel.ts`) — this feature adds no engine types, only UI-side
+derivations that read them.
 
-## SimRole extension (engine, config-only — no formulas)
-
-Three new variants join the 008 union in `src/engine/ports.ts`:
+## SimRole (engine, already implemented by 009 — read-only for this feature)
 
 ```ts
-type CompressionCodec = 'none' | 'gzip' | 'lz4' | 'zstd'
+// src/engine/ports.ts
+type KafkaCompression = 'none' | 'zstd'
+type KafkaHardwareProfileId = 'm6i.large' | 'm6i.xlarge' | 'm6i.2xlarge' | 'm6i.4xlarge'
 
 type SimRole =
   | { role: 'generator'; ratePerSec: number }                    // 008
@@ -19,64 +19,62 @@ type SimRole =
   | { role: 'sink' }                                              // 008
   | {
       role: 'kafka'
-      hardwareProfileId: string       // FK into HARDWARE_PROFILES
+      hardwareProfile: KafkaHardwareProfileId
       partitions: number              // integer ≥ 1
       replicationFactor: number       // integer ≥ 1
       tlsEnabled: boolean
-      compression: CompressionCodec
-      retentionHours: number          // ≥ 1
+      compression: KafkaCompression   // 'none' | 'zstd' (real union — no 'gzip'/'lz4')
+      retentionBytes: number          // ≥ 0
     }
-  | { role: 'producer'; ratePerSec: number; avgPayloadBytes: number }   // > 0 each
-  | { role: 'consumer'; capacityPerSec: number }                        // > 0
+  | { role: 'producer'; messageRatePerSec: number; averagePayloadBytes: number }  // payload > 0
+  | { role: 'consumer'; consumeRatePerSec: number }
 ```
 
-- Validation (FR-002, never clamped, last valid value retained):
+- Validation (FR-002, never clamped, last valid value retained), per the
+  real contract (`specs/009-kafka-simulation-model/contracts/engine-kafka-ports.md` §1):
   `partitions ≥ 1` (integer), `replicationFactor ≥ 1` (integer),
-  `retentionHours ≥ 1`, `ratePerSec ≥ 0` (producer, same rule as
-  generator), `avgPayloadBytes > 0`, `capacityPerSec > 0`.
-- A node with no `sim` payload, or an 008 role, behaves exactly as before
-  — this feature is additive to the union.
-- No formula reads these fields yet (Principle I) — 009 is the first
-  consumer of `hardwareProfileId`/`partitions`/etc. for real computation.
+  `retentionBytes ≥ 0`, `messageRatePerSec ≥ 0`, `averagePayloadBytes > 0`
+  (required for RPS→MB/s conversion — `buildTopologyGraph` throws if
+  violated, so the Inspector MUST reject this before it ever reaches the
+  engine), `consumeRatePerSec ≥ 0`.
+- Already fully serialized by 009's `exportDiagram.ts` whitelist — no
+  further export/import work needed by this feature.
+- No formula changes needed — 009's `kafkaModel.ts`/`kafkaFormulas.ts`
+  already compute real numbers from this config.
 
-## HardwareProfile catalog (engine, static data)
+## KAFKA_HARDWARE_PROFILES (engine, already implemented — read-only)
 
 ```ts
-// src/engine/hardwareProfiles.ts
-interface HardwareProfile {
-  id: string
-  label: string          // e.g. "m6i.xlarge"
-  vCpu: number
-  ramGB: number
-  networkGbps: number
-  diskType: 'ssd' | 'hdd' | 'nvme'
-  diskIops: number
+// src/engine/kafkaCatalog.ts
+interface KafkaHardwareProfile {
+  id: KafkaHardwareProfileId
+  vcpu: number
+  ramGiB: number
+  networkMBps: number
+  diskMBps: number
+  sources: { vcpu: FormulaSource[]; ramGiB: FormulaSource[]; networkMBps: FormulaSource[]; diskMBps: FormulaSource[] }
 }
 
-const HARDWARE_PROFILES: HardwareProfile[]   // ~5 fixed entries
+const KAFKA_HARDWARE_PROFILES: Record<KafkaHardwareProfileId, KafkaHardwareProfile>
+function resolveKafkaHardwareProfile(profileId: KafkaHardwareProfileId): KafkaHardwareProfile
 ```
 
-- Referenced by id from `SimRole` (kafka variant), never copied onto the
-  node — the picker resolves the full row from `HARDWARE_PROFILES` by id
-  for display.
+- The Inspector's picker iterates `Object.values(KAFKA_HARDWARE_PROFILES)`
+  and displays `vcpu`/`ramGiB`/`networkMBps`/`diskMBps` per entry (FR-001
+  acceptance scenario 1); the node stores only the `hardwareProfile` id.
 
-## KafkaNodeMetrics / FormulaDescriptor (engine, consumed — never produced here)
+## KafkaNodeMetrics / FormulaDescriptor (engine, already implemented — read-only, consumed never produced)
 
 ```ts
-// src/engine/kafkaContracts.ts
-type KafkaStatus = 'healthy' | 'saturated' | 'degraded'
-type BindingConstraint = 'network' | 'cpu' | 'disk' | undefined
-
+// src/engine/ports.ts
 interface KafkaNodeMetrics {
-  ingressPerSec: number        // MB/s
-  egressPerSec: number         // MB/s
-  networkSaturation: number    // ratio, unclamped in data (UI clamps display)
-  cpuSaturation: number        // ratio
-  diskSaturation: number       // ratio
-  consumerLagCount: number
-  pageCacheHitRatio: number    // 0..1
-  status: KafkaStatus
-  bindingConstraint: BindingConstraint
+  ingressMBps: number
+  egressMBps: number
+  saturation: { network: number; cpu: number; disk: number }
+  consumerLagBytes: number
+  consumerLagMessages: number
+  pageCacheHitRatio: number
+  status: 'healthy' | 'saturated' | 'degraded'
 }
 
 interface FormulaSource {
@@ -86,68 +84,54 @@ interface FormulaSource {
 }
 
 interface FormulaDescriptor {
-  id: string
+  id: string                                     // e.g. 'kafka.network.ingress-ceiling'
   name: string
-  expression: string                       // human-readable, e.g. "x = a / b"
-  inputs: Record<string, number | string>  // current values, for display
-  binding: boolean                         // true if this is the currently-limiting formula
-  sources: FormulaSource[]                 // MUST be non-empty (Principle II)
+  expression: string
+  inputs: Record<string, number | string | boolean>
+  sources: FormulaSource[]                        // non-empty, enforced by kafkaFormulas.ts at emit time
+  isBinding: boolean
 }
-```
 
-- `status`/`bindingConstraint` on `KafkaNodeMetrics` and `binding` flags
-  across a node's `FormulaDescriptor[]` MUST always agree (FR-005): exactly
-  the formula(s) tied to `bindingConstraint`'s resource are `binding: true`.
-  Enforced by a fixture self-check test (research.md D8) until 009 owns
-  real production of both.
-
-## MetricsWindow extension (engine, worker → UI)
-
-```ts
-// extends 008's MetricsWindow.nodes[id] shape
 interface NodeMetrics {
   throughputPerSec: number
   queueDepth: number
-  kafka?: KafkaNodeMetrics      // NEW — undefined until 009 populates it
-  formulas?: FormulaDescriptor[]  // NEW — undefined until 009 populates it
+  kafka?: KafkaNodeMetrics                        // present only for kafka-role nodes
+  formulaDescriptors?: FormulaDescriptor[]
+}
+
+interface EdgeMetrics {
+  throughputPerSec: number
+  nativeThroughputPerSec?: number                 // req/s — present on producer/consumer<->kafka edges
+  throughputMBps?: number                         // MB/s — present on producer/consumer<->kafka edges
 }
 ```
 
-- Both new fields are optional and additive; 008's existing consumers are
-  unaffected.
+- Already delivered to the UI through the existing `MetricsWindow` →
+  `src/sim/store.ts`'s `selectNodeMetrics(window, nodeId)` /
+  `selectEdgeMetrics(window, edgeId)` selectors — the exact same functions
+  `App.tsx` already calls for 008's plain metrics. No new plumbing.
+- `FormulaDescriptor.id` naming convention this feature relies on for the
+  binding-resource derivation below: `kafka.network.*`, `kafka.cpu.*`,
+  `kafka.disk.*` (ingress ceilings) and `kafka.disk-cliff.*` (cliff
+  regime).
 
-## Fixture (UI-side, dev/test data — kept after 009 integration)
-
-```ts
-// src/lab/kafkaFixture.ts
-interface KafkaFixtureEntry {
-  metrics: KafkaNodeMetrics
-  formulas: FormulaDescriptor[]
-}
-
-const KAFKA_FIXTURE: Record<string, KafkaFixtureEntry>
-```
-
-- Keys are stable demo node ids, one per regime: `healthy-kafka`,
-  `network-saturated-kafka`, `cpu-saturated-kafka`, `disk-cliff-kafka`,
-  `degraded-kafka` — matching `test/fixtures/kafka-demo-topology.json`'s
-  node ids exactly, so importing that topology exercises every regime.
-- Each entry's `status`/`bindingConstraint` agrees with which
-  `formulas[].binding` is true (same invariant as above).
-
-## Fixture-then-live resolver (UI-side adapter — the FR-010 "same path")
+## Binding-resource derivation (UI-side, new — the only place FR-005's "agreement" is computed)
 
 ```ts
-// src/lab/kafkaNodeData.ts
-function resolveKafkaMetrics(nodeId: string, latestWindow: MetricsWindow | undefined): KafkaNodeMetrics | undefined
-function resolveFormulas(nodeId: string, latestWindow: MetricsWindow | undefined): FormulaDescriptor[]
+// src/lab/kafkaBindingResource.ts
+type BindingResource = 'network' | 'cpu' | 'disk' | undefined
+
+function deriveBindingResource(formulaDescriptors: FormulaDescriptor[] | undefined): BindingResource
 ```
 
-- Precedence: `latestWindow?.nodes[nodeId]?.kafka` /
-  `.formulas`, else `KAFKA_FIXTURE[nodeId]`, else `undefined` / `[]`.
-- Every UI consumer (metrics readout, status treatment, `FormulaPanel`,
-  dual-unit edge label) calls only these two functions — no component
-  branches on "fixture vs. live" itself.
+- If any `kafka.disk-cliff.*` descriptor has `isBinding: true` → `'disk'`.
+- Else, whichever of `kafka.network.ingress-ceiling` /
+  `kafka.cpu.ingress-ceiling` / `kafka.disk.ingress-ceiling` has
+  `isBinding: true` → its resource.
+- Else `undefined` (healthy — nothing binding).
+- Both the metrics-panel meter highlight and `FormulaPanel`'s highlighted
+  row call this same function on the same `formulaDescriptors` array, so
+  they agree by construction (FR-005).
 
 ## Status treatment (UI-side derivation)
 
@@ -155,37 +139,39 @@ function resolveFormulas(nodeId: string, latestWindow: MetricsWindow | undefined
 // src/lab/kafkaStatusTreatment.ts
 const STATUS_CLASS_PREFIX = 'sim-status-'   // sim-status-saturated | sim-status-degraded
 
-function applyStatusTreatment(existingClassName: string | undefined, status: KafkaStatus | undefined): string
+function applyKafkaStatusClass(existingClassName: string | undefined, status: KafkaNodeMetrics['status'] | undefined): string
 ```
 
 - MUST strip any existing `sim-status-*` token from `existingClassName`
-  before appending the current one (idempotent by construction — see
-  research.md D4's pitfall note). `healthy`/`undefined` → treatment
-  removed entirely.
+  before appending the current one — same idempotent pattern already used
+  by `withHandlesVisibleClass` (`src/lab/useHandleVisibility.ts`).
+  `healthy`/`undefined` → treatment removed entirely.
 - Paired with a small text badge (not a className-only signal) rendered
-  wherever the node label renders, so status is legible without color.
+  wherever the node label renders (`LabelNode.tsx`), so status is legible
+  without color.
 
-## Dual-unit edge conversion (engine-side, pure — no sources owed)
+## Role field validators (UI-side, new)
 
 ```ts
-// src/engine/unitConversion.ts
-function convertReqPerSecToMBPerSec(reqPerSec: number, avgPayloadBytes: number): number
+// src/lab/kafkaRoleValidation.ts
+function validatePartitions(text: string): { value: number } | { error: string }
+function validateReplicationFactor(text: string): { value: number } | { error: string }
+function validateRetentionBytes(text: string): { value: number } | { error: string }
+function validateProducerRate(text: string): { value: number } | { error: string }
+function validateAveragePayloadBytes(text: string): { value: number } | { error: string }
+function validateConsumeRate(text: string): { value: number } | { error: string }
 ```
 
-- `mbPerSec = reqPerSec * avgPayloadBytes / 1_000_000`. Displayed
-  alongside the native req/s value on an edge only when its source node is
-  a `producer` and its target is a `kafka` node.
+- Rules mirror 009's own engine-side validation exactly (data-model.md's
+  `SimRole` section above) so a value the Inspector accepts can never be
+  rejected downstream by `buildTopologyGraph`.
+- Each rejects with a specific message and never clamps, following
+  `SimRoleFields`'s existing 008 pattern.
 
-## Serialization rules (extends 008's table)
+## Serialization
 
-| Field | In topology JSON? |
-|---|---|
-| node `data.sim` (incl. new kafka/producer/consumer variants) | **yes** |
-| node `data.simMetrics.kafka`, `.formulas` | **no** (transient, same rule as existing `simMetrics`) |
-| edge dual-unit display value | **no** (derived at render time from source node config + live/fixture throughput) |
-| `HARDWARE_PROFILES` catalog itself | n/a — static code, not per-diagram data; only the chosen `hardwareProfileId` is serialized |
+No changes — 009's `exportDiagram.ts` whitelist already covers every
+`kafka`/`producer`/`consumer` `SimRole` field (see the merged diff in
+`test/lab/exportDiagram.test.ts`). This feature does not touch
+serialization.
 
-Round-trip invariant (extends 008's): `parse(serialize(topology))` is
-deep-equal on the serialized subset for every new role variant too;
-invalid values are never written (rejected before `onSetNodeSimRole` is
-called, same as 008).
