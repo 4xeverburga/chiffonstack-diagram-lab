@@ -6,7 +6,7 @@ import { EDGE_THICKNESSES, resolveDirection, resolveThickness, type EdgeThicknes
 import { IMAGE_SIZE_WARNING_BYTES, IMAGE_UPLOAD_ACCEPT, readImageFile } from './imageUpload'
 import { resolveTextSize, TEXT_SIZES, type TextSize } from './textSizes'
 import type { KafkaHardwareProfileId, NodeMetrics, SimRole } from '../engine/ports'
-import { KAFKA_HARDWARE_PROFILES } from '../engine/kafkaCatalog'
+import { KAFKA_HARDWARE_PROFILES } from '../engine/kafka/catalog'
 import type { RunStatus } from '../sim/workerProtocol'
 import { KafkaRoleConfigFields, ProducerRoleConfigFields, ConsumerRoleConfigFields } from './kafkaConfigFields'
 import { KafkaMetricsPanel } from './KafkaMetricsPanel'

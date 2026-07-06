@@ -1,6 +1,6 @@
 import type { ReactElement } from 'react'
 import type { NodeMetrics, SimRole } from '../engine/ports'
-import { resolveKafkaHardwareProfile } from '../engine/kafkaCatalog'
+import { resolveKafkaHardwareProfile } from '../engine/kafka/catalog'
 import { deriveBindingResource } from './kafkaBindingResource'
 import { formatDualUnitLabel } from './dualUnitLabel'
 

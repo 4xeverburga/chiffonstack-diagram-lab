@@ -4,7 +4,7 @@ import type { FormulaDescriptor } from '../engine/ports'
 // a Kafka node's FormulaDescriptor[] (feature 009's real contract has no
 // dedicated `bindingConstraint` field on KafkaNodeMetrics — binding is
 // expressed per-formula via `isBinding`, see specs/009-kafka-simulation-model/
-// contracts/engine-kafka-ports.md and src/engine/kafkaFormulas.ts's
+// contracts/engine-kafka-ports.md and src/engine/kafka/formulas.ts's
 // `buildKafkaFormulaDescriptors`). This is the single function both the
 // Inspector's metrics readout and FormulaPanel call, so their highlights
 // always agree (FR-005) by construction.

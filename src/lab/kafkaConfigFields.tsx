@@ -1,5 +1,5 @@
 import { useState, type ChangeEvent } from 'react'
-import { KAFKA_HARDWARE_PROFILES } from '../engine/kafkaCatalog'
+import { KAFKA_HARDWARE_PROFILES } from '../engine/kafka/catalog'
 import type { KafkaCompression, SimRole } from '../engine/ports'
 import {
   validateAveragePayloadBytes,

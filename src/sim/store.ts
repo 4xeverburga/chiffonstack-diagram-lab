@@ -62,7 +62,7 @@ export function buildSimTopology(nodes: Node[], edges: Edge[]): SimTopology {
 }
 
 // A simulation needs at least one traffic source to be worth running.
-// `producer` counts alongside the classic `generator`: kafkaModel.ts's
+// `producer` counts alongside the classic `generator`: kafka/model.ts's
 // computeKafkaWindowMetrics reads a producer's configured
 // `messageRatePerSec` directly every window regardless of the DES event
 // queue, so a producer-only topology (feature 010) is a legitimate,
