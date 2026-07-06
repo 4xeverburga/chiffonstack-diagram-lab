@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { resolveKafkaHardwareProfile } from '../../src/engine/kafkaCatalog'
+import { resolveKafkaHardwareProfile } from '../../../src/engine/kafka/catalog'
 import {
   buildKafkaFormulaDescriptors,
   cpuIngressCeilingMBps,
@@ -10,7 +10,7 @@ import {
   pageCacheCapacityBytes,
   saturationRatio,
   validateFormulaDescriptorsHaveSources,
-} from '../../src/engine/kafkaFormulas'
+} from '../../../src/engine/kafka/formulas'
 
 describe('kafka formulas', () => {
   it('computes network ceiling from replication factor', () => {

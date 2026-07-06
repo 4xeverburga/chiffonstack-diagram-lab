@@ -16,7 +16,7 @@ import {
   type SimTopology,
   type TrafficSourcePort,
 } from './ports'
-import { computeKafkaWindowMetrics, ensureKafkaRuntimes } from './kafkaModel'
+import { computeKafkaWindowMetrics, ensureKafkaRuntimes } from './kafka/model'
 
 type GeneratorEvent = { nodeId: string }
 

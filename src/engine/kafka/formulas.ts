@@ -1,5 +1,5 @@
-import type { FormulaDescriptor, FormulaSource, KafkaCompression } from './ports'
-import type { KafkaHardwareProfile } from './kafkaCatalog'
+import type { FormulaDescriptor, FormulaSource, KafkaCompression } from '../ports'
+import type { KafkaHardwareProfile } from './catalog'
 import {
   KAFKA_BYTES_PER_GIB,
   KAFKA_BYTES_PER_MB,
@@ -9,7 +9,7 @@ import {
   KAFKA_STATUS_SATURATION_THRESHOLD,
   KAFKA_TLS_CPU_MULTIPLIER,
   KAFKA_ZSTD_CPU_MULTIPLIER,
-} from './config'
+} from '../config'
 
 export const BYTES_PER_MB = KAFKA_BYTES_PER_MB
 export const BYTES_PER_GIB = KAFKA_BYTES_PER_GIB
