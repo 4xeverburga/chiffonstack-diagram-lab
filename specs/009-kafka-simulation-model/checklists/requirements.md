@@ -41,3 +41,6 @@
   inventing numbers.
 - The single-broker-equivalent abstraction is recorded under Assumptions;
   it bounds scope honestly rather than implying per-broker fidelity.
+- Implementation validation (2026-07-05): `npm run lint`, `npm test`, and
+  `npm run build` all pass after engine-side Kafka model changes and
+  deterministic coverage additions.

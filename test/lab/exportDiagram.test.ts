@@ -274,6 +274,60 @@ describe('parseDiagram', () => {
     expect(parsedNodes.find((node) => node.id === 'sink')?.data.sim).toEqual({ role: 'sink' })
   })
 
+  it('round-trips producer/consumer/kafka roles and Kafka config fields', () => {
+    const nodes = [
+      {
+        id: 'producer',
+        type: 'labelNode',
+        position: { x: 0, y: 0 },
+        data: { label: 'producer', sim: { role: 'producer', messageRatePerSec: 1000, averagePayloadBytes: 1024 } },
+      },
+      {
+        id: 'kafka',
+        type: 'labelNode',
+        position: { x: 100, y: 0 },
+        data: {
+          label: 'kafka',
+          sim: {
+            role: 'kafka',
+            hardwareProfile: 'm6i.xlarge',
+            partitions: 12,
+            replicationFactor: 3,
+            tlsEnabled: true,
+            compression: 'zstd',
+            retentionBytes: 5000000000,
+          },
+        },
+      },
+      {
+        id: 'consumer',
+        type: 'labelNode',
+        position: { x: 200, y: 0 },
+        data: { label: 'consumer', sim: { role: 'consumer', consumeRatePerSec: 900 } },
+      },
+    ]
+    const json = serializeDiagram(nodes, [])
+    const { nodes: parsedNodes } = parseDiagram(json)
+    expect(parsedNodes.find((node) => node.id === 'producer')?.data.sim).toEqual({
+      role: 'producer',
+      messageRatePerSec: 1000,
+      averagePayloadBytes: 1024,
+    })
+    expect(parsedNodes.find((node) => node.id === 'consumer')?.data.sim).toEqual({
+      role: 'consumer',
+      consumeRatePerSec: 900,
+    })
+    expect(parsedNodes.find((node) => node.id === 'kafka')?.data.sim).toEqual({
+      role: 'kafka',
+      hardwareProfile: 'm6i.xlarge',
+      partitions: 12,
+      replicationFactor: 3,
+      tlsEnabled: true,
+      compression: 'zstd',
+      retentionBytes: 5000000000,
+    })
+  })
+
   it('omits data.sim entirely for a node with no simulation role', () => {
     const json = JSON.parse(serializeDiagram(kitchenSinkNodes, kitchenSinkEdges)) as { nodes: Array<{ data: Record<string, unknown> }> }
     for (const node of json.nodes) {

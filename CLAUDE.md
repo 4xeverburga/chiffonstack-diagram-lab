@@ -27,9 +27,3 @@ function loadKey(name: string) { … }
 If a call site needs "the usual" value, pass it explicitly (or use an options
 object with every key provided). Behavior should never depend on an omitted
 argument.
-
-<!-- SPECKIT START -->
-For additional context about technologies to be used, project structure,
-shell commands, and other important information, read the current plan:
-[specs/008-simulation-engine-skeleton/plan.md](specs/008-simulation-engine-skeleton/plan.md)
-<!-- SPECKIT END -->

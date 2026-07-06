@@ -15,6 +15,13 @@ export interface TopologyGraph {
 }
 
 export function buildTopologyGraph(topology: SimTopology): TopologyGraph {
+  for (const node of topology.nodes) {
+    if (node.sim.role === 'producer' && node.sim.averagePayloadBytes <= 0) {
+      throw new Error(
+        `Producer node "${node.id}" must have averagePayloadBytes > 0 for RPS to MB/s conversion.`,
+      )
+    }
+  }
   const simByNode = new Map(topology.nodes.map((node) => [node.id, node.sim] as const))
   const outgoingEdgesByNode = new Map<string, string[]>()
   const edgeById = new Map<string, { source: string; target: string }>()

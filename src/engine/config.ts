@@ -101,3 +101,14 @@ export const DEFAULT_FLOW_SMOOTHING_CONFIG: FlowSmoothingConfig = {
   sigmaThreshold: 2,
   minStdDevFloor: 1,
 }
+
+// Kafka simulation model constants (feature 009). Kept here to preserve the
+// "single source of truth" rule for tunables used across engine modules.
+export const KAFKA_STATUS_SATURATION_THRESHOLD = 0.95
+export const KAFKA_CPU_MBPS_PER_VCPU = 180
+export const KAFKA_TLS_CPU_MULTIPLIER = 1.3
+export const KAFKA_ZSTD_CPU_MULTIPLIER = 1.5
+export const KAFKA_PAGE_CACHE_OVERHEAD_GIB = 2
+export const KAFKA_DISK_CLIFF_READ_FACTOR = 0.2
+export const KAFKA_BYTES_PER_MB = 1_000_000
+export const KAFKA_BYTES_PER_GIB = 1024 * 1024 * 1024
