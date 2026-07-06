@@ -708,11 +708,12 @@
 .node-info-popover {
   display: none;
   position: absolute;
-  /* Expands UPWARD from the button (bottom-anchored), not downward —
-     downward would grow the popover directly over the node it describes,
-     hiding the very thing being inspected. */
+  /* Expands UP and to the RIGHT from the button (bottom/left-anchored),
+     never down or left — down would grow the popover directly over the
+     node it describes, hiding the very thing being inspected, and left
+     reads against the grain for anyone scanning left-to-right. */
   bottom: 20px;
-  right: 0;
+  left: 0;
   z-index: 1002;
   min-width: 170px;
   padding: 8px 10px;
