@@ -43,9 +43,9 @@ No Setup phase: this feature adds no new dependencies and no new tooling.
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete.
 
-- [ ] T001 [P] Implement pure per-field validators (`validatePartitions`, `validateReplicationFactor`, `validateRetentionBytes`, `validateProducerRate`, `validateAveragePayloadBytes`, `validateConsumeRate`; each returns `{ value }` or `{ error }`, rules mirroring 009's own engine-side checks) in `src/lab/kafkaRoleValidation.ts`
-- [ ] T002 [P] Implement `deriveBindingResource(formulaDescriptors)` — scans `FormulaDescriptor[]` ids (`kafka.disk-cliff.*` wins if binding, else whichever of `kafka.network/cpu/disk.ingress-ceiling` is binding) and returns `'network' | 'cpu' | 'disk' | undefined` — in `src/lab/kafkaBindingResource.ts`
-- [ ] T003 [P] Implement `applyKafkaStatusClass(existingClassName, status)` in `src/lab/kafkaStatusTreatment.ts`, following the exact idempotent-strip-then-apply pattern already used by `withHandlesVisibleClass` (`src/lab/useHandleVisibility.ts`)
+- [X] T001 [P] Implement pure per-field validators (`validatePartitions`, `validateReplicationFactor`, `validateRetentionBytes`, `validateProducerRate`, `validateAveragePayloadBytes`, `validateConsumeRate`; each returns `{ value }` or `{ error }`, rules mirroring 009's own engine-side checks) in `src/lab/kafkaRoleValidation.ts`
+- [X] T002 [P] Implement `deriveBindingResource(formulaDescriptors)` — scans `FormulaDescriptor[]` ids (`kafka.disk-cliff.*` wins if binding, else whichever of `kafka.network/cpu/disk.ingress-ceiling` is binding) and returns `'network' | 'cpu' | 'disk' | undefined` — in `src/lab/kafkaBindingResource.ts`
+- [X] T003 [P] Implement `applyKafkaStatusClass(existingClassName, status)` in `src/lab/kafkaStatusTreatment.ts`, following the exact idempotent-strip-then-apply pattern already used by `withHandlesVisibleClass` (`src/lab/useHandleVisibility.ts`)
 
 **Checkpoint**: Validators, binding-resource derivation, and status-treatment derivation are done — user stories can now be implemented.
 
@@ -59,13 +59,13 @@ No Setup phase: this feature adds no new dependencies and no new tooling.
 
 ### Tests for User Story 1
 
-- [ ] T004 [P] [US1] Unit test matrix for every validator in `kafkaRoleValidation.ts` (each field: valid values accepted, invalid values rejected with a specific message, never clamped) in `test/lab/kafkaRoleValidation.test.ts` (SC-002)
+- [X] T004 [P] [US1] Unit test matrix for every validator in `kafkaRoleValidation.ts` (each field: valid values accepted, invalid values rejected with a specific message, never clamped) in `test/lab/kafkaRoleValidation.test.ts` (SC-002)
 
 ### Implementation for User Story 1
 
-- [ ] T005 [US1] Add `kafka`, `producer`, `consumer` to `SIM_ROLE_CHOICES` and `simRoleChoice()` in `src/lab/Inspector.tsx`, and add each role's default-on-assignment values (mirroring how `generator`/`processor` already default when first chosen) (depends on T001)
-- [ ] T006 [US1] Add the `kafka` role's Inspector fields — hardware profile picker (`Object.values(KAFKA_HARDWARE_PROFILES)`, showing `vcpu`/`ramGiB`/`networkMBps`/`diskMBps`), partitions, replication factor, TLS toggle, compression selector (`none`/`zstd`), retention bytes — each wired to its `kafkaRoleValidation.ts` validator with the existing draft-text-state + inline-error pattern (depends on T001, T005)
-- [ ] T007 [P] [US1] Add the `producer` role's Inspector fields (message rate, average payload bytes) and the `consumer` role's field (consume rate), same validation pattern (depends on T001, T005)
+- [X] T005 [US1] Add `kafka`, `producer`, `consumer` to `SIM_ROLE_CHOICES` and `simRoleChoice()` in `src/lab/Inspector.tsx`, and add each role's default-on-assignment values (mirroring how `generator`/`processor` already default when first chosen) (depends on T001)
+- [X] T006 [US1] Add the `kafka` role's Inspector fields — hardware profile picker (`Object.values(KAFKA_HARDWARE_PROFILES)`, showing `vcpu`/`ramGiB`/`networkMBps`/`diskMBps`), partitions, replication factor, TLS toggle, compression selector (`none`/`zstd`), retention bytes — each wired to its `kafkaRoleValidation.ts` validator with the existing draft-text-state + inline-error pattern (depends on T001, T005)
+- [X] T007 [P] [US1] Add the `producer` role's Inspector fields (message rate, average payload bytes) and the `consumer` role's field (consume rate), same validation pattern (depends on T001, T005)
 
 **Checkpoint**: User Story 1 is fully functional and independently testable — Kafka/producer/consumer configuration works end to end with inline validation.
 
@@ -79,12 +79,12 @@ No Setup phase: this feature adds no new dependencies and no new tooling.
 
 ### Tests for User Story 2
 
-- [ ] T008 [P] [US2] Unit tests for `deriveBindingResource` (disk-cliff precedence over ingress-ceiling formulas, each of network/cpu/disk selected correctly, `undefined` when nothing is binding, empty/undefined input) in `test/lab/kafkaBindingResource.test.ts`
+- [X] T008 [P] [US2] Unit tests for `deriveBindingResource` (disk-cliff precedence over ingress-ceiling formulas, each of network/cpu/disk selected correctly, `undefined` when nothing is binding, empty/undefined input) in `test/lab/kafkaBindingResource.test.ts`
 
 ### Implementation for User Story 2
 
-- [ ] T009 [US2] Add the Kafka metrics readout to `src/lab/Inspector.tsx`'s node branch — ingress/egress throughput, network/CPU/disk saturation meters, consumer lag (bytes + messages), page cache hit ratio, and the healthy/saturated/degraded status badge — sourced from `selectedNodeMetrics?.kafka` (the existing prop, already `NodeMetrics | undefined`), rendering `—` when `undefined` (depends on T006)
-- [ ] T010 [US2] Visually distinguish the binding constraint in the metrics readout using `deriveBindingResource(selectedNodeMetrics?.formulaDescriptors)` (e.g. highlighted meter + label matching the returned resource) (depends on T002, T009)
+- [X] T009 [US2] Add the Kafka metrics readout to `src/lab/Inspector.tsx`'s node branch — ingress/egress throughput, network/CPU/disk saturation meters, consumer lag (bytes + messages), page cache hit ratio, and the healthy/saturated/degraded status badge — sourced from `selectedNodeMetrics?.kafka` (the existing prop, already `NodeMetrics | undefined`), rendering `—` when `undefined` (depends on T006)
+- [X] T010 [US2] Visually distinguish the binding constraint in the metrics readout using `deriveBindingResource(selectedNodeMetrics?.formulaDescriptors)` (e.g. highlighted meter + label matching the returned resource) (depends on T002, T009)
 
 **Checkpoint**: User Stories 1 and 2 both work independently — Kafka nodes can be configured and their live health read from the Inspector.
 
@@ -98,13 +98,13 @@ No Setup phase: this feature adds no new dependencies and no new tooling.
 
 ### Tests for User Story 3
 
-- [ ] T011 [P] [US3] Unit tests for `applyKafkaStatusClass` idempotency (repeated calls never duplicate the class token; switching status replaces rather than appends; `healthy`/`undefined` clears any existing treatment) in `test/lab/kafkaStatusTreatment.test.ts`
+- [X] T011 [P] [US3] Unit tests for `applyKafkaStatusClass` idempotency (repeated calls never duplicate the class token; switching status replaces rather than appends; `healthy`/`undefined` clears any existing treatment) in `test/lab/kafkaStatusTreatment.test.ts`
 
 ### Implementation for User Story 3
 
-- [ ] T012 [US3] Apply `applyKafkaStatusClass` to each rendered node's `className` in `src/App.tsx`'s `renderedNodes` `useMemo`, reading `selectNodeMetrics(latestWindow, node.id)?.kafka?.status`, following the same idempotent-recompute pattern already used for `withHandlesVisibleClass` in that same block (depends on T003)
-- [ ] T013 [US3] Add the status badge (text, not color-only) alongside the label in `src/lab/LabelNode.tsx`, sourced from the node's resolved status (depends on T012)
-- [ ] T014 [US3] Render both units on the edge in `src/lab/HeatEdge.tsx` when `data.simMetrics.nativeThroughputPerSec`/`.throughputMBps` are present (already merged onto every edge's `data` by the existing `selectEdgeMetrics` call in `App.tsx`'s `renderedEdges` `useMemo` — no new computation needed)
+- [X] T012 [US3] Apply `applyKafkaStatusClass` to each rendered node's `className` in `src/App.tsx`'s `renderedNodes` `useMemo`, reading `selectNodeMetrics(latestWindow, node.id)?.kafka?.status`, following the same idempotent-recompute pattern already used for `withHandlesVisibleClass` in that same block (depends on T003)
+- [X] T013 [US3] Add the status badge (text, not color-only) alongside the label in `src/lab/LabelNode.tsx`, sourced from the node's resolved status (depends on T012)
+- [X] T014 [US3] Render both units on the edge in `src/lab/HeatEdge.tsx` when `data.simMetrics.nativeThroughputPerSec`/`.throughputMBps` are present (already merged onto every edge's `data` by the existing `selectEdgeMetrics` call in `App.tsx`'s `renderedEdges` `useMemo` — no new computation needed)
 
 **Checkpoint**: User Stories 1–3 all work independently — the canvas itself now shows stress and dual-unit edges.
 
@@ -118,12 +118,12 @@ No Setup phase: this feature adds no new dependencies and no new tooling.
 
 ### Tests for User Story 4
 
-- [ ] T015 [P] [US4] Unit tests confirming a pure view-model helper (e.g. `describeFormulaPanelState(formulaDescriptors)`) chooses the no-formulas explanatory copy for an empty/undefined list and that the standing disclaimer text is always present, in `test/lab/FormulaPanel.test.ts` (kept separate from JSX per Principle VI's pure-logic testing split)
+- [X] T015 [P] [US4] Unit tests confirming a pure view-model helper (e.g. `describeFormulaPanelState(formulaDescriptors)`) chooses the no-formulas explanatory copy for an empty/undefined list and that the standing disclaimer text is always present, in `test/lab/FormulaPanel.test.ts` (kept separate from JSX per Principle VI's pure-logic testing split)
 
 ### Implementation for User Story 4
 
-- [ ] T016 [US4] Implement `src/lab/FormulaPanel.tsx`: renders each `FormulaDescriptor` (name, expression, `inputs` as key/value list, highlight when `isBinding === true` — matching `deriveBindingResource`'s result via T002) with its `sources` as `<a target="_blank" rel="noopener noreferrer">` links, the standing directional-accuracy disclaimer in every state, and the no-formulas explanatory sentence for empty/placeholder/no-role nodes (depends on T002)
-- [ ] T017 [US4] Mount `FormulaPanel` at the bottom of `src/lab/Inspector.tsx`'s node branch, below the role/metrics fields, passing `selectedNodeMetrics?.formulaDescriptors` (depends on T009, T016)
+- [X] T016 [US4] Implement `src/lab/FormulaPanel.tsx`: renders each `FormulaDescriptor` (name, expression, `inputs` as key/value list, highlight when `isBinding === true` — matching `deriveBindingResource`'s result via T002) with its `sources` as `<a target="_blank" rel="noopener noreferrer">` links, the standing directional-accuracy disclaimer in every state, and the no-formulas explanatory sentence for empty/placeholder/no-role nodes (depends on T002)
+- [X] T017 [US4] Mount `FormulaPanel` at the bottom of `src/lab/Inspector.tsx`'s node branch, below the role/metrics fields, passing `selectedNodeMetrics?.formulaDescriptors` (depends on T009, T016)
 
 **Checkpoint**: All four user stories are independently functional — the Kafka Simulation UI is complete end to end against the real engine.
 
@@ -133,10 +133,10 @@ No Setup phase: this feature adds no new dependencies and no new tooling.
 
 **Purpose**: Verification sweep across the whole feature.
 
-- [ ] T018 [P] Run `npm run lint` and fix any violations, confirming no `src/lab/` addition accidentally imports from a path the `src/engine/**` purity override would flag
-- [ ] T019 [P] Run `npm run build` (`tsc -b && vite build`) and fix any type errors across `src/lab/`
-- [ ] T020 Execute the [quickstart.md](../010-kafka-simulation-ui/quickstart.md) manual walkthrough end to end (all 10 steps) and fix any discrepancies found
-- [ ] T021 [P] Run `npm run test` and confirm the full suite (009's existing engine tests plus all new `test/lab/**` additions) passes
+- [X] T018 [P] Run `npm run lint` and fix any violations, confirming no `src/lab/` addition accidentally imports from a path the `src/engine/**` purity override would flag
+- [X] T019 [P] Run `npm run build` (`tsc -b && vite build`) and fix any type errors across `src/lab/`
+- [X] T020 Execute the [quickstart.md](../010-kafka-simulation-ui/quickstart.md) manual walkthrough end to end (all 10 steps) and fix any discrepancies found
+- [X] T021 [P] Run `npm run test` and confirm the full suite (009's existing engine tests plus all new `test/lab/**` additions) passes
 
 ---
 

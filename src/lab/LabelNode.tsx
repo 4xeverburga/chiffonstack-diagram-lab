@@ -33,6 +33,7 @@ export function LabelNode({ id, data, selected }: NodeProps) {
   const label = typeof data.label === 'string' ? data.label : ''
   const image = typeof data.image === 'string' ? data.image : undefined
   const labelSize = resolveTextSize(data.labelSize)
+  const simStatus = data.simStatus === 'saturated' || data.simStatus === 'degraded' ? data.simStatus : undefined
   const imageAspect =
     typeof data.imageAspect === 'number' && Number.isFinite(data.imageAspect) && data.imageAspect > 0
       ? data.imageAspect
@@ -67,6 +68,7 @@ export function LabelNode({ id, data, selected }: NodeProps) {
       <div className="node-content">
         {image ? <img className="node-image" src={image} alt="" /> : null}
         {label.trim() ? <span className={`node-label node-label-${labelSize}`}>{label}</span> : null}
+        {simStatus ? <span className={`node-status-badge node-status-badge-${simStatus}`}>{simStatus}</span> : null}
       </div>
     </>
   )

@@ -1,4 +1,4 @@
-import { BaseEdge, getBezierPath, type EdgeProps } from '@xyflow/react'
+import { BaseEdge, EdgeLabelRenderer, getBezierPath, type EdgeProps } from '@xyflow/react'
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import type { HeatVariant } from './heatVariants'
 import { edgeStyleClassNames, resolveDirection, resolveThickness } from './edgeStyle'
@@ -60,6 +60,14 @@ export function HeatEdge({
   // config.ts's SIGMOID_MAPPING_BY_TRAFFIC_SCALE), so it must be tunable
   // per diagram, not a single hardcoded curve for every project.
   const throughputPerSec = (data as { simMetrics?: { throughputPerSec: number } } | undefined)?.simMetrics?.throughputPerSec
+  // Dual-unit display (US3, FR-007): 009 already computes both units for
+  // producer/consumer<->kafka edges (kafkaModel.ts) and delivers them
+  // through the same simMetrics channel as throughputPerSec above — no
+  // conversion happens here, this only renders values the engine already
+  // emitted, so it can never disagree with the engine's own numbers.
+  const dualUnitMetrics = (data as { simMetrics?: { nativeThroughputPerSec?: number; throughputMBps?: number } } | undefined)
+    ?.simMetrics
+  const hasDualUnits = dualUnitMetrics?.nativeThroughputPerSec !== undefined && dualUnitMetrics?.throughputMBps !== undefined
   const smoothingRef = useRef<FlowAnimationState>(createInitialFlowAnimationState(mappingConfig))
   const [committedAnimation, setCommittedAnimation] = useState(() => smoothingRef.current.committed)
 
@@ -125,6 +133,16 @@ export function HeatEdge({
           onCycleThickness={() => onCycleThickness(id)}
           onReverseDirection={() => onReverseDirection(id)}
         />
+      ) : null}
+      {hasDualUnits ? (
+        <EdgeLabelRenderer>
+          <div
+            className="lab-edge-dual-unit-label nodrag nopan"
+            style={{ transform: `translate(${labelX}px, ${labelY}px) translate(-50%, 20%)` }}
+          >
+            {dualUnitMetrics!.nativeThroughputPerSec!.toFixed(1)} msg/s / {dualUnitMetrics!.throughputMBps!.toFixed(2)} MB/s
+          </div>
+        </EdgeLabelRenderer>
       ) : null}
     </>
   )

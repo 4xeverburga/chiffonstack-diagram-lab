@@ -54,7 +54,7 @@ export function SimulationControls({
         </select>
       </label>
       {!hasGenerator ? (
-        <span className="sim-controls-message">Add a load generator node to start the simulation.</span>
+        <span className="sim-controls-message">Add a load generator or producer node to start the simulation.</span>
       ) : null}
       {statusMessage && (runStatus === 'error' || runStatus === 'paused') ? (
         <span className={`sim-controls-message${runStatus === 'error' ? ' sim-controls-error' : ''}`}>{statusMessage}</span>

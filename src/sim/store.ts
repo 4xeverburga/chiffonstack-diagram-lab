@@ -61,8 +61,17 @@ export function buildSimTopology(nodes: Node[], edges: Edge[]): SimTopology {
   return { nodes: topologyNodes, edges: topologyEdges }
 }
 
+// A simulation needs at least one traffic source to be worth running.
+// `producer` counts alongside the classic `generator`: kafkaModel.ts's
+// computeKafkaWindowMetrics reads a producer's configured
+// `messageRatePerSec` directly every window regardless of the DES event
+// queue, so a producer-only topology (feature 010) is a legitimate,
+// runnable simulation even with zero classic generator-role nodes.
 export function hasGeneratorRole(nodes: Node[]): boolean {
-  return nodes.some((node) => nodeSimRole(node)?.role === 'generator')
+  return nodes.some((node) => {
+    const role = nodeSimRole(node)?.role
+    return role === 'generator' || role === 'producer'
+  })
 }
 
 export function selectNodeMetrics(window: MetricsWindow | undefined, nodeId: string): NodeMetrics | undefined {

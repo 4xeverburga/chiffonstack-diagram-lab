@@ -118,6 +118,129 @@
   margin: 0;
 }
 
+.lab-field-checkbox {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Kafka metrics readout (feature 010, US2/FR-004/FR-005). */
+.sim-kafka-metrics {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.sim-status-badge {
+  align-self: flex-start;
+  font-family: var(--mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--token-secondary, var(--border));
+  color: var(--text-h);
+}
+
+.sim-status-badge-saturated {
+  border-color: var(--token-primary, #ff4715);
+  border-style: solid;
+}
+
+.sim-status-badge-degraded {
+  border-color: var(--token-primary, #ff4715);
+  border-style: dotted;
+}
+
+.sim-kafka-meter {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text);
+}
+
+/* The binding meter is distinguished by weight/border, not color alone
+   (spec Edge Cases — low-contrast token accessibility fallback). */
+.sim-kafka-meter-binding {
+  font-weight: 600;
+  color: var(--text-h);
+  border-bottom: 1px solid var(--token-primary, #ff4715);
+}
+
+/* Formula & sources panel (feature 010, US4/FR-008/FR-009) — bottom of the
+   Inspector, per the fixed layout decision in spec.md's Assumptions. */
+.lab-formula-panel {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.lab-formula-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.lab-formula {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text);
+  padding: 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
+
+.lab-formula-binding {
+  border-color: var(--token-primary, #ff4715);
+}
+
+.lab-formula-name {
+  font-weight: 600;
+  color: var(--text-h);
+  margin-bottom: 4px;
+}
+
+.lab-formula-expression {
+  color: var(--text);
+  margin-bottom: 4px;
+  word-break: break-word;
+}
+
+.lab-formula-inputs {
+  list-style: none;
+  margin: 0 0 4px;
+  padding: 0;
+  color: var(--text);
+  opacity: 0.85;
+}
+
+.lab-formula-sources {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.lab-formula-sources a {
+  color: var(--token-primary, #ff4715);
+}
+
+.lab-formula-disclaimer {
+  margin-top: 10px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text);
+  opacity: 0.75;
+}
+
 .lab-body {
   display: flex;
   flex: 1 1 auto;
@@ -489,6 +612,47 @@
   border-style: dashed;
 }
 
+/* Canvas status treatment for saturated/degraded Kafka nodes (feature 010,
+   FR-006): token-derived only (no new design token), and shape-redundant
+   with the text badge below rather than color-only, so both remain
+   distinguishable under low-contrast user tokens. Dotted vs. solid thick
+   border keeps the two states visually distinct from each other as well
+   as from the plain/-active/-dim treatments above. Applied via
+   kafkaStatusTreatment.ts's idempotent class derivation — see App.tsx's
+   renderedNodes useMemo. */
+.react-flow__node.sim-status-saturated {
+  border-width: 2px;
+  border-style: solid;
+  border-color: var(--token-primary, #ff4715);
+}
+
+.react-flow__node.sim-status-degraded {
+  border-width: 2px;
+  border-style: dotted;
+  border-color: var(--token-primary, #ff4715);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--token-primary, #ff4715) 30%, transparent);
+}
+
+.node-status-badge {
+  flex: 0 0 auto;
+  font-family: var(--mono);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--token-secondary, var(--border));
+  color: var(--text-h);
+}
+
+.node-status-badge-saturated {
+  border-style: solid;
+}
+
+.node-status-badge-degraded {
+  border-style: dotted;
+}
+
 /* Connection handles (LabelNode.tsx renders one per side: top/bottom/left/
    right) are hidden at rest and revealed only during interaction, so the
    canvas stays as clean as the exports it produces (US2, FR-002). The real
@@ -663,6 +827,25 @@
 
 .lab-edge-toolbar button:hover {
   border-color: #ff4715;
+}
+
+/* Dual-unit (req/msg per second + MB/s) display for producer/consumer<->
+   kafka edges (feature 010, US3/FR-007) — both values are read straight
+   from the engine's own EdgeMetrics, never recomputed here. Always
+   visible (not gated on selection like the toolbar above), offset below
+   the midpoint so it never collides with EdgeToolbar's above-midpoint
+   position while an edge is selected. */
+.lab-edge-dual-unit-label {
+  position: absolute;
+  font-family: var(--mono);
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  border: 1px solid var(--token-secondary, var(--border));
+  background: var(--bg);
+  color: var(--text);
+  white-space: nowrap;
+  pointer-events: none;
 }
 
 @keyframes heat-flow {

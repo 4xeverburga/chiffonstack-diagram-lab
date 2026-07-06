@@ -5,19 +5,27 @@ import { HEAT_VARIANTS, type HeatVariant } from './heatVariants'
 import { EDGE_THICKNESSES, resolveDirection, resolveThickness, type EdgeThickness } from './edgeStyle'
 import { IMAGE_SIZE_WARNING_BYTES, IMAGE_UPLOAD_ACCEPT, readImageFile } from './imageUpload'
 import { resolveTextSize, TEXT_SIZES, type TextSize } from './textSizes'
-import type { NodeMetrics, SimRole } from '../engine/ports'
+import type { KafkaHardwareProfileId, NodeMetrics, SimRole } from '../engine/ports'
+import { KAFKA_HARDWARE_PROFILES } from '../engine/kafkaCatalog'
 import type { RunStatus } from '../sim/workerProtocol'
+import { KafkaRoleConfigFields, ProducerRoleConfigFields, ConsumerRoleConfigFields } from './kafkaConfigFields'
+import { KafkaMetricsPanel } from './KafkaMetricsPanel'
+import { FormulaPanel } from './FormulaPanel'
 
 const NODE_KINDS: NodeKind[] = ['default', 'active', 'dim']
 
-const SIM_ROLE_CHOICES = ['none', 'generator', 'processor', 'sink'] as const
+const SIM_ROLE_CHOICES = ['none', 'generator', 'processor', 'sink', 'kafka', 'producer', 'consumer'] as const
 type SimRoleChoice = (typeof SIM_ROLE_CHOICES)[number]
 
 function simRoleChoice(sim: SimRole | undefined): SimRoleChoice {
-  if (!sim) return 'none'
-  if (sim.role === 'generator' || sim.role === 'processor' || sim.role === 'sink') return sim.role
-  return 'none'
+  return sim?.role ?? 'none'
 }
+
+// Defaults applied the moment a role is first assigned (mirrors 008's
+// generator/processor defaults). Kafka defaults are conventional Kafka
+// starting points (3 partitions, replication factor 2); the hardware
+// profile defaults to the catalog's first (smallest) entry.
+const DEFAULT_KAFKA_HARDWARE_PROFILE = Object.keys(KAFKA_HARDWARE_PROFILES)[0] as KafkaHardwareProfileId
 
 type SimRoleFieldsProps = {
   node: Node
@@ -61,6 +69,29 @@ function SimRoleFields({ node, metrics, runStatus, onSetNodeSimRole }: SimRoleFi
     if (choice === 'generator') {
       setRateText('100')
       onSetNodeSimRole(node.id, { role: 'generator', ratePerSec: 100 })
+      return
+    }
+    if (choice === 'kafka') {
+      setRateText('')
+      onSetNodeSimRole(node.id, {
+        role: 'kafka',
+        hardwareProfile: DEFAULT_KAFKA_HARDWARE_PROFILE,
+        partitions: 3,
+        replicationFactor: 2,
+        tlsEnabled: false,
+        compression: 'none',
+        retentionBytes: 1_000_000_000,
+      })
+      return
+    }
+    if (choice === 'producer') {
+      setRateText('')
+      onSetNodeSimRole(node.id, { role: 'producer', messageRatePerSec: 100, averagePayloadBytes: 1024 })
+      return
+    }
+    if (choice === 'consumer') {
+      setRateText('')
+      onSetNodeSimRole(node.id, { role: 'consumer', consumeRatePerSec: 100 })
       return
     }
     setRateText('200')
@@ -125,6 +156,15 @@ function SimRoleFields({ node, metrics, runStatus, onSetNodeSimRole }: SimRoleFi
         </>
       ) : null}
       {error ? <div className="lab-warning">{error}</div> : null}
+      {sim?.role === 'kafka' ? (
+        <KafkaRoleConfigFields sim={sim} disabled={!canEditSim} onChange={(next) => onSetNodeSimRole(node.id, next)} />
+      ) : null}
+      {sim?.role === 'producer' ? (
+        <ProducerRoleConfigFields sim={sim} disabled={!canEditSim} onChange={(next) => onSetNodeSimRole(node.id, next)} />
+      ) : null}
+      {sim?.role === 'consumer' ? (
+        <ConsumerRoleConfigFields sim={sim} disabled={!canEditSim} onChange={(next) => onSetNodeSimRole(node.id, next)} />
+      ) : null}
       {sim && sim.role !== 'sink' ? (
         <div className="sim-metrics-readout">
           <span>Throughput: {metrics ? `${metrics.throughputPerSec.toFixed(1)} req/s` : '—'}</span>
@@ -136,6 +176,10 @@ function SimRoleFields({ node, metrics, runStatus, onSetNodeSimRole }: SimRoleFi
           <span>Throughput: {metrics ? `${metrics.throughputPerSec.toFixed(1)} req/s` : '—'}</span>
         </div>
       ) : null}
+      {sim?.role === 'kafka' ? (
+        <KafkaMetricsPanel metrics={metrics?.kafka} formulaDescriptors={metrics?.formulaDescriptors} />
+      ) : null}
+      <FormulaPanel formulaDescriptors={metrics?.formulaDescriptors} simRole={sim} />
     </div>
   )
 }

@@ -36,6 +36,7 @@ import { initialEdges, initialNodes } from './lab/initialDiagram'
 import { useDiagramMutations } from './lab/useDiagramMutations'
 import { downloadDiagram, parseDiagram } from './lab/exportDiagram'
 import { useHandleVisibility, withHandlesVisibleClass } from './lab/useHandleVisibility'
+import { applyKafkaStatusClass } from './lab/kafkaStatusTreatment'
 import { useLayoutHelpers } from './lab/useLayoutHelpers'
 import { AlignmentGuides } from './lab/AlignmentGuides'
 import { DEFAULT_DESIGN_TOKENS, type DesignTokens } from './lab/designTokens'
@@ -124,14 +125,26 @@ function LabEditor() {
   // (US2, FR-002). Hover and in-progress connection drags are handled by
   // App.css alone. See withHandlesVisibleClass for why this must be
   // idempotent rather than a blind append.
+  //
+  // A saturated/degraded Kafka node also gets a token-derived status
+  // treatment class (FR-006, feature 010) — same idempotent-recompute
+  // requirement and for the same reason (NodeResizer's onResize round-trips
+  // through updateNode), so applyKafkaStatusClass follows the exact same
+  // strip-then-reapply pattern as withHandlesVisibleClass. The resolved
+  // status also rides on `data.simStatus` (transient, never serialized —
+  // exportDiagram.ts whitelists node.data) so LabelNode can render its text
+  // badge without re-deriving status from a className string.
   const handlesVisibleNodeIds = useHandleVisibility(selection)
   const renderedNodes = useMemo(
     () =>
       nodes.map((node) => {
-        const className = withHandlesVisibleClass(node.className, handlesVisibleNodeIds.has(node.id))
-        return className === (node.className ?? '') ? node : { ...node, className }
+        const kafkaStatus = latestWindow ? selectNodeMetrics(latestWindow, node.id)?.kafka?.status : undefined
+        const withHandles = withHandlesVisibleClass(node.className, handlesVisibleNodeIds.has(node.id))
+        const className = applyKafkaStatusClass(withHandles, kafkaStatus)
+        const next = className === (node.className ?? '') ? node : { ...node, className }
+        return next.data.simStatus === kafkaStatus ? next : { ...next, data: { ...next.data, simStatus: kafkaStatus } }
       }),
-    [nodes, handlesVisibleNodeIds],
+    [nodes, handlesVisibleNodeIds, latestWindow],
   )
 
   // Exposed as CSS custom properties on the canvas wrapper so node/edge
