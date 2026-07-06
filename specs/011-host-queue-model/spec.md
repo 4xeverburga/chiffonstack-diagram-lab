@@ -188,3 +188,7 @@ A user selects any host, queue, or edge during simulation and opens the formula 
 - **Queue units**: Queue telemetry is data-rate based (MB/s, GB backlog), converted from request rates via edge payload sizes.
 - **Stress-tool integration (JMeter/Locust), autoscaling/replicas, crash states (OOM), and global backpressure indices are explicitly out of scope**, per the product decision of 2026-07-06.
 - The existing simulation delivery architecture (isolated engine, windowed metrics, animation smoothing) is reused as-is; this feature changes the domain model, not the delivery machinery.
+
+## Noted for future work (not in scope for this feature)
+
+- **Overload behavior mode**: today, an overloaded manual-mode host hard-clamps at `manualMaxRPS` and sheds only the excess (graceful degradation) — a calculated-mode host never sheds at all. Real systems can instead **collapse**: thread/connection-pool exhaustion, retry storms, or GC death-spirals can drop a host's *effective* throughput toward zero once overloaded, not just plateau it (see Gunther's Universal Scalability Law's "retrograde" region). Product decision (2026-07-06): add this as a **user-facing overload-behavior switch** on hosts in a future feature — `clamp` (today's behavior) vs. `collapse` (throughput degrades/craters past the overload point) — with **`collapse` as the default** once added. This is a closed-parameter-set change (FR-020) and needs its own spec/clarification pass; it is intentionally NOT implemented by this feature.

@@ -54,6 +54,8 @@ All Technical Context unknowns resolved. Decisions numbered for citation from pl
 
 **Alternatives considered**: Error-rate curve between saturationRPS and maxRPS — rejected: out of scope (no error modeling in v1).
 
+**Revisit noted (2026-07-06, not actioned this feature)**: the product owner flagged that real overloaded systems often *collapse* (effective throughput drops toward zero via pool exhaustion/retry storms/GC spirals) rather than plateau at a clamp — see spec.md's "Noted for future work" section. A future feature should add a per-host overload-behavior switch (`clamp` vs. `collapse`, defaulting to `collapse`) rather than changing this decision in place, since FR-020's closed parameter set requires its own clarification pass before a new field is added.
+
 ## D7 — Retired roles degrade to visual-only nodes on import
 
 **Decision**: `exportDiagram`/import keeps parsing old JSON; nodes whose `data.sim.role` is a retired role get their `sim` payload dropped (node becomes a plain visual node) with a one-time console/UI notice. No auto-conversion.
