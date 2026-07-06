@@ -1,68 +1,77 @@
 <!--
 Sync Impact Report
-- Version change: 1.3.0 → 2.0.0
-- Bump rationale: MAJOR — product pivot from Diagram Lab (static diagram editor
-  whose product was its exports) to SUGAR (interactive performance/capacity
-  simulator). Former Principles I (Export Fidelity), II (Design-Token Contract),
-  and V (Export Targets & Portability) are removed; the export pipeline is no
-  longer part of the product.
+- Version change: 2.0.0 → 3.0.0
+- Bump rationale: MAJOR — Principle I is redefined. The 2026-07-06 product
+  decision (feature 011-host-queue-model) reverses the Kafka-first strategy:
+  the deep Kafka model is retired and compute Host nodes become the deeply
+  modeled focus, with Queue nodes as deliberately generic zero-config buffers
+  and a closed user-facing parameter set.
 - Modified principles:
-  - I. Export Fidelity Is the Product → removed
-  - II. Minimal Design-Token Contract → removed (tokens survive only as editor
-    styling, no longer a public contract)
-  - III. Open Source & Self-Contained → III. Open Source & Web-First (CSR-only
-    scope made explicit; Live Mock Server / CLI / VS Code extension deferred)
-  - IV. Contributor-Legible Codebase → VI. Contributor-Legible Codebase
-    (retained; functional-core rule superseded by the stronger Principle IV
-    ports-and-adapters rule for the simulation engine)
-  - V. Export Targets & Portability → removed
-- Added principles:
-  - I. Kafka-First Model Depth
-  - II. Every Formula Is Traceable
-  - IV. Simulation Core Behind Ports (hexagonal-lite)
-  - V. Render Discipline: Aggregate, Never Per-Event
+  - I. Kafka-First Model Depth → I. Host-First Model Depth, Closed Parameter Set
+  - V. Render Discipline: Aggregate, Never Per-Event — example node-data
+    fields updated from Kafka vocabulary (consumerLag, pageCacheHitRatio) to
+    host/queue vocabulary (saturation, latency, backlog); rule unchanged.
+- Added sections: none
+- Removed sections: none
+- Preamble: "assign real hardware profiles (vCPU, RAM, disk)" replaced with
+  lean host-capability wording to match the closed parameter set.
 - Templates requiring updates:
-  - ✅ .specify/templates/plan-template.md — Constitution Check gate is generic;
-    derives from this file, no edit needed
+  - ✅ .specify/templates/plan-template.md — Constitution Check gate is
+    generic; derives from this file, no edit needed
   - ✅ .specify/templates/spec-template.md — no constitution-specific references
   - ✅ .specify/templates/tasks-template.md — no constitution-specific references
-  - ✅ PRODUCT.md — rewritten for SUGAR in the same change
-  - ⚠ CLAUDE.md — still points at specs/003-edge-styling-controls/plan.md as
-    "the current plan"; update when the first SUGAR feature plan exists
-- Follow-up TODOs:
-  - TODO: create the first SUGAR feature spec (simulation engine core + Kafka
-    model) and repoint CLAUDE.md at its plan
+  - ✅ PRODUCT.md — "Kafka first" differentiator and hardware-profile wording
+    rewritten for the host-first model in the same change
+- Follow-up TODOs: none
 -->
 
 # SUGAR Constitution
 
 SUGAR is ChiffonStack's interactive performance, capacity, and chaos simulator for
 software architectures and data pipelines: a React Flow (`@xyflow/react`) canvas
-where engineers model topologies, assign real hardware profiles (vCPU, RAM, disk),
-and watch the system breathe, congest, scale, or collapse under load — driven by a
+where engineers model topologies, describe each host's capability with a small set
+of explicit parameters (known capability curve, or CPU time × worker threads), and
+watch the system breathe, congest, or collapse under load — driven by a
 discrete-event simulation engine running in the browser.
 See `PRODUCT.md` in the project root for the full product definition.
 
 ## Core Principles
 
-### I. Kafka-First Model Depth
+### I. Host-First Model Depth, Closed Parameter Set
 
-One technology modeled deeply and credibly beats four modeled superficially:
+Compute is the hard rightsizing problem; queues are connective tissue. The target
+users (data engineers, system architects, SREs) already understand queues — what
+they cannot eyeball is how hosts interact and where saturation appears first:
 
-- Kafka is the first and, until it is complete, the only deeply modeled component.
-  Its model MUST cover the physics named in the product vision: ingress/egress
-  network bandwidth, vCPU saturation (with TLS and compression multipliers), and
-  the Disk Cliff (consumer lag exceeding OS page-cache RAM forcing disk reads).
-- New component types (Spark, Airflow, FastAPI, …) MUST NOT gain simulation
-  formulas until the Kafka model is implemented, sourced (Principle II), and
-  validated end-to-end in the canvas. Until then, non-Kafka nodes may exist only
-  as pass-through or fixed-rate placeholders that are visibly labeled as such.
-- Generic building blocks (load generators, sinks, edge unit converters
-  RPS ↔ MB/s) are infrastructure, not models — they are exempt from this gate.
+- Host nodes (client pool, transactional API, worker/consumer, database,
+  external API) are the deeply modeled components. Their model MUST cover:
+  saturation ratio (offered load vs capacity), a smooth ρ/(1−ρ) hockey-stick
+  latency curve with no threshold discontinuities, and dual configuration
+  modes — manual (known capability curve) and calculated (derived from CPU
+  time and worker threads, weighted by inbound edge compute multipliers).
+- Queue nodes are deliberately generic: unbounded buffers with **zero
+  configuration parameters**, reporting telemetry only (throughput in/out,
+  accumulated backlog). Their outflow derives from downstream host capacity.
+  No technology-specific queue modeling (Kafka, RabbitMQ, SQS, …) without a
+  constitution amendment.
+- The retired deep Kafka model (Disk Cliff, page cache, TLS/compression vCPU
+  multipliers, hardware instance profiles) is dead weight and MUST be removed,
+  not maintained.
+- The user-facing simulation parameter set is **closed** to the lean list in
+  spec 011 FR-020: host — `requestRatePerSec` (client pool) |
+  `manualBaselineLatencyMs`, `manualSaturationRPS`, `manualMaxRPS` (manual) |
+  `cpuProcessingTimeMs`, `maxWorkerThreads` (calculated); edge —
+  `trafficShareRatio`, `averagePayloadSizeKB`, `targetComputeWeightMultiplier`,
+  `pathIoLatencyMs`; queue — none. Adding any new user-facing parameter or
+  resource dimension (network bandwidth ceilings, disk/IO velocity,
+  RAM/page-cache sizing, hardware instance profiles) REQUIRES a constitution
+  amendment. Internal engine tunables in central config are exempt but MUST
+  NOT surface as user inputs.
 
-Rationale: the target users (SREs, data engineers) will distrust the whole tool
-the first time one number is badly wrong. Depth on one technology establishes the
-credibility that breadth can later inherit.
+Rationale: a lean model users fully understand beats a detailed model they
+must trust blindly; parameter bloat is the failure mode that killed the
+Kafka-first iteration. Depth now means fidelity of interaction between hosts,
+not fidelity of any single vendor technology.
 
 ### II. Every Formula Is Traceable
 
@@ -107,9 +116,9 @@ lock-in remains the named anti-reference.
 The simulation engine is the product's core and MUST stay independent of its
 delivery mechanisms:
 
-- The engine (event queue, component models, formulas, unit conversion,
-  hardware profiles) is pure TypeScript: no imports of React, DOM APIs,
-  `@xyflow/react`, or Zustand anywhere in the core. `data in → data out`.
+- The engine (event queue, component models, formulas, unit conversion) is
+  pure TypeScript: no imports of React, DOM APIs, `@xyflow/react`, or Zustand
+  anywhere in the core. `data in → data out`.
 - The core is consumed exclusively through explicit ports (TypeScript
   interfaces): a topology input port, a traffic-source port, and a metrics
   output port. The Web Worker host, the canvas UI, and the stochastic
@@ -139,8 +148,9 @@ The UI must stay fluid while the engine processes extreme event rates:
 - All animation variables MUST be bounded: whatever the throughput
   (0 → ∞), the mapped visual values stay within fixed min/max so the canvas
   never degenerates at burst load.
-- Node/edge `data` carries simulation state (`status`, `currentRPS`,
-  `consumerLag`, `pageCacheHitRatio`, …) updated once per metric window.
+- Node/edge `data` carries simulation state (`status`, `saturationRatio`,
+  `currentLatencyMs`, `currentRPS`, `backlogGB`, …) updated once per metric
+  window.
 
 Rationale: a simulator that freezes under the very load it simulates refutes
 itself; bounded CSS-driven animation makes cost independent of event rate.
@@ -174,8 +184,9 @@ confidently change it — doubly so when the code encodes physics formulas.
   `data` property so topologies serialize naturally; UI-only callbacks and
   transient render props MUST be whitelisted out of the serialized JSON.
 - **Legacy code**: remaining Diagram Lab export pipeline code (SVG export,
-  component-code export, agent bundle) is dead weight under this constitution
-  and MUST be removed rather than maintained.
+  component-code export, agent bundle) and the retired deep Kafka model
+  (hardware catalog, Kafka formulas/metrics surfaces) are dead weight under
+  this constitution and MUST be removed rather than maintained.
 
 ## Development Workflow & Quality Gates
 
@@ -184,7 +195,7 @@ confidently change it — doubly so when the code encodes physics formulas.
   every push and pull request. A red CI blocks merge.
 - Model-affecting changes MUST be verified two ways: unit tests on the formula
   functions (exact expected values at known operating points, including the
-  saturation/cliff regions), and a canvas smoke check that the Inspector shows
+  saturation region), and a canvas smoke check that the Inspector shows
   the updated formula and sources.
 - Performance-affecting changes to the worker/UI boundary MUST be checked
   against the render-discipline rule: no per-event messages, no unbounded
@@ -205,12 +216,14 @@ confidently change it — doubly so when the code encodes physics formulas.
   comment and any required updates to dependent templates and `PRODUCT.md`.
   Approval by the project maintainer ratifies the amendment. Bringing the
   deferred local mode (Live Mock Server / CLI / extension) into scope requires
-  an amendment to Principle III.
+  an amendment to Principle III; adding a user-facing simulation parameter or
+  a technology-specific queue model requires an amendment to Principle I.
 - **Versioning**: semantic — MAJOR for principle removals/redefinitions or
   backward-incompatible governance changes; MINOR for new principles or
-  materially expanded guidance (including each new deeply modeled technology
-  admitted past the Kafka-first gate); PATCH for clarifications and wording.
+  materially expanded guidance (including each new parameter or deeply modeled
+  technology admitted past the closed-parameter gate); PATCH for
+  clarifications and wording.
 - **Compliance review**: the `/speckit-plan` Constitution Check is the standing
   gate; re-check after design (Phase 1) as the plan template requires.
 
-**Version**: 2.0.0 | **Ratified**: 2026-07-04 | **Last Amended**: 2026-07-05
+**Version**: 3.0.0 | **Ratified**: 2026-07-04 | **Last Amended**: 2026-07-06

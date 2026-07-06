@@ -2,6 +2,10 @@
 
 Guidance for Claude Code when working in this repository.
 
+<!-- SPECKIT START -->
+Current feature plan: specs/011-host-queue-model/plan.md (constitution: .specify/memory/constitution.md v3.0.0)
+<!-- SPECKIT END -->
+
 ## Coding conventions
 - Centralize any parameter on a config file or .env
 - All imports must be declared with relation to  the root of the project. This way refactoring and moving files is easier.
