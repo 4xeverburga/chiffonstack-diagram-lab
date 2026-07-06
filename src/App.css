@@ -613,17 +613,42 @@
 }
 
 /* Canvas status treatment for saturated/degraded Kafka nodes (feature 010,
-   FR-006): token-derived only (no new design token), and shape-redundant
-   with the text badge below rather than color-only, so both remain
-   distinguishable under low-contrast user tokens. Dotted vs. solid thick
-   border keeps the two states visually distinct from each other as well
-   as from the plain/-active/-dim treatments above. Applied via
+   FR-006): the border alone is the whole always-visible signal — no
+   permanent on-canvas text badge (that detail moved into the hover
+   NodeInfoButton popover below). Two non-color signals distinguish the
+   two states from each other and from the plain/-active/-dim treatments
+   above, so this still isn't "color alone": border-style (solid vs.
+   dotted) AND blink cadence (degraded pulses noticeably faster —
+   "more urgent" reads as such even color-blind). Applied via
    kafkaStatusTreatment.ts's idempotent class derivation — see App.tsx's
    renderedNodes useMemo. */
+@keyframes sim-status-pulse-saturated {
+  0%,
+  100% {
+    border-color: var(--token-primary, #ff4715);
+  }
+  50% {
+    border-color: color-mix(in srgb, var(--token-primary, #ff4715) 45%, transparent);
+  }
+}
+
+@keyframes sim-status-pulse-degraded {
+  0%,
+  100% {
+    border-color: var(--token-primary, #ff4715);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--token-primary, #ff4715) 30%, transparent);
+  }
+  50% {
+    border-color: color-mix(in srgb, var(--token-primary, #ff4715) 25%, transparent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--token-primary, #ff4715) 12%, transparent);
+  }
+}
+
 .react-flow__node.sim-status-saturated {
   border-width: 2px;
   border-style: solid;
   border-color: var(--token-primary, #ff4715);
+  animation: sim-status-pulse-saturated 1.6s ease-in-out infinite;
 }
 
 .react-flow__node.sim-status-degraded {
@@ -631,26 +656,98 @@
   border-style: dotted;
   border-color: var(--token-primary, #ff4715);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--token-primary, #ff4715) 30%, transparent);
+  animation: sim-status-pulse-degraded 0.8s ease-in-out infinite;
 }
 
-.node-status-badge {
-  flex: 0 0 auto;
-  font-family: var(--mono);
-  font-size: 9px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  padding: 1px 6px;
+
+/* Hover-triggered detail popover (NodeInfoButton.tsx) beside every
+   simulated node: the canvas keeps its FR-006-required always-visible
+   signal (the border color/style/blink treatment above), while richer
+   detail (rates, saturation meters, lag, binding constraint, the
+   producer's dual-unit reading) lives one hover away instead of
+   permanently occupying canvas space. z-index 1002 deliberately outranks
+   React Flow's own selected-node z-index:1000 (confirmed via
+   getComputedStyle — the library inlines it on whichever node is
+   currently selected), so the popover is never clipped by a neighboring
+   selected node. */
+.node-info-button-wrapper {
+  position: absolute;
+  top: -9px;
+  right: -9px;
+}
+
+.node-info-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
   border-radius: 999px;
   border: 1px solid var(--token-secondary, var(--border));
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 10px;
+  font-style: italic;
+  /* Deliberately the node's own resting cursor, not `help` — hovering
+     canvas chrome shouldn't change the pointer, same as every other
+     canvas control. */
+  cursor: default;
+}
+
+.node-info-button:hover,
+.node-info-button:focus-visible {
+  border-color: var(--token-primary, #ff4715);
   color: var(--text-h);
 }
 
-.node-status-badge-saturated {
-  border-style: solid;
+.node-info-popover {
+  display: none;
+  position: absolute;
+  /* Expands UPWARD from the button (bottom-anchored), not downward —
+     downward would grow the popover directly over the node it describes,
+     hiding the very thing being inspected. */
+  bottom: 20px;
+  right: 0;
+  z-index: 1002;
+  min-width: 170px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--token-secondary, var(--border));
+  background: var(--bg);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  font-family: var(--mono);
+  font-size: 11px;
+  /* Explicit unitless line-height: without it, this inherits :root's
+     `font: 18px/145%` as an already-resolved 26.1px absolute length (CSS
+     percentage line-heights compute once, against the ancestor's own
+     font-size, then inherit as that fixed px value) — 2.4x too tall for
+     an 11px row, and much more obvious once scaled up by the canvas's own
+     zoom transform (nodes/their children live inside
+     `.react-flow__viewport`, which is scaled directly). */
+  line-height: 1.4;
+  color: var(--text);
 }
 
-.node-status-badge-degraded {
-  border-style: dotted;
+.node-info-button-wrapper:hover .node-info-popover,
+.node-info-button-wrapper:focus-within .node-info-popover {
+  display: block;
+}
+
+.node-info-popover-title {
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-h);
+  margin-bottom: 6px;
+}
+
+.node-info-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  white-space: nowrap;
 }
 
 /* Connection handles (LabelNode.tsx renders one per side: top/bottom/left/
@@ -829,37 +926,6 @@
   border-color: #ff4715;
 }
 
-/* Dual-unit (req/msg per second + MB/s) display for producer/consumer<->
-   kafka edges (feature 010, US3/FR-007) — both values are read straight
-   from the engine's own EdgeMetrics, never recomputed here. Always
-   visible (not gated on selection like the toolbar above), offset below
-   the midpoint so it never collides with EdgeToolbar's above-midpoint
-   position while an edge is selected.
-   z-index 1001 is deliberate, not arbitrary: React Flow inlines
-   `z-index: 1000` on whichever node is currently SELECTED (its own
-   "bring to front" behavior, confirmed via computed style — outside our
-   control and undocumented as a stable value, but observably true today).
-   A short edge's midpoint sits close to its target node, and users
-   routinely select a Kafka node right after connecting it — EdgeToolbar's
-   z-index:10 never had to clear this bar because it only appears while an
-   EDGE (not a node) is selected. This label appears unconditionally, so
-   it must reliably out-rank a selected node or it renders clipped behind
-   it (the exact bug this comment exists to prevent regressing). */
-.lab-edge-dual-unit-label {
-  position: absolute;
-  z-index: 1001;
-  font-family: var(--mono);
-  font-size: 10px;
-  padding: 3px 8px;
-  border-radius: 999px;
-  border: 1px solid var(--token-secondary, var(--border));
-  background: var(--bg);
-  color: var(--text-h);
-  white-space: nowrap;
-  pointer-events: none;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
-}
-
 @keyframes heat-flow {
   from {
     /* Must be an exact multiple of the current dash pattern's total repeat
@@ -883,6 +949,11 @@
   }
 
   .lab-inspector-flash {
+    animation: none;
+  }
+
+  .react-flow__node.sim-status-saturated,
+  .react-flow__node.sim-status-degraded {
     animation: none;
   }
 }

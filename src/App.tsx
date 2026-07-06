@@ -131,18 +131,20 @@ function LabEditor() {
   // requirement and for the same reason (NodeResizer's onResize round-trips
   // through updateNode), so applyKafkaStatusClass follows the exact same
   // strip-then-reapply pattern as withHandlesVisibleClass. The resolved
-  // status also rides on `data.simStatus` (transient, never serialized —
-  // exportDiagram.ts whitelists node.data) so LabelNode can render its text
-  // badge without re-deriving status from a className string.
+  // node's full NodeMetrics also ride on `data.simMetrics` (transient,
+  // never serialized — exportDiagram.ts whitelists node.data) so LabelNode
+  // can render its always-visible status badge AND the hover-triggered
+  // NodeInfoButton's detail popover from one source, without a second
+  // selector round-trip per node.
   const handlesVisibleNodeIds = useHandleVisibility(selection)
   const renderedNodes = useMemo(
     () =>
       nodes.map((node) => {
-        const kafkaStatus = latestWindow ? selectNodeMetrics(latestWindow, node.id)?.kafka?.status : undefined
+        const nodeMetrics = latestWindow ? selectNodeMetrics(latestWindow, node.id) : undefined
         const withHandles = withHandlesVisibleClass(node.className, handlesVisibleNodeIds.has(node.id))
-        const className = applyKafkaStatusClass(withHandles, kafkaStatus)
+        const className = applyKafkaStatusClass(withHandles, nodeMetrics?.kafka?.status)
         const next = className === (node.className ?? '') ? node : { ...node, className }
-        return next.data.simStatus === kafkaStatus ? next : { ...next, data: { ...next.data, simStatus: kafkaStatus } }
+        return next.data.simMetrics === nodeMetrics ? next : { ...next, data: { ...next.data, simMetrics: nodeMetrics } }
       }),
     [nodes, handlesVisibleNodeIds, latestWindow],
   )

@@ -2,6 +2,8 @@ import { Handle, NodeResizer, useReactFlow, type NodeProps, type OnResize } from
 import { HANDLE_SIDES, HANDLE_SIDE_POSITION } from './handleSides'
 import { heightForRatioLockedWidth } from './imageFit'
 import { labelBandFor, resolveTextSize } from './textSizes'
+import { NodeInfoButton } from './NodeInfoButton'
+import type { NodeMetrics, SimRole } from '../engine/ports'
 
 // Custom node used for every diagram box: keeps the existing className-driven
 // look (node / node-active / node-dim). Renaming and image assignment happen
@@ -33,7 +35,8 @@ export function LabelNode({ id, data, selected }: NodeProps) {
   const label = typeof data.label === 'string' ? data.label : ''
   const image = typeof data.image === 'string' ? data.image : undefined
   const labelSize = resolveTextSize(data.labelSize)
-  const simStatus = data.simStatus === 'saturated' || data.simStatus === 'degraded' ? data.simStatus : undefined
+  const sim = data.sim as SimRole | undefined
+  const metrics = data.simMetrics as NodeMetrics | undefined
   const imageAspect =
     typeof data.imageAspect === 'number' && Number.isFinite(data.imageAspect) && data.imageAspect > 0
       ? data.imageAspect
@@ -68,8 +71,8 @@ export function LabelNode({ id, data, selected }: NodeProps) {
       <div className="node-content">
         {image ? <img className="node-image" src={image} alt="" /> : null}
         {label.trim() ? <span className={`node-label node-label-${labelSize}`}>{label}</span> : null}
-        {simStatus ? <span className={`node-status-badge node-status-badge-${simStatus}`}>{simStatus}</span> : null}
       </div>
+      {sim ? <NodeInfoButton sim={sim} metrics={metrics} /> : null}
     </>
   )
 }
