@@ -834,18 +834,30 @@
    from the engine's own EdgeMetrics, never recomputed here. Always
    visible (not gated on selection like the toolbar above), offset below
    the midpoint so it never collides with EdgeToolbar's above-midpoint
-   position while an edge is selected. */
+   position while an edge is selected.
+   z-index 1001 is deliberate, not arbitrary: React Flow inlines
+   `z-index: 1000` on whichever node is currently SELECTED (its own
+   "bring to front" behavior, confirmed via computed style — outside our
+   control and undocumented as a stable value, but observably true today).
+   A short edge's midpoint sits close to its target node, and users
+   routinely select a Kafka node right after connecting it — EdgeToolbar's
+   z-index:10 never had to clear this bar because it only appears while an
+   EDGE (not a node) is selected. This label appears unconditionally, so
+   it must reliably out-rank a selected node or it renders clipped behind
+   it (the exact bug this comment exists to prevent regressing). */
 .lab-edge-dual-unit-label {
   position: absolute;
+  z-index: 1001;
   font-family: var(--mono);
   font-size: 10px;
-  padding: 2px 6px;
-  border-radius: 6px;
+  padding: 3px 8px;
+  border-radius: 999px;
   border: 1px solid var(--token-secondary, var(--border));
   background: var(--bg);
-  color: var(--text);
+  color: var(--text-h);
   white-space: nowrap;
   pointer-events: none;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
 }
 
 @keyframes heat-flow {

@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import type { HeatVariant } from './heatVariants'
 import { edgeStyleClassNames, resolveDirection, resolveThickness } from './edgeStyle'
 import { EdgeToolbar } from './EdgeToolbar'
+import { formatDualUnitLabel } from './dualUnitLabel'
 import { DEFAULT_SIGMOID_MAPPING_CONFIG, DEFAULT_FLOW_SMOOTHING_CONFIG } from '../engine/config'
 import type { SigmoidMappingConfig } from '../engine/sigmoidMapping'
 import { createInitialFlowAnimationState, updateFlowAnimationState, type FlowAnimationState } from '../engine/flowAnimationSmoothing'
@@ -138,9 +139,9 @@ export function HeatEdge({
         <EdgeLabelRenderer>
           <div
             className="lab-edge-dual-unit-label nodrag nopan"
-            style={{ transform: `translate(${labelX}px, ${labelY}px) translate(-50%, 20%)` }}
+            style={{ transform: `translate(${labelX}px, ${labelY}px) translate(-50%, 18px)` }}
           >
-            {dualUnitMetrics!.nativeThroughputPerSec!.toFixed(1)} msg/s / {dualUnitMetrics!.throughputMBps!.toFixed(2)} MB/s
+            {formatDualUnitLabel(dualUnitMetrics!.nativeThroughputPerSec!, dualUnitMetrics!.throughputMBps!)}
           </div>
         </EdgeLabelRenderer>
       ) : null}
