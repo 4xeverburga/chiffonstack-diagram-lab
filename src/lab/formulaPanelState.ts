@@ -1,4 +1,4 @@
-import type { FormulaDescriptor, SimRole } from '../engine/ports'
+import type { FormulaDescriptor, NodeSim } from '../engine/ports'
 
 // Pure view-model logic for FormulaPanel.tsx, split into its own module so
 // that file only exports the component (oxlint's react/only-export-
@@ -14,19 +14,19 @@ export interface FormulaPanelState {
 
 export function describeFormulaPanelState(
   formulaDescriptors: FormulaDescriptor[] | undefined,
-  simRole: SimRole | undefined,
+  sim: NodeSim | undefined,
 ): FormulaPanelState {
   if (formulaDescriptors && formulaDescriptors.length > 0) {
     return { hasFormulas: true, emptyMessage: '' }
   }
-  if (simRole?.role === 'processor') {
+  if (sim?.kind === 'queue') {
     return {
       hasFormulas: false,
-      emptyMessage: 'Placeholder (fixed rate) — no real technology model behind this node yet, so there are no formulas to show.',
+      emptyMessage: 'No formulas apply to this node yet — queue backlog formulas appear once the simulation is running.',
     }
   }
   return {
     hasFormulas: false,
-    emptyMessage: 'No formulas apply to this node yet — assign a modeled role (e.g. Kafka) to see its active formulas here.',
+    emptyMessage: 'No formulas apply to this node yet — assign a host or queue role, then start the simulation to see its active formulas here.',
   }
 }

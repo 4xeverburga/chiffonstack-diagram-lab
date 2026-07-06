@@ -3,84 +3,105 @@ import { HEAT_VARIANTS, type HeatVariant } from './heatVariants'
 import { LEGACY_SOURCE_SIDE, LEGACY_TARGET_SIDE, resolveHandleSide } from './handleSides'
 import { resolveDirection, resolveThickness } from './edgeStyle'
 import { resolveTextSize } from './textSizes'
-import type { SimRole } from '../engine/ports'
+import type { EdgeSimConfig, NodeSim } from '../engine/ports'
+
+// Tracks whether the current parseDiagram() call dropped any retired-role
+// node so a single, one-time console notice can be surfaced (research.md
+// D7) rather than one per node.
+let lastImportDroppedRetiredRoles = false
 
 // A node's simulation role (FR-001) is the only new field this feature
 // adds to the canonical node shape. Absent (undefined) for every node
 // nobody has assigned a role to, so pre-008 diagrams — and this feature's
 // own placeholder/dim/active nodes — round-trip byte-identical to before
-// (legacy-diagram parity, US3). Invalid/malformed input silently drops the
-// role rather than throwing, matching the tolerance already applied to
-// edge variant/thickness/direction and image aspect below.
-function plainSimRole(value: unknown): SimRole | undefined {
+// (legacy-diagram parity, US3). Nodes carrying a retired role (the old
+// `{ role: ... }` shape from generator/processor/producer/consumer/sink/
+// kafka) never match any of the checks below — since the new shape keys
+// off `kind` instead of `role` — so they silently degrade to plain visual
+// nodes on import (research.md D7), same tolerance already applied to edge
+// variant/thickness/direction and image aspect below.
+function plainNodeSim(value: unknown): NodeSim | undefined {
   if (!isRecord(value)) return undefined
-  if (value.role === 'generator' && typeof value.ratePerSec === 'number' && Number.isFinite(value.ratePerSec) && value.ratePerSec >= 0) {
-    return { role: 'generator', ratePerSec: value.ratePerSec }
+  if (value.kind === 'queue') return { kind: 'queue' }
+  if (value.kind !== 'host') {
+    if (isRecord(value) && typeof value.role === 'string') lastImportDroppedRetiredRoles = true
+    return undefined
   }
+  if (value.profile === 'client_pool' && isFiniteNumber(value.requestRatePerSec) && value.requestRatePerSec >= 0) {
+    return { kind: 'host', profile: 'client_pool', requestRatePerSec: value.requestRatePerSec }
+  }
+  if (value.profile === 'external_api' && isFiniteNumber(value.manualBaselineLatencyMs) && value.manualBaselineLatencyMs >= 0) {
+    return { kind: 'host', profile: 'external_api', manualBaselineLatencyMs: value.manualBaselineLatencyMs }
+  }
+  const computeProfile = value.profile === 'transactional_api' || value.profile === 'worker_consumer' || value.profile === 'database_server'
+  if (!computeProfile) return undefined
+  const profile = value.profile as 'transactional_api' | 'worker_consumer' | 'database_server'
   if (
-    value.role === 'processor' &&
-    typeof value.serviceRatePerSec === 'number' &&
-    Number.isFinite(value.serviceRatePerSec) &&
-    value.serviceRatePerSec > 0
-  ) {
-    return { role: 'processor', serviceRatePerSec: value.serviceRatePerSec }
-  }
-  if (value.role === 'sink') {
-    return { role: 'sink' }
-  }
-  if (
-    value.role === 'producer' &&
-    typeof value.messageRatePerSec === 'number' &&
-    Number.isFinite(value.messageRatePerSec) &&
-    value.messageRatePerSec >= 0 &&
-    typeof value.averagePayloadBytes === 'number' &&
-    Number.isFinite(value.averagePayloadBytes) &&
-    value.averagePayloadBytes > 0
+    value.configMode === 'manual' &&
+    isFiniteNumber(value.manualBaselineLatencyMs) &&
+    value.manualBaselineLatencyMs >= 0 &&
+    isFiniteNumber(value.manualSaturationRPS) &&
+    value.manualSaturationRPS >= 0 &&
+    isFiniteNumber(value.manualMaxRPS) &&
+    value.manualMaxRPS >= value.manualSaturationRPS
   ) {
     return {
-      role: 'producer',
-      messageRatePerSec: value.messageRatePerSec,
-      averagePayloadBytes: value.averagePayloadBytes,
+      kind: 'host',
+      profile,
+      configMode: 'manual',
+      manualBaselineLatencyMs: value.manualBaselineLatencyMs,
+      manualSaturationRPS: value.manualSaturationRPS,
+      manualMaxRPS: value.manualMaxRPS,
     }
   }
   if (
-    value.role === 'consumer' &&
-    typeof value.consumeRatePerSec === 'number' &&
-    Number.isFinite(value.consumeRatePerSec) &&
-    value.consumeRatePerSec >= 0
-  ) {
-    return { role: 'consumer', consumeRatePerSec: value.consumeRatePerSec }
-  }
-  if (
-    value.role === 'kafka' &&
-    (value.hardwareProfile === 'm6i.large' ||
-      value.hardwareProfile === 'm6i.xlarge' ||
-      value.hardwareProfile === 'm6i.2xlarge' ||
-      value.hardwareProfile === 'm6i.4xlarge') &&
-    typeof value.partitions === 'number' &&
-    Number.isFinite(value.partitions) &&
-    value.partitions >= 1 &&
-    typeof value.replicationFactor === 'number' &&
-    Number.isFinite(value.replicationFactor) &&
-    value.replicationFactor >= 1 &&
-    typeof value.tlsEnabled === 'boolean' &&
-    (value.compression === 'none' || value.compression === 'zstd') &&
-    typeof value.retentionBytes === 'number' &&
-    Number.isFinite(value.retentionBytes) &&
-    value.retentionBytes >= 0
+    value.configMode === 'calculated' &&
+    isFiniteNumber(value.cpuProcessingTimeMs) &&
+    value.cpuProcessingTimeMs >= 0 &&
+    isFiniteNumber(value.maxWorkerThreads) &&
+    value.maxWorkerThreads >= 0
   ) {
     return {
-      role: 'kafka',
-      hardwareProfile: value.hardwareProfile,
-      partitions: value.partitions,
-      replicationFactor: value.replicationFactor,
-      tlsEnabled: value.tlsEnabled,
-      compression: value.compression,
-      retentionBytes: value.retentionBytes,
+      kind: 'host',
+      profile,
+      configMode: 'calculated',
+      cpuProcessingTimeMs: value.cpuProcessingTimeMs,
+      maxWorkerThreads: value.maxWorkerThreads,
     }
   }
   return undefined
 }
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value)
+}
+
+// An edge's traffic-shaping configuration (data-model.md EdgeSimConfig) —
+// all four fields required; a partially-specified or legacy edge (no
+// simConfig at all) drops the whole object rather than guessing values
+// (CLAUDE.md: no default parameters).
+function plainEdgeSimConfig(value: unknown): EdgeSimConfig | undefined {
+  if (!isRecord(value)) return undefined
+  if (
+    isFiniteNumber(value.trafficShareRatio) &&
+    value.trafficShareRatio >= 0 &&
+    isFiniteNumber(value.averagePayloadSizeKB) &&
+    value.averagePayloadSizeKB >= 0 &&
+    isFiniteNumber(value.targetComputeWeightMultiplier) &&
+    value.targetComputeWeightMultiplier > 0 &&
+    isFiniteNumber(value.pathIoLatencyMs) &&
+    value.pathIoLatencyMs >= 0
+  ) {
+    return {
+      trafficShareRatio: value.trafficShareRatio,
+      averagePayloadSizeKB: value.averagePayloadSizeKB,
+      targetComputeWeightMultiplier: value.targetComputeWeightMultiplier,
+      pathIoLatencyMs: value.pathIoLatencyMs,
+    }
+  }
+  return undefined
+}
+
 
 // The canonical edge `data` is exactly these three fields. Both the
 // serializer and the parser build `data` through this whitelist, so
@@ -97,6 +118,7 @@ function plainEdgeData(data: unknown) {
     variant,
     thickness: resolveThickness(record.thickness),
     direction: resolveDirection(record.direction),
+    simConfig: plainEdgeSimConfig(record.simConfig),
   }
 }
 
@@ -121,7 +143,7 @@ export function toPlainDiagram(nodes: Node[], edges: Edge[]) {
         // via JSON.stringify, keeping legacy/no-image nodes byte-identical
         // to pre-005 output (contracts/image-fit.md guarantee 3).
         imageAspect: node.data.image ? imageAspect : undefined,
-        sim: plainSimRole(node.data.sim),
+        sim: plainNodeSim(node.data.sim),
       },
       className: node.className,
       // Present only once the user has manually resized the node
@@ -190,7 +212,7 @@ function parsePlainNode(value: unknown, index: number): Node {
     image && typeof rawImageAspect === 'number' && Number.isFinite(rawImageAspect) && rawImageAspect > 0
       ? rawImageAspect
       : undefined
-  const sim = plainSimRole(value.data.sim)
+  const sim = plainNodeSim(value.data.sim)
   const node: Node = {
     id: value.id,
     type: typeof value.type === 'string' ? value.type : 'labelNode',
@@ -230,6 +252,7 @@ function parsePlainEdge(value: unknown, index: number): Edge {
 // Flow's Node/Edge shape (contracts/diagram-json.md round-trip guarantee).
 // Throws a descriptive error on malformed input; the UI layer surfaces it.
 export function parseDiagram(json: string): { nodes: Node[]; edges: Edge[] } {
+  lastImportDroppedRetiredRoles = false
   let parsed: unknown
   try {
     parsed = JSON.parse(json)
@@ -241,6 +264,11 @@ export function parseDiagram(json: string): { nodes: Node[]; edges: Edge[] } {
   }
   const nodes = parsed.nodes.map((node, index) => parsePlainNode(node, index))
   const edges = parsed.edges.map((edge, index) => parsePlainEdge(edge, index))
+  if (lastImportDroppedRetiredRoles) {
+    console.warn(
+      'Diagram Lab: one or more nodes used a retired simulation role (generator/processor/producer/consumer/sink/kafka) and were imported as plain visual nodes. Reassign a host or queue role to simulate them again.',
+    )
+  }
   return { nodes, edges }
 }
 

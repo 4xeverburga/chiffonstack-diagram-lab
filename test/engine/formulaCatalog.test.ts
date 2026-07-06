@@ -1,0 +1,84 @@
+import { describe, expect, it } from 'vitest'
+import {
+  buildEdgeCongestionDescriptor,
+  buildEdgeConnectionsDescriptor,
+  buildEdgeRateDescriptor,
+  buildHostCapacityDescriptor,
+  buildHostLatencyDescriptor,
+  buildHostSaturationDescriptor,
+  buildHostShedDescriptor,
+  buildQueueBacklogDescriptor,
+  validateFormulaDescriptorsHaveSources,
+} from '../../src/engine/formulaCatalog'
+
+describe('formula catalog — every descriptor has >=1 source (SC-005)', () => {
+  it('host descriptors all carry sources', () => {
+    const descriptors = [
+      buildHostSaturationDescriptor({ incomingRPS: 100, capacityRPS: 500, saturationRatio: 0.2 }),
+      buildHostLatencyDescriptor({ baseLatencyMs: 10, saturationRatio: 0.2, latencyMs: 12.5 }),
+      buildHostCapacityDescriptor({ maxWorkerThreads: 8, cpuProcessingTimeMs: 16, capacityRPS: 500 }),
+      buildHostShedDescriptor({ incomingRPS: 700, manualMaxRPS: 550, shedRPS: 150 }),
+    ]
+    expect(() => validateFormulaDescriptorsHaveSources(descriptors)).not.toThrow()
+    for (const descriptor of descriptors) expect(descriptor.sources.length).toBeGreaterThan(0)
+  })
+
+  it('edge and queue descriptors all carry sources', () => {
+    const descriptors = [
+      buildEdgeRateDescriptor({ currentRPS: 100, averagePayloadSizeKB: 10, currentMBps: 0.9765625 }),
+      buildEdgeConnectionsDescriptor({ currentRPS: 100, latencySec: 0.05, activeConnections: 5 }),
+      buildEdgeCongestionDescriptor({ targetSaturationRatio: 0.9, isCongested: true }),
+      buildQueueBacklogDescriptor({ inflowMBps: 20, outflowMBps: 10, backlogGB: 0.6 }),
+    ]
+    expect(() => validateFormulaDescriptorsHaveSources(descriptors)).not.toThrow()
+    for (const descriptor of descriptors) expect(descriptor.sources.length).toBeGreaterThan(0)
+  })
+
+  it('throws when a descriptor has zero sources', () => {
+    expect(() =>
+      validateFormulaDescriptorsHaveSources([
+        { id: 'bad', name: 'bad', expression: 'x', inputs: {}, sources: [], isBinding: false },
+      ]),
+    ).toThrow('bad')
+  })
+})
+
+describe('formula catalog — inputs mirror the live computation at a known operating point', () => {
+  it('saturation descriptor reports the exact incoming/capacity/binding used to compute it', () => {
+    const descriptor = buildHostSaturationDescriptor({ incomingRPS: 460, capacityRPS: 500, saturationRatio: 0.92 })
+    expect(descriptor.inputs.incomingRPS).toBe(460)
+    expect(descriptor.inputs.capacityRPS).toBe(500)
+    expect(descriptor.isBinding).toBe(true) // 0.92 >= HOST_SATURATION_THRESHOLD (0.85)
+  })
+
+  it('latency descriptor reports the exact base/rho used to compute it', () => {
+    const descriptor = buildHostLatencyDescriptor({ baseLatencyMs: 10, saturationRatio: 0.2, latencyMs: 12.5 })
+    expect(descriptor.inputs.baseLatencyMs).toBe(10)
+    expect(descriptor.inputs.saturationRatio).toBe(0.2)
+    expect(descriptor.isBinding).toBe(false)
+  })
+
+  it('shed descriptor is binding exactly when shedRPS > 0', () => {
+    expect(buildHostShedDescriptor({ incomingRPS: 400, manualMaxRPS: 550, shedRPS: 0 }).isBinding).toBe(false)
+    expect(buildHostShedDescriptor({ incomingRPS: 700, manualMaxRPS: 550, shedRPS: 150 }).isBinding).toBe(true)
+  })
+
+  it('edge rate descriptor reports the exact RPS/payload/MBps used to compute it', () => {
+    const descriptor = buildEdgeRateDescriptor({ currentRPS: 200, averagePayloadSizeKB: 50, currentMBps: 9.765625 })
+    expect(descriptor.inputs.currentRPS).toBe(200)
+    expect(descriptor.inputs.averagePayloadSizeKB).toBe(50)
+    expect(descriptor.inputs.currentMBps).toBeCloseTo(9.765625, 5)
+  })
+
+  it("connections descriptor (Little's law) reports the exact rate/latency/result", () => {
+    const descriptor = buildEdgeConnectionsDescriptor({ currentRPS: 200, latencySec: 0.25, activeConnections: 50 })
+    expect(descriptor.inputs.currentRPS).toBe(200)
+    expect(descriptor.inputs.latencySec).toBe(0.25)
+    expect(descriptor.inputs.activeConnections).toBe(50)
+  })
+
+  it('queue backlog descriptor is binding exactly when inflow exceeds outflow', () => {
+    expect(buildQueueBacklogDescriptor({ inflowMBps: 20, outflowMBps: 10, backlogGB: 0.6 }).isBinding).toBe(true)
+    expect(buildQueueBacklogDescriptor({ inflowMBps: 5, outflowMBps: 10, backlogGB: 0 }).isBinding).toBe(false)
+  })
+})

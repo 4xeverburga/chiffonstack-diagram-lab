@@ -7,10 +7,10 @@ import { Sidebar } from './lab/Sidebar'
 import { SimulationControls } from './lab/SimulationControls'
 import { Inspector } from './lab/Inspector'
 import { classNameForKind } from './lab/nodeKinds'
-import { applyKafkaStatusClass } from './lab/kafkaStatusTreatment'
+import { applyHostStatusClass } from './lab/hostStatusTreatment'
 import { DEFAULT_DESIGN_TOKENS } from './lab/designTokens'
 import { DEFAULT_TRAFFIC_SCALE } from './engine/config'
-import type { FormulaDescriptor, KafkaNodeMetrics, NodeMetrics, SimRole } from './engine/ports'
+import type { FormulaDescriptor, HostNodeMetrics, NodeMetrics, NodeSim } from './engine/ports'
 
 // Dev-only design/UI preview: mounts the REAL app components (LabelNode,
 // Sidebar, SimulationControls, Inspector) fed with representative mock data,
@@ -33,133 +33,116 @@ const canvasTokenStyle = {
   '--token-body-font': DEFAULT_DESIGN_TOKENS.bodyFont,
 } as CSSProperties
 
-const HEALTHY_KAFKA: KafkaNodeMetrics = {
-  ingressMBps: 120,
-  egressMBps: 118,
-  saturation: { network: 0.22, cpu: 0.18, disk: 0.15 },
-  consumerLagBytes: 2_000_000,
-  consumerLagMessages: 1_500,
-  pageCacheHitRatio: 0.97,
+const HEALTHY_HOST: HostNodeMetrics = {
+  incomingRPS: 120,
+  forwardedRPS: 120,
+  shedRPS: 0,
+  saturationRatio: 0.22,
+  latencyMs: 12,
   status: 'healthy',
 }
 
-const SATURATED_KAFKA: KafkaNodeMetrics = {
-  ingressMBps: 512,
-  egressMBps: 480,
-  saturation: { network: 0.62, cpu: 0.55, disk: 0.94 },
-  consumerLagBytes: 131_072_000,
-  consumerLagMessages: 128_000,
-  pageCacheHitRatio: 0.78,
+const SATURATED_HOST: HostNodeMetrics = {
+  incomingRPS: 480,
+  forwardedRPS: 480,
+  shedRPS: 0,
+  saturationRatio: 0.92,
+  latencyMs: 68,
   status: 'saturated',
 }
 
-const DEGRADED_KAFKA: KafkaNodeMetrics = {
-  ingressMBps: 640,
-  egressMBps: 210,
-  saturation: { network: 0.71, cpu: 0.68, disk: 0.99 },
-  consumerLagBytes: 900_000_000,
-  consumerLagMessages: 820_000,
-  pageCacheHitRatio: 0.31,
-  status: 'degraded',
+const OVERLOADED_HOST: HostNodeMetrics = {
+  incomingRPS: 640,
+  forwardedRPS: 550,
+  shedRPS: 90,
+  saturationRatio: 1.28,
+  latencyMs: 210,
+  status: 'overloaded',
 }
 
-const KAFKA_FORMULAS: FormulaDescriptor[] = [
+const HOST_FORMULAS: FormulaDescriptor[] = [
   {
-    id: 'disk-throughput',
-    name: 'Disk throughput',
-    expression: 'disk_util = (retention_bytes / disk_capacity_bytes) \u00d7 100',
-    inputs: { retention_bytes: 1_000_000_000, disk_capacity_bytes: 214_748_364_800 },
-    sources: [{ title: 'AWS m6i spec sheet', url: 'https://aws.amazon.com/ec2/instance-types/m6i/' }],
+    id: 'host.saturation-ratio',
+    name: 'Saturation ratio (\u03c1)',
+    expression: 'rho = incomingRPS / capacityRPS',
+    inputs: { incomingRPS: 640, capacityRPS: 500 },
+    sources: [{ title: 'Kleinrock, Queueing Systems Vol. 1 (1975)', url: 'https://www.wiley.com/en-us/Queueing+Systems' }],
     isBinding: true,
   },
   {
-    id: 'network-throughput',
-    name: 'Network throughput',
-    expression: 'net_util = (throughput_MBps / nic_capacity_MBps) \u00d7 100',
-    inputs: { throughput_MBps: 465, nic_capacity_MBps: 750 },
-    sources: [{ title: 'AWS network baseline', url: 'https://aws.amazon.com/ec2/instance-types/m6i/' }],
-    isBinding: false,
-  },
-  {
-    id: 'cpu-utilization',
-    name: 'CPU utilization',
-    expression: 'cpu_util = (msg_rate / max_msgs_per_core) \u00d7 100 / vcpu',
-    inputs: { msg_rate: 2_048, vcpu: 2 },
-    sources: [{ title: 'Kafka broker sizing guide', url: 'https://kafka.apache.org/documentation/' }],
-    isBinding: false,
+    id: 'host.hockey-stick-latency',
+    name: 'Latency under load',
+    expression: 'latencyMs = baseLatencyMs * (1 + rho / (1 - rho))',
+    inputs: { baseLatencyMs: 10, saturationRatio: 1.28 },
+    sources: [{ title: 'Harchol-Balter, Performance Modeling and Design of Computer Systems (2013)', url: 'https://www.cs.cmu.edu/~harchol/Perfbook/book.html' }],
+    isBinding: true,
   },
 ]
 
-const KAFKA_SIM_ROLE: SimRole = {
-  role: 'kafka',
-  hardwareProfile: 'm6i.large',
-  partitions: 3,
-  replicationFactor: 2,
-  tlsEnabled: false,
-  compression: 'none',
-  retentionBytes: 1_000_000_000,
+const CLIENT_POOL_SIM: NodeSim = { kind: 'host', profile: 'client_pool', requestRatePerSec: 500 }
+const MANUAL_API_SIM: NodeSim = {
+  kind: 'host',
+  profile: 'transactional_api',
+  configMode: 'manual',
+  manualBaselineLatencyMs: 10,
+  manualSaturationRPS: 500,
+  manualMaxRPS: 550,
 }
+const QUEUE_SIM: NodeSim = { kind: 'queue' }
 
-function canvasNode(
-  id: string,
-  label: string,
-  x: number,
-  className: string,
-  sim: SimRole | undefined,
-  metrics: NodeMetrics | undefined,
-): Node {
+function canvasNode(id: string, label: string, x: number, className: string, sim: NodeSim | undefined, metrics: NodeMetrics | undefined): Node {
   return { id, type: 'labelNode', position: { x, y: 0 }, data: { label, sim, simMetrics: metrics }, className }
 }
 
-// The exact five states shown in DESIGN.md's canvas-node section: default,
-// selected (healthy kafka), dim, saturated, and degraded — matching the
+// The exact states shown in DESIGN.md's canvas-node section: default,
+// selected (healthy host), dim, saturated, and overloaded — matching the
 // screenshot this preview replaces.
 const CANVAS_NODES: Node[] = [
-  canvasNode('producer-01', 'producer-01', 0, classNameForKind('default'), {
-    role: 'producer',
-    messageRatePerSec: 500,
-    averagePayloadBytes: 1024,
-  }, undefined),
-  canvasNode('kafka-01', 'kafka-01', 220, classNameForKind('active'), KAFKA_SIM_ROLE, {
-    throughputPerSec: 500,
+  canvasNode('client-pool', 'client-pool', 0, classNameForKind('default'), CLIENT_POOL_SIM, undefined),
+  canvasNode('api-healthy', 'api-healthy', 220, classNameForKind('active'), MANUAL_API_SIM, {
+    throughputPerSec: 120,
     queueDepth: 0,
-    kafka: HEALTHY_KAFKA,
+    host: HEALTHY_HOST,
   }),
-  canvasNode('consumer-01', 'consumer-01', 440, classNameForKind('dim'), { role: 'consumer', consumeRatePerSec: 500 }, undefined),
+  canvasNode('queue', 'queue', 440, classNameForKind('dim'), QUEUE_SIM, {
+    throughputPerSec: 90,
+    queueDepth: 512,
+    queue: { inflowMBps: 20, outflowMBps: 12, backlogGB: 0.6 },
+  }),
   canvasNode(
-    'kafka-02',
-    'kafka-02',
+    'api-saturated',
+    'api-saturated',
     660,
-    applyKafkaStatusClass(classNameForKind('default'), 'saturated'),
-    KAFKA_SIM_ROLE,
-    { throughputPerSec: 2048, queueDepth: 128_000, kafka: SATURATED_KAFKA, formulaDescriptors: KAFKA_FORMULAS },
+    applyHostStatusClass(classNameForKind('default'), 'saturated'),
+    MANUAL_API_SIM,
+    { throughputPerSec: 480, queueDepth: 0, host: SATURATED_HOST, formulaDescriptors: HOST_FORMULAS },
   ),
   canvasNode(
-    'kafka-03',
-    'kafka-03',
+    'api-overloaded',
+    'api-overloaded',
     880,
-    applyKafkaStatusClass(classNameForKind('default'), 'degraded'),
-    KAFKA_SIM_ROLE,
-    { throughputPerSec: 1024, queueDepth: 820_000, kafka: DEGRADED_KAFKA, formulaDescriptors: KAFKA_FORMULAS },
+    applyHostStatusClass(classNameForKind('default'), 'overloaded'),
+    MANUAL_API_SIM,
+    { throughputPerSec: 550, queueDepth: 0, host: OVERLOADED_HOST, formulaDescriptors: HOST_FORMULAS },
   ),
 ]
 
 // Worst-case density audit target (ui-audit.html's former purpose): the
-// Inspector's tallest possible state, a saturated Kafka node with every
+// Inspector's tallest possible state, an overloaded host with every
 // formula/meter section expanded.
 const INSPECTOR_NODE: Node = canvasNode(
-  'kafka-02',
-  'kafka-02',
+  'api-overloaded',
+  'api-overloaded',
   0,
-  applyKafkaStatusClass(classNameForKind('default'), 'saturated'),
-  KAFKA_SIM_ROLE,
+  applyHostStatusClass(classNameForKind('default'), 'overloaded'),
+  MANUAL_API_SIM,
   undefined,
 )
 const INSPECTOR_METRICS: NodeMetrics = {
-  throughputPerSec: 2048,
-  queueDepth: 128_000,
-  kafka: SATURATED_KAFKA,
-  formulaDescriptors: KAFKA_FORMULAS,
+  throughputPerSec: 550,
+  queueDepth: 0,
+  host: OVERLOADED_HOST,
+  formulaDescriptors: HOST_FORMULAS,
 }
 
 function Preview() {
@@ -203,14 +186,16 @@ function Preview() {
           selectedNode={INSPECTOR_NODE}
           selectedEdge={undefined}
           selectedNodeMetrics={INSPECTOR_METRICS}
+          selectedEdgeMetrics={undefined}
           runStatus="idle"
           onRenameNode={noop}
           onSetNodeKind={noop}
           onSetNodeImage={noop}
           onSetNodeLabelSize={noop}
-          onSetNodeSimRole={noop}
+          onSetNodeSim={noop}
           onSetEdgeVariant={noop}
           onSetEdgeThickness={noop}
+          onSetEdgeSimConfig={noop}
           onReverseEdgeDirection={noop}
           onDeleteEdge={noop}
         />
@@ -220,3 +205,4 @@ function Preview() {
 }
 
 export default Preview
+

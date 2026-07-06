@@ -3,8 +3,8 @@ import { FORMULA_PANEL_DISCLAIMER, describeFormulaPanelState } from '../../src/l
 import type { FormulaDescriptor } from '../../src/engine/ports'
 
 const descriptor: FormulaDescriptor = {
-  id: 'kafka.network.ingress-ceiling',
-  name: 'Network ingress ceiling',
+  id: 'host.saturation-ratio',
+  name: 'Saturation ratio',
   expression: 'x = y / z',
   inputs: {},
   sources: [{ title: 't', url: 'https://example.com' }],
@@ -13,16 +13,16 @@ const descriptor: FormulaDescriptor = {
 
 describe('describeFormulaPanelState', () => {
   it('reports hasFormulas when descriptors are present', () => {
-    expect(describeFormulaPanelState([descriptor], { role: 'kafka', hardwareProfile: 'm6i.large', partitions: 1, replicationFactor: 1, tlsEnabled: false, compression: 'none', retentionBytes: 0 })).toEqual({
+    expect(describeFormulaPanelState([descriptor], { kind: 'host', profile: 'client_pool', requestRatePerSec: 100 })).toEqual({
       hasFormulas: true,
       emptyMessage: '',
     })
   })
 
-  it('gives the 008 placeholder-processor a specific explanation, not a generic empty message', () => {
-    const state = describeFormulaPanelState(undefined, { role: 'processor', serviceRatePerSec: 1 })
+  it('gives a queue a specific explanation, not a generic empty message', () => {
+    const state = describeFormulaPanelState(undefined, { kind: 'queue' })
     expect(state.hasFormulas).toBe(false)
-    expect(state.emptyMessage.toLowerCase()).toContain('placeholder')
+    expect(state.emptyMessage.toLowerCase()).toContain('queue')
   })
 
   it('gives a no-role node a generic explanation', () => {

@@ -101,15 +101,6 @@
   color: #ff4715;
 }
 
-.sim-metrics-readout {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  font-family: var(--mono);
-  font-size: 12px;
-  color: var(--text);
-}
-
 .sim-placeholder-note {
   font-family: var(--mono);
   font-size: 11px;
@@ -124,8 +115,8 @@
   gap: 8px;
 }
 
-/* Kafka metrics readout (feature 010, US2/FR-004/FR-005). */
-.sim-kafka-metrics {
+/* Host/queue metrics readout (feature 011). */
+.sim-host-metrics {
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -151,12 +142,12 @@
   border-style: solid;
 }
 
-.sim-status-badge-degraded {
+.sim-status-badge-overloaded {
   border-color: var(--token-primary, #ff4715);
   border-style: dotted;
 }
 
-.sim-kafka-meter {
+.sim-host-meter {
   display: flex;
   justify-content: space-between;
   gap: 8px;
@@ -167,7 +158,7 @@
 
 /* The binding meter is distinguished by weight/border, not color alone
    (spec Edge Cases — low-contrast token accessibility fallback). */
-.sim-kafka-meter-binding {
+.sim-host-meter-binding {
   font-weight: 600;
   color: var(--text-h);
   border-bottom: 1px solid var(--token-primary, #ff4715);
@@ -612,25 +603,25 @@
   border-style: dashed;
 }
 
-/* Canvas status treatment for saturated/degraded Kafka nodes (feature 010,
-   FR-006). HARD RULE: the node itself is an invariant element — its
-   border-width/border-style/size/footprint never change for any
-   simulated status, exactly like every other node on the canvas. A
-   discrete `::after` ring (a prior iteration) was rejected: even sitting
-   outside the node's box, its hard edge still read visually as "this
-   node is bigger than the others." Status is instead conveyed entirely
-   by (a) a border-COLOR change on the node (still 1px, still solid — a
-   color swap, not a shape change) and (b) a blurred, no-spread
+/* Canvas status treatment for saturated/overloaded hosts (feature 011,
+   formerly 010's single-status treatment). HARD RULE: the node itself is an
+   invariant element — its border-width/border-style/size/footprint never
+   change for any simulated status, exactly like every other node on the
+   canvas. A discrete `::after` ring (a prior iteration) was rejected: even
+   sitting outside the node's box, its hard edge still read visually as
+   "this node is bigger than the others." Status is instead conveyed
+   entirely by (a) a border-COLOR change on the node (still 1px, still
+   solid — a color swap, not a shape change) and (b) a blurred, no-spread
    `box-shadow` glow that fades to transparent rather than forming a
    second crisp rectangle — a CSS stand-in for a soft light emission, not
    an outline. The non-color signal (still not "color alone") is the
-   glow's ANIMATION PATTERN: saturated breathes smoothly, degraded
+   glow's ANIMATION PATTERN: saturated breathes smoothly, overloaded
    flickers abruptly (`steps()` easing) and faster — "more urgent" reads
    as such even color-blind, with zero change to the node's visual
-   bounding box. Applied via kafkaStatusTreatment.ts's idempotent class
+   bounding box. Applied via hostStatusTreatment.ts's idempotent class
    derivation — see App.tsx's renderedNodes useMemo. */
 .react-flow__node.sim-status-saturated,
-.react-flow__node.sim-status-degraded {
+.react-flow__node.sim-status-overloaded {
   border-color: var(--token-primary, #ff4715);
 }
 
@@ -638,8 +629,8 @@
   animation: sim-status-glow-saturated 1.6s ease-in-out infinite;
 }
 
-.react-flow__node.sim-status-degraded {
-  animation: sim-status-glow-degraded 0.7s steps(2, jump-end) infinite;
+.react-flow__node.sim-status-overloaded {
+  animation: sim-status-glow-overloaded 0.7s steps(2, jump-end) infinite;
 }
 
 @keyframes sim-status-glow-saturated {
@@ -652,7 +643,7 @@
   }
 }
 
-@keyframes sim-status-glow-degraded {
+@keyframes sim-status-glow-overloaded {
   0%,
   100% {
     box-shadow: 0 0 0 0 color-mix(in srgb, var(--token-primary, #ff4715) 0%, transparent);
@@ -862,6 +853,14 @@
   stroke: var(--token-secondary, var(--border));
 }
 
+/* Congested-edge treatment (feature 011, US1): an inbound edge to a host
+   past EDGE_CONGESTION_THRESHOLD renders red regardless of its base
+   variant color, so congestion is visible without opening the Inspector
+   (driven by per-window EdgeSimMetrics.isCongested, HeatEdge.tsx). */
+.lab-edge-congested {
+  stroke: #ff3b30 !important;
+}
+
 /* Thickness steps (edgeStyle.ts): only thin/thick override — `normal` keeps
    each variant's baseline width above, so pre-003 diagrams render
    identically (contracts/edge-style.md guarantee 2). Same two values are
@@ -957,7 +956,7 @@
   }
 
   .react-flow__node.sim-status-saturated,
-  .react-flow__node.sim-status-degraded {
+  .react-flow__node.sim-status-overloaded {
     animation: none;
   }
 }

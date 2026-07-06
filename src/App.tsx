@@ -36,7 +36,7 @@ import { initialEdges, initialNodes } from './lab/initialDiagram'
 import { useDiagramMutations } from './lab/useDiagramMutations'
 import { downloadDiagram, parseDiagram } from './lab/exportDiagram'
 import { useHandleVisibility, withHandlesVisibleClass } from './lab/useHandleVisibility'
-import { applyKafkaStatusClass } from './lab/kafkaStatusTreatment'
+import { applyHostStatusClass } from './lab/hostStatusTreatment'
 import { useLayoutHelpers } from './lab/useLayoutHelpers'
 import { AlignmentGuides } from './lab/AlignmentGuides'
 import { DEFAULT_DESIGN_TOKENS, type DesignTokens } from './lab/designTokens'
@@ -126,10 +126,10 @@ function LabEditor() {
   // App.css alone. See withHandlesVisibleClass for why this must be
   // idempotent rather than a blind append.
   //
-  // A saturated/degraded Kafka node also gets a token-derived status
-  // treatment class (FR-006, feature 010) — same idempotent-recompute
-  // requirement and for the same reason (NodeResizer's onResize round-trips
-  // through updateNode), so applyKafkaStatusClass follows the exact same
+  // A saturated/overloaded host also gets a token-derived status
+  // treatment class (FR-013) — same idempotent-recompute requirement and
+  // for the same reason (NodeResizer's onResize round-trips through
+  // updateNode), so applyHostStatusClass follows the exact same
   // strip-then-reapply pattern as withHandlesVisibleClass. The resolved
   // node's full NodeMetrics also ride on `data.simMetrics` (transient,
   // never serialized — exportDiagram.ts whitelists node.data) so LabelNode
@@ -142,7 +142,7 @@ function LabEditor() {
       nodes.map((node) => {
         const nodeMetrics = latestWindow ? selectNodeMetrics(latestWindow, node.id) : undefined
         const withHandles = withHandlesVisibleClass(node.className, handlesVisibleNodeIds.has(node.id))
-        const className = applyKafkaStatusClass(withHandles, nodeMetrics?.kafka?.status)
+        const className = applyHostStatusClass(withHandles, nodeMetrics?.host?.status)
         const next = className === (node.className ?? '') ? node : { ...node, className }
         return next.data.simMetrics === nodeMetrics ? next : { ...next, data: { ...next.data, simMetrics: nodeMetrics } }
       }),
@@ -320,6 +320,7 @@ function LabEditor() {
   const selectedNode = selectedNodeId ? nodes.find((node) => node.id === selectedNodeId) : undefined
   const selectedEdge = selectedEdgeId ? edges.find((edge) => edge.id === selectedEdgeId) : undefined
   const selectedNodeMetrics = selectedNodeId ? selectNodeMetrics(latestWindow, selectedNodeId) : undefined
+  const selectedEdgeMetrics = selectedEdgeId ? selectEdgeMetrics(latestWindow, selectedEdgeId) : undefined
 
   return (
     <div className="lab">
@@ -383,14 +384,16 @@ function LabEditor() {
           selectedNode={selectedNode}
           selectedEdge={selectedEdge}
           selectedNodeMetrics={selectedNodeMetrics}
+          selectedEdgeMetrics={selectedEdgeMetrics}
           runStatus={runStatus}
           onRenameNode={mutations.renameNode}
           onSetNodeKind={mutations.setNodeKind}
           onSetNodeImage={mutations.setNodeImage}
           onSetNodeLabelSize={mutations.setNodeLabelSize}
-          onSetNodeSimRole={mutations.setNodeSimRole}
+          onSetNodeSim={mutations.setNodeSim}
           onSetEdgeVariant={mutations.setEdgeVariant}
           onSetEdgeThickness={mutations.setEdgeThickness}
+          onSetEdgeSimConfig={mutations.setEdgeSimConfig}
           onReverseEdgeDirection={mutations.reverseEdgeDirection}
           onDeleteEdge={mutations.deleteEdge}
         />

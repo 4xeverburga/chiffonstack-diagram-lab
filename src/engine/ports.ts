@@ -4,9 +4,6 @@
 // from React/DOM/xyflow/Zustand, and nothing outside src/engine/ imports
 // from here except through these shapes.
 
-export type KafkaCompression = 'none' | 'zstd'
-export type KafkaHardwareProfileId = 'm6i.large' | 'm6i.xlarge' | 'm6i.2xlarge' | 'm6i.4xlarge'
-
 export interface FormulaSource {
   title: string
   url: string
@@ -22,50 +19,107 @@ export interface FormulaDescriptor {
   isBinding: boolean
 }
 
-export interface KafkaNodeMetrics {
-  ingressMBps: number
-  egressMBps: number
-  saturation: {
-    network: number
-    cpu: number
-    disk: number
-  }
-  consumerLagBytes: number
-  consumerLagMessages: number
-  pageCacheHitRatio: number
-  status: 'healthy' | 'saturated' | 'degraded'
+/** A host's runtime archetype (data-model.md). `client_pool` is the only
+ *  traffic source; `external_api` never saturates; the rest carry a
+ *  manual/calculated capacity model. */
+export type HostRuntimeProfile =
+  | 'client_pool'
+  | 'transactional_api'
+  | 'worker_consumer'
+  | 'database_server'
+  | 'external_api'
+
+/** A host node's behavior plus its configuration (data-model.md). Exactly
+ *  the closed parameter set from FR-020 — nothing else is user-facing. */
+export type HostNodeSim =
+  | { kind: 'host'; profile: 'client_pool'; requestRatePerSec: number }
+  | { kind: 'host'; profile: 'external_api'; manualBaselineLatencyMs: number }
+  | {
+      kind: 'host'
+      profile: 'transactional_api' | 'worker_consumer' | 'database_server'
+      configMode: 'manual'
+      manualBaselineLatencyMs: number
+      manualSaturationRPS: number
+      manualMaxRPS: number
+    }
+  | {
+      kind: 'host'
+      profile: 'transactional_api' | 'worker_consumer' | 'database_server'
+      configMode: 'calculated'
+      cpuProcessingTimeMs: number
+      maxWorkerThreads: number
+    }
+
+/** A zero-configuration buffer node (data-model.md, FR-010). */
+export interface QueueNodeSim {
+  kind: 'queue'
 }
 
-/** A node's behavior in the engine, plus its configuration (data-model.md). */
-export type SimRole =
-  | { role: 'generator'; ratePerSec: number }
-  | { role: 'processor'; serviceRatePerSec: number }
-  | {
-      role: 'kafka'
-      hardwareProfile: KafkaHardwareProfileId
-      partitions: number
-      replicationFactor: number
-      tlsEnabled: boolean
-      compression: KafkaCompression
-      retentionBytes: number
-    }
-  | { role: 'producer'; messageRatePerSec: number; averagePayloadBytes: number }
-  | { role: 'consumer'; consumeRatePerSec: number }
-  | { role: 'sink' }
+export type NodeSim = HostNodeSim | QueueNodeSim
+
+/** Traffic-shaping configuration living on an edge (data-model.md). Every
+ *  field is required — no default parameter values (CLAUDE.md). */
+export interface EdgeSimConfig {
+  /** ≥ 0; normalized per source at load time when a source's outbound
+   *  shares don't already sum to 1. */
+  trafficShareRatio: number
+  /** ≥ 0; drives RPS <-> MB/s conversion. */
+  averagePayloadSizeKB: number
+  /** > 0; weights a calculated-mode target host's ρ. */
+  targetComputeWeightMultiplier: number
+  /** ≥ 0; downstream I/O wait, and Little's law input. */
+  pathIoLatencyMs: number
+}
 
 /** The engine's own view of the topology — no positions, labels, or visuals. */
 export interface SimTopology {
-  nodes: { id: string; sim: SimRole }[]
-  edges: { id: string; source: string; target: string }[]
+  nodes: { id: string; sim: NodeSim }[]
+  edges: { id: string; source: string; target: string; config: EdgeSimConfig }[]
+}
+
+/** Per-window host telemetry (data-model.md). */
+export interface HostNodeMetrics {
+  incomingRPS: number
+  /** After the manual-mode maxRPS clamp (research.md D6). */
+  forwardedRPS: number
+  /** Derived display value, not an input. */
+  shedRPS: number
+  /** Unclamped; display may exceed 1.0. */
+  saturationRatio: number
+  /** base × (1 + ρ/(1−ρ)), ρ ≤ HOST_RHO_CLAMP (research.md D2). */
+  latencyMs: number
+  status: 'healthy' | 'saturated' | 'overloaded'
+}
+
+/** Per-window queue telemetry (data-model.md). */
+export interface QueueNodeMetrics {
+  inflowMBps: number
+  /** min(desired-by-consumers, inflow + backlog drain) (research.md D4). */
+  outflowMBps: number
+  /** ≥ 0, unbounded above. */
+  backlogGB: number
+}
+
+/** Per-window edge telemetry (data-model.md). */
+export interface EdgeSimMetrics {
+  /** sourceOutput × normalizedShare. */
+  currentRPS: number
+  currentMBps: number
+  /** Little's law: currentRPS × (latencySec of the target path). */
+  activeConnections: number
+  /** Target saturation > EDGE_CONGESTION_THRESHOLD. */
+  isCongested: boolean
 }
 
 export interface NodeMetrics {
-  /** Departures during the window, scaled to per-second. */
+  /** Departures during the window, scaled to per-second. Kept for
+   *  HeatEdge/back-compat. */
   throughputPerSec: number
-  /** Instantaneous backlog at window end. */
+  /** Instantaneous backlog at window end; hosts: 0, queues: backlog in
+   *  messages-equivalent. */
   queueDepth: number
-  /** Present only for Kafka-role nodes (feature 009). */
-  kafka?: KafkaNodeMetrics
+  host?: HostNodeMetrics
+  queue?: QueueNodeMetrics
   /** Active formulas and source citations behind this node's metrics. */
   formulaDescriptors?: FormulaDescriptor[]
 }
@@ -73,9 +127,8 @@ export interface NodeMetrics {
 export interface EdgeMetrics {
   /** Traffic crossing the edge during the window, scaled to per-second. */
   throughputPerSec: number
-  /** Optional dual-units view for producer/consumer <-> Kafka links. */
-  nativeThroughputPerSec?: number
-  throughputMBps?: number
+  sim?: EdgeSimMetrics
+  formulaDescriptors?: FormulaDescriptor[]
 }
 
 /** One aggregated snapshot, emitted at most once per `windowSizeMs`. */

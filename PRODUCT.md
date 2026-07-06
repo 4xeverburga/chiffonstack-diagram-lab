@@ -4,8 +4,9 @@
 
 **SUGAR** — an open-source interactive performance, capacity, and chaos
 simulator for software architectures and data pipelines, by ChiffonStack.
-A React Flow (`@xyflow/react`) canvas where engineers model topologies, assign
-real hardware profiles (vCPU, RAM, disk), and watch the system breathe,
+A React Flow (`@xyflow/react`) canvas where engineers model topologies,
+describe each host's capability with a few explicit parameters (a known
+capability curve, or CPU time × worker threads), and watch the system breathe,
 congest, scale, or collapse under load — driven by a discrete-event simulation
 engine running entirely in the browser.
 
@@ -17,20 +18,21 @@ styling carry over; the export pipeline does not.
 
 Backend engineers, data architects, platform engineers (DevOps/SRE), and data
 engineers. They are not looking for a pretty drawing tool; they need a local
-"chaos sandbox" to validate Kafka partitioning strategies, predict
-backpressure bottlenecks, tune autoscaling policies, or size clusters before
-paying for real cloud infrastructure. They will distrust any number they
+"chaos sandbox" to predict backpressure bottlenecks, find which service
+saturates first, and rightsize compute before paying for real cloud
+infrastructure. They will distrust any number they
 cannot audit — which is why every simulation formula is shown with its
 sources in the Inspector.
 
 ## Product Purpose
 
 SUGAR turns "will this architecture hold at 10× load?" into a five-minute
-experiment. Success looks like: a user lays out a topology, assigns hardware
-profiles (e.g. `m6i.xlarge`), starts a synthetic traffic generator, and
-watches the canvas animate throughput, queue growth, and saturation — then
-drags a slider (partitions, RAM, payload size) and immediately sees where the
-system breaks instead. Numbers are positioned as directionally correct for
+experiment. Success looks like: a user lays out a topology, describes each
+host's capability (known capability curve, or CPU time × worker threads),
+starts a synthetic traffic generator, and watches the canvas animate
+throughput, backlog growth, and saturation — then drags a slider (request
+rate, worker threads, payload size) and immediately sees where the system
+breaks instead. Numbers are positioned as directionally correct for
 comparing scenarios, never as guarantees.
 
 ## Simulation Model
@@ -38,11 +40,13 @@ comparing scenarios, never as guarantees.
 - **Discrete-event engine, in-browser.** A pure-TypeScript core runs in a Web
   Worker behind explicit ports (topology in, traffic in, metrics out). The UI
   receives aggregated metric windows, never per-event messages.
-- **Kafka first.** One technology modeled deeply before any breadth: network
-  ingress/egress bandwidth, vCPU saturation with TLS/compression multipliers,
-  and the Disk Cliff (consumer lag exceeding page-cache RAM forcing disk
-  reads). Other component types remain labeled pass-through placeholders
-  until the Kafka model is complete and sourced.
+- **Hosts first, lean parameters.** Compute hosts (client pools, APIs,
+  workers, databases, external dependencies) are the deeply modeled
+  components: saturation ratio, a smooth hockey-stick latency curve, and
+  manual (known capability) vs calculated (CPU time × worker threads)
+  configuration. Queues are deliberately generic zero-config buffers —
+  throughput and backlog telemetry only. The user-facing parameter set is
+  closed and small; new parameters require a constitution amendment.
 - **Traceable formulas.** Every formula the engine applies is a named,
   unit-tested function carrying structured source metadata (vendor docs,
   papers, benchmarks). Selecting a node shows its active formulas and
@@ -81,8 +85,8 @@ The project is open source. That constrains how it's built:
 ## Anti-references
 
 - **Interview-prep toy simulators** — abstract components with made-up
-  latency numbers and gamified scoring. SUGAR is a utilitarian tool: real
-  hardware profiles, sourced formulas, honest uncertainty.
+  latency numbers and gamified scoring. SUGAR is a utilitarian tool: explicit
+  user-owned capability parameters, sourced formulas, honest uncertainty.
 - **Diagramming SaaS lock-in** (Lucidchart-style) — accounts, cloud storage,
   proprietary formats, paywalls. SUGAR's models are text you own.
 - **Presentation animation tools** (Figma Motion, drawio animations) — motion

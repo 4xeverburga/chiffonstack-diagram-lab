@@ -1,7 +1,7 @@
 import { createStore } from 'zustand/vanilla'
 import { useStore } from 'zustand'
 import type { Edge, Node } from '@xyflow/react'
-import type { EdgeMetrics, MetricsWindow, NodeMetrics, SimRole, SimTopology } from '../engine/ports'
+import type { EdgeMetrics, EdgeSimConfig, MetricsWindow, NodeMetrics, NodeSim, SimTopology } from '../engine/ports'
 import type { RunStatus } from './workerProtocol'
 
 // Zustand holds the simulation-run's cross-cutting state (run status, the
@@ -39,38 +39,45 @@ export function useSimStore<T>(store: SimStore, selector: (state: SimStoreState)
   return useStore(store, selector)
 }
 
-function nodeSimRole(node: Node): SimRole | undefined {
-  const sim = (node.data as { sim?: SimRole } | undefined)?.sim
+function nodeSim(node: Node): NodeSim | undefined {
+  const sim = (node.data as { sim?: NodeSim } | undefined)?.sim
   return sim
 }
 
+function edgeSimConfig(edge: Edge): EdgeSimConfig | undefined {
+  return (edge.data as { simConfig?: EdgeSimConfig } | undefined)?.simConfig
+}
+
 // Builds the engine's SimTopology view from React Flow's nodes/edges
-// (data-model.md): only nodes carrying a `sim` role participate, and edges
-// are reduced to their bare source/target ids.
+// (data-model.md): only nodes carrying a `sim` role participate, and only
+// edges between two participating nodes that also carry a full
+// EdgeSimConfig are included (an edge missing its config isn't ready to
+// simulate yet — e.g. mid-authoring — so it's simply omitted rather than
+// guessing default values, per CLAUDE.md's no-default-parameters rule).
 export function buildSimTopology(nodes: Node[], edges: Edge[]): SimTopology {
   const simNodeIds = new Set<string>()
   const topologyNodes = nodes.flatMap((node) => {
-    const sim = nodeSimRole(node)
+    const sim = nodeSim(node)
     if (!sim) return []
     simNodeIds.add(node.id)
     return [{ id: node.id, sim }]
   })
-  const topologyEdges = edges
-    .filter((edge) => simNodeIds.has(edge.source) && simNodeIds.has(edge.target))
-    .map((edge) => ({ id: edge.id, source: edge.source, target: edge.target }))
+  const topologyEdges = edges.flatMap((edge) => {
+    if (!simNodeIds.has(edge.source) || !simNodeIds.has(edge.target)) return []
+    const config = edgeSimConfig(edge)
+    if (!config) return []
+    return [{ id: edge.id, source: edge.source, target: edge.target, config }]
+  })
   return { nodes: topologyNodes, edges: topologyEdges }
 }
 
-// A simulation needs at least one traffic source to be worth running.
-// `producer` counts alongside the classic `generator`: kafka/model.ts's
-// computeKafkaWindowMetrics reads a producer's configured
-// `messageRatePerSec` directly every window regardless of the DES event
-// queue, so a producer-only topology (feature 010) is a legitimate,
-// runnable simulation even with zero classic generator-role nodes.
+// A simulation needs at least one traffic source to be worth running —
+// exactly one host profile emits traffic without any inbound edges: the
+// client pool (data-model.md).
 export function hasGeneratorRole(nodes: Node[]): boolean {
   return nodes.some((node) => {
-    const role = nodeSimRole(node)?.role
-    return role === 'generator' || role === 'producer'
+    const sim = nodeSim(node)
+    return sim?.kind === 'host' && sim.profile === 'client_pool'
   })
 }
 

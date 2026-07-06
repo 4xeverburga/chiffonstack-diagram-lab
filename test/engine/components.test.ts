@@ -1,26 +1,96 @@
 import { describe, expect, it } from 'vitest'
-import { buildTopologyGraph, detectCycle, drainProcessorBacklog, generatorUsesBatchMode, nextOutgoingEdgeIndex } from '../../src/engine/components'
-import type { SimTopology } from '../../src/engine/ports'
+import {
+  buildTopologyGraph,
+  detectCycle,
+  edgeTrafficShare,
+  generatorUsesBatchMode,
+  nextOutgoingEdgeIndex,
+} from '../../src/engine/components'
+import type { EdgeSimConfig, SimTopology } from '../../src/engine/ports'
+
+function edgeConfig(overrides: Partial<EdgeSimConfig> = {}): EdgeSimConfig {
+  return {
+    trafficShareRatio: 1,
+    averagePayloadSizeKB: 1,
+    targetComputeWeightMultiplier: 1,
+    pathIoLatencyMs: 0,
+    ...overrides,
+  }
+}
 
 const threeNodeTopology: SimTopology = {
   nodes: [
-    { id: 'gen', sim: { role: 'generator', ratePerSec: 100 } },
-    { id: 'proc', sim: { role: 'processor', serviceRatePerSec: 200 } },
-    { id: 'sink', sim: { role: 'sink' } },
+    { id: 'pool', sim: { kind: 'host', profile: 'client_pool', requestRatePerSec: 100 } },
+    {
+      id: 'api',
+      sim: {
+        kind: 'host',
+        profile: 'transactional_api',
+        configMode: 'manual',
+        manualBaselineLatencyMs: 10,
+        manualSaturationRPS: 500,
+        manualMaxRPS: 600,
+      },
+    },
+    { id: 'db', sim: { kind: 'host', profile: 'external_api', manualBaselineLatencyMs: 5 } },
   ],
   edges: [
-    { id: 'e1', source: 'gen', target: 'proc' },
-    { id: 'e2', source: 'proc', target: 'sink' },
+    { id: 'e1', source: 'pool', target: 'api', config: edgeConfig() },
+    { id: 'e2', source: 'api', target: 'db', config: edgeConfig() },
   ],
 }
 
 describe('buildTopologyGraph', () => {
-  it('indexes nodes, edges, and generator ids', () => {
+  it('indexes nodes, edges, generator ids, and a valid topological order', () => {
     const graph = buildTopologyGraph(threeNodeTopology)
-    expect(graph.nodeIds).toEqual(['gen', 'proc', 'sink'])
-    expect(graph.generatorNodeIds).toEqual(['gen'])
-    expect(graph.outgoingEdgesByNode.get('gen')).toEqual(['e1'])
-    expect(graph.edgeById.get('e1')).toEqual({ source: 'gen', target: 'proc' })
+    expect(graph.nodeIds).toEqual(['pool', 'api', 'db'])
+    expect(graph.generatorNodeIds).toEqual(['pool'])
+    expect(graph.outgoingEdgesByNode.get('pool')).toEqual(['e1'])
+    expect(graph.incomingEdgesByNode.get('api')).toEqual(['e1'])
+    expect(graph.edgeById.get('e1')?.source).toBe('pool')
+    expect(graph.topologicalOrder).toEqual(['pool', 'api', 'db'])
+  })
+
+  it('returns an empty topological order when the graph has a cycle', () => {
+    const cyclic: SimTopology = {
+      nodes: [
+        { id: 'a', sim: { kind: 'queue' } },
+        { id: 'b', sim: { kind: 'queue' } },
+      ],
+      edges: [
+        { id: 'e1', source: 'a', target: 'b', config: edgeConfig() },
+        { id: 'e2', source: 'b', target: 'a', config: edgeConfig() },
+      ],
+    }
+    expect(buildTopologyGraph(cyclic).topologicalOrder).toEqual([])
+  })
+})
+
+describe('edgeTrafficShare', () => {
+  it('returns the edge\'s own configured ratio, unmodified', () => {
+    expect(edgeTrafficShare({ config: edgeConfig({ trafficShareRatio: 0.3 }) })).toBe(0.3)
+  })
+
+  it('does not normalize against sibling edges — multiple edges from the same source can each carry a ratio of 1.0 (broadcast/sequential fan-out)', () => {
+    const topology: SimTopology = {
+      nodes: [
+        { id: 'q', sim: { kind: 'queue' } },
+        { id: 'a', sim: { kind: 'host', profile: 'external_api', manualBaselineLatencyMs: 1 } },
+        { id: 'b', sim: { kind: 'host', profile: 'external_api', manualBaselineLatencyMs: 1 } },
+      ],
+      edges: [
+        { id: 'qa', source: 'q', target: 'a', config: edgeConfig({ trafficShareRatio: 1 }) },
+        { id: 'qb', source: 'q', target: 'b', config: edgeConfig({ trafficShareRatio: 1 }) },
+      ],
+    }
+    const graph = buildTopologyGraph(topology)
+    expect(edgeTrafficShare(graph.edgeById.get('qa'))).toBe(1)
+    expect(edgeTrafficShare(graph.edgeById.get('qb'))).toBe(1)
+  })
+
+  it('clamps a negative ratio to 0 and treats a missing edge as 0', () => {
+    expect(edgeTrafficShare({ config: edgeConfig({ trafficShareRatio: -5 }) })).toBe(0)
+    expect(edgeTrafficShare(undefined)).toBe(0)
   })
 })
 
@@ -32,12 +102,12 @@ describe('detectCycle', () => {
   it('detects a direct two-node cycle', () => {
     const cyclic: SimTopology = {
       nodes: [
-        { id: 'a', sim: { role: 'processor', serviceRatePerSec: 100 } },
-        { id: 'b', sim: { role: 'processor', serviceRatePerSec: 100 } },
+        { id: 'a', sim: { kind: 'queue' } },
+        { id: 'b', sim: { kind: 'queue' } },
       ],
       edges: [
-        { id: 'e1', source: 'a', target: 'b' },
-        { id: 'e2', source: 'b', target: 'a' },
+        { id: 'e1', source: 'a', target: 'b', config: edgeConfig() },
+        { id: 'e2', source: 'b', target: 'a', config: edgeConfig() },
       ],
     }
     const cycle = detectCycle(buildTopologyGraph(cyclic))
@@ -48,14 +118,14 @@ describe('detectCycle', () => {
   it('detects a longer cycle through three nodes', () => {
     const cyclic: SimTopology = {
       nodes: [
-        { id: 'a', sim: { role: 'processor', serviceRatePerSec: 100 } },
-        { id: 'b', sim: { role: 'processor', serviceRatePerSec: 100 } },
-        { id: 'c', sim: { role: 'processor', serviceRatePerSec: 100 } },
+        { id: 'a', sim: { kind: 'queue' } },
+        { id: 'b', sim: { kind: 'queue' } },
+        { id: 'c', sim: { kind: 'queue' } },
       ],
       edges: [
-        { id: 'e1', source: 'a', target: 'b' },
-        { id: 'e2', source: 'b', target: 'c' },
-        { id: 'e3', source: 'c', target: 'a' },
+        { id: 'e1', source: 'a', target: 'b', config: edgeConfig() },
+        { id: 'e2', source: 'b', target: 'c', config: edgeConfig() },
+        { id: 'e3', source: 'c', target: 'a', config: edgeConfig() },
       ],
     }
     expect(detectCycle(buildTopologyGraph(cyclic))).toBeDefined()
@@ -63,8 +133,8 @@ describe('detectCycle', () => {
 
   it('ignores edges reaching a node with no sim role', () => {
     const topology: SimTopology = {
-      nodes: [{ id: 'gen', sim: { role: 'generator', ratePerSec: 10 } }],
-      edges: [{ id: 'e1', source: 'gen', target: 'plain-node' }],
+      nodes: [{ id: 'pool', sim: { kind: 'host', profile: 'client_pool', requestRatePerSec: 10 } }],
+      edges: [{ id: 'e1', source: 'pool', target: 'plain-node', config: edgeConfig() }],
     }
     expect(detectCycle(buildTopologyGraph(topology))).toBeUndefined()
   })
@@ -88,27 +158,6 @@ describe('nextOutgoingEdgeIndex', () => {
   })
 })
 
-describe('drainProcessorBacklog', () => {
-  it('drains the full backlog when capacity exceeds it', () => {
-    const result = drainProcessorBacklog(10, 1000, 1000)
-    expect(result.departed).toBe(10)
-    expect(result.remainingBacklog).toBe(0)
-  })
-
-  it('drains only what capacity allows, leaving the remainder queued', () => {
-    // serviceRate 100/s over 100ms => capacity 10.
-    const result = drainProcessorBacklog(50, 100, 100)
-    expect(result.departed).toBeCloseTo(10)
-    expect(result.remainingBacklog).toBeCloseTo(40)
-  })
-
-  it('is a no-op on an empty backlog', () => {
-    const result = drainProcessorBacklog(0, 500, 200)
-    expect(result.departed).toBe(0)
-    expect(result.remainingBacklog).toBe(0)
-  })
-})
-
 describe('generatorUsesBatchMode', () => {
   it('stays per-item below the threshold', () => {
     expect(generatorUsesBatchMode(100)).toBe(false)
@@ -118,3 +167,4 @@ describe('generatorUsesBatchMode', () => {
     expect(generatorUsesBatchMode(1_000_000)).toBe(true)
   })
 })
+
