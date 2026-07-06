@@ -278,32 +278,35 @@ look nice," that's the tell it should be a border instead.
   simulated status), communicating "de-emphasized" without touching
   opacity (which would also wash out an attached image).
 - **Saturated (feature 010):** border-color swaps to Signal Orange (still
-  1px, still solid — a color change, not a shape change) plus an animated
-  halo ring drawn on a `::after` pseudo-element *outside* the node's own
-  box (a CSS stand-in for "an SVG/Lottie ring shown around it"), so it can
-  never affect canvas layout.
-- **Degraded (feature 010):** same border-color swap; the halo ring is
-  dotted instead of solid and pulses at a visibly faster cadence —
-  visually distinct from saturated by the halo's style/speed, not color,
-  exactly like the Inspector's status badges above. The node's own border
-  never differs from any other node's.
+  1px, still solid — a color change, not a shape change) plus a blurred,
+  no-spread glow (`box-shadow`, fades to transparent) that breathes
+  smoothly. A hard-edged ring around the node was tried and rejected: even
+  positioned outside the node's own box, its crisp edge still read as
+  "this node got bigger" — a glow that fades to nothing avoids that
+  entirely and never affects canvas layout.
+- **Degraded (feature 010):** same border-color swap and glow mechanism;
+  distinguished from saturated only by the glow's *animation pattern* —
+  an abrupt, stepped flicker instead of a smooth breathing fade, and
+  faster — never by shape, ring style, or color alone. The node's own
+  border and footprint never differ from any other node's.
 
 ### Named Rules
 **The Invariant-Node Rule.** A node's own box (size, border-width,
-border-style) never changes for any simulated status — nodes are meant to
-be visually interchangeable geometry. Status is communicated only via (a)
-a border-color swap, (b) animation, and/or (c) a halo/overlay rendered
-outside the node's box (`::after`, an SVG, or a Lottie asset) — never by
-resizing or restyling the node element itself.
+border-style, visual footprint) never changes for any simulated status —
+nodes are meant to be visually interchangeable geometry, including any
+glow/shadow effect layered on top of them, which must fade rather than
+form a hard second edge. Status is communicated only via (a) a
+border-color swap and/or (b) an animation whose fade/timing pattern
+differs — never by resizing, restyling, or drawing a crisp outline around
+the node element.
 
-### Named Rules
 **The Border-Style-Not-Color Rule.** Any two states that must both use
 the accent color (saturated vs. degraded, binding vs. not) are
-distinguished by border style/weight/text, never by shade of the same
-orange. This is a hard accessibility floor, not a nicety — enforced
-across badges and meters directly, and across nodes via their halo
-overlay (see the Invariant-Node Rule above) rather than the node's own
-border, which stays shape-invariant.
+distinguished by border style/weight/text or animation pattern, never by
+shade of the same orange. This is a hard accessibility floor, not a
+nicety — enforced across badges and meters via border style, and across
+nodes via glow animation pattern (see the Invariant-Node Rule above)
+rather than the node's own border, which stays shape-invariant.
 
 ## 6. Do's and Don'ts
 

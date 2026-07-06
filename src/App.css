@@ -614,64 +614,51 @@
 
 /* Canvas status treatment for saturated/degraded Kafka nodes (feature 010,
    FR-006). HARD RULE: the node itself is an invariant element — its
-   border-width/border-style/size never change for any simulated status,
-   exactly like every other node on the canvas. Status is conveyed
-   entirely by (a) a border-COLOR change on the node (still 1px, still
-   solid — a color swap, not a shape change) and (b) a halo drawn on a
-   `::after` pseudo-element positioned OUTSIDE the node's own box (a
-   CSS-only stand-in for "an SVG/Lottie ring shown around it"), which
-   never participates in box-sizing/layout. The halo carries the second,
-   non-color signal (still not "color alone"): solid ring for saturated,
-   dotted ring for degraded, plus degraded's pulse cadence being visibly
-   faster ("more urgent" reads as such even color-blind). Applied via
-   kafkaStatusTreatment.ts's idempotent class derivation — see App.tsx's
-   renderedNodes useMemo. */
+   border-width/border-style/size/footprint never change for any
+   simulated status, exactly like every other node on the canvas. A
+   discrete `::after` ring (a prior iteration) was rejected: even sitting
+   outside the node's box, its hard edge still read visually as "this
+   node is bigger than the others." Status is instead conveyed entirely
+   by (a) a border-COLOR change on the node (still 1px, still solid — a
+   color swap, not a shape change) and (b) a blurred, no-spread
+   `box-shadow` glow that fades to transparent rather than forming a
+   second crisp rectangle — a CSS stand-in for a soft light emission, not
+   an outline. The non-color signal (still not "color alone") is the
+   glow's ANIMATION PATTERN: saturated breathes smoothly, degraded
+   flickers abruptly (`steps()` easing) and faster — "more urgent" reads
+   as such even color-blind, with zero change to the node's visual
+   bounding box. Applied via kafkaStatusTreatment.ts's idempotent class
+   derivation — see App.tsx's renderedNodes useMemo. */
 .react-flow__node.sim-status-saturated,
 .react-flow__node.sim-status-degraded {
   border-color: var(--token-primary, #ff4715);
 }
 
-.react-flow__node.sim-status-saturated::after,
-.react-flow__node.sim-status-degraded::after {
-  /* Sits ~6px outside the node's own border on every side, so it can
-     never shrink the node's content box or shift canvas layout — purely
-     a decorative overlay, same spirit as a floating SVG/Lottie halo. */
-  content: '';
-  position: absolute;
-  inset: -6px;
-  border-radius: 14px;
-  pointer-events: none;
+.react-flow__node.sim-status-saturated {
+  animation: sim-status-glow-saturated 1.6s ease-in-out infinite;
 }
 
-.react-flow__node.sim-status-saturated::after {
-  border: 2px solid var(--token-primary, #ff4715);
-  animation: sim-status-halo-saturated 1.6s ease-in-out infinite;
+.react-flow__node.sim-status-degraded {
+  animation: sim-status-glow-degraded 0.7s steps(2, jump-end) infinite;
 }
 
-.react-flow__node.sim-status-degraded::after {
-  border: 2px dotted var(--token-primary, #ff4715);
-  animation: sim-status-halo-degraded 0.8s ease-in-out infinite;
-}
-
-@keyframes sim-status-halo-saturated {
+@keyframes sim-status-glow-saturated {
   0%,
   100% {
-    opacity: 1;
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--token-primary, #ff4715) 0%, transparent);
   }
   50% {
-    opacity: 0.35;
+    box-shadow: 0 0 10px 1px color-mix(in srgb, var(--token-primary, #ff4715) 45%, transparent);
   }
 }
 
-@keyframes sim-status-halo-degraded {
+@keyframes sim-status-glow-degraded {
   0%,
   100% {
-    opacity: 1;
-    box-shadow: 0 0 0 1px color-mix(in srgb, var(--token-primary, #ff4715) 30%, transparent);
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--token-primary, #ff4715) 0%, transparent);
   }
   50% {
-    opacity: 0.4;
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--token-primary, #ff4715) 12%, transparent);
+    box-shadow: 0 0 6px 2px color-mix(in srgb, var(--token-primary, #ff4715) 55%, transparent);
   }
 }
 
@@ -968,8 +955,8 @@
     animation: none;
   }
 
-  .react-flow__node.sim-status-saturated::after,
-  .react-flow__node.sim-status-degraded::after {
+  .react-flow__node.sim-status-saturated,
+  .react-flow__node.sim-status-degraded {
     animation: none;
   }
 }
