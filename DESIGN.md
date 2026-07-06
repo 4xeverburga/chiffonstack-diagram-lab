@@ -271,23 +271,39 @@ look nice," that's the tell it should be a border instead.
 
 ### Canvas nodes
 - **Shape:** `8px` radius, hairline (Warm-Stone-tinted) border, paper
-  background.
+  background. This box is invariant — its border-width and border-style
+  never change for any simulated status (only its border-*color* may).
 - **Active/selected:** Signal Orange border + the color-mix ring above.
-- **Dim:** dashed border, Slate text — communicates "de-emphasized"
-  without touching opacity (which would also wash out an attached
-  image).
-- **Saturated (feature 010):** solid 2px Signal Orange border + a small
-  pill status badge in the node content.
-- **Degraded (feature 010):** dotted 2px Signal Orange border + ring +
-  the same badge — visually distinct from saturated by border style, not
-  color, exactly like the Inspector's status badges above.
+- **Dim:** dashed border, Slate text — a user-chosen style variant (not a
+  simulated status), communicating "de-emphasized" without touching
+  opacity (which would also wash out an attached image).
+- **Saturated (feature 010):** border-color swaps to Signal Orange (still
+  1px, still solid — a color change, not a shape change) plus an animated
+  halo ring drawn on a `::after` pseudo-element *outside* the node's own
+  box (a CSS stand-in for "an SVG/Lottie ring shown around it"), so it can
+  never affect canvas layout.
+- **Degraded (feature 010):** same border-color swap; the halo ring is
+  dotted instead of solid and pulses at a visibly faster cadence —
+  visually distinct from saturated by the halo's style/speed, not color,
+  exactly like the Inspector's status badges above. The node's own border
+  never differs from any other node's.
+
+### Named Rules
+**The Invariant-Node Rule.** A node's own box (size, border-width,
+border-style) never changes for any simulated status — nodes are meant to
+be visually interchangeable geometry. Status is communicated only via (a)
+a border-color swap, (b) animation, and/or (c) a halo/overlay rendered
+outside the node's box (`::after`, an SVG, or a Lottie asset) — never by
+resizing or restyling the node element itself.
 
 ### Named Rules
 **The Border-Style-Not-Color Rule.** Any two states that must both use
 the accent color (saturated vs. degraded, binding vs. not) are
 distinguished by border style/weight/text, never by shade of the same
 orange. This is a hard accessibility floor, not a nicety — enforced
-across nodes, badges, and meters alike.
+across badges and meters directly, and across nodes via their halo
+overlay (see the Invariant-Node Rule above) rather than the node's own
+border, which stays shape-invariant.
 
 ## 6. Do's and Don'ts
 
