@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createSimulation } from '../../src/engine/simulation'
 import { mulberry32, PoissonTrafficSource } from '../../src/engine/poisson'
-import type { MetricsSinkPort, MetricsWindow, SimTopology } from '../../src/engine/ports'
+import type { EdgeSimConfig, MetricsSinkPort, MetricsWindow, SimTopology } from '../../src/engine/ports'
 import { CycleError } from '../../src/engine/ports'
 
 function collectingSink(): { sink: MetricsSinkPort; windows: MetricsWindow[] } {
@@ -9,24 +9,38 @@ function collectingSink(): { sink: MetricsSinkPort; windows: MetricsWindow[] } {
   return { sink: { emitWindow: (window) => windows.push(window) }, windows }
 }
 
+function edgeConfig(overrides: Partial<EdgeSimConfig> = {}): EdgeSimConfig {
+  return { trafficShareRatio: 1, averagePayloadSizeKB: 1, targetComputeWeightMultiplier: 1, pathIoLatencyMs: 0, ...overrides }
+}
+
 const uncongestedTopology: SimTopology = {
   nodes: [
-    { id: 'gen', sim: { role: 'generator', ratePerSec: 100 } },
-    { id: 'proc', sim: { role: 'processor', serviceRatePerSec: 200 } },
-    { id: 'sink', sim: { role: 'sink' } },
+    { id: 'pool', sim: { kind: 'host', profile: 'client_pool', requestRatePerSec: 100 } },
+    {
+      id: 'api',
+      sim: {
+        kind: 'host',
+        profile: 'transactional_api',
+        configMode: 'manual',
+        manualBaselineLatencyMs: 10,
+        manualSaturationRPS: 200,
+        manualMaxRPS: 200,
+      },
+    },
+    { id: 'db', sim: { kind: 'host', profile: 'external_api', manualBaselineLatencyMs: 5 } },
   ],
   edges: [
-    { id: 'gen-proc', source: 'gen', target: 'proc' },
-    { id: 'proc-sink', source: 'proc', target: 'sink' },
+    { id: 'pool-api', source: 'pool', target: 'api', config: edgeConfig() },
+    { id: 'api-db', source: 'api', target: 'db', config: edgeConfig() },
   ],
 }
 
 const congestedTopology: SimTopology = {
   ...uncongestedTopology,
   nodes: [
-    { id: 'gen', sim: { role: 'generator', ratePerSec: 300 } },
-    { id: 'proc', sim: { role: 'processor', serviceRatePerSec: 200 } },
-    { id: 'sink', sim: { role: 'sink' } },
+    { id: 'pool', sim: { kind: 'host', profile: 'client_pool', requestRatePerSec: 300 } },
+    uncongestedTopology.nodes[1],
+    uncongestedTopology.nodes[2],
   ],
 }
 
@@ -58,56 +72,72 @@ describe('createSimulation lifecycle', () => {
     const simulation = createSimulation(new PoissonTrafficSource(mulberry32(1)), sink, 200)
     const cyclic: SimTopology = {
       nodes: [
-        { id: 'a', sim: { role: 'processor', serviceRatePerSec: 100 } },
-        { id: 'b', sim: { role: 'processor', serviceRatePerSec: 100 } },
+        { id: 'a', sim: { kind: 'queue' } },
+        { id: 'b', sim: { kind: 'queue' } },
       ],
       edges: [
-        { id: 'e1', source: 'a', target: 'b' },
-        { id: 'e2', source: 'b', target: 'a' },
+        { id: 'e1', source: 'a', target: 'b', config: edgeConfig() },
+        { id: 'e2', source: 'b', target: 'a', config: edgeConfig() },
       ],
     }
     expect(() => simulation.loadTopology(cyclic)).toThrow(CycleError)
   })
 
-  it('runs with no generator without throwing, reporting zero throughput everywhere', () => {
+  it('runs with no client pool without throwing, reporting zero throughput everywhere', () => {
     const { sink, windows } = collectingSink()
     const simulation = createSimulation(new PoissonTrafficSource(mulberry32(1)), sink, 200)
     simulation.loadTopology({
-      nodes: [
-        { id: 'proc', sim: { role: 'processor', serviceRatePerSec: 200 } },
-        { id: 'sink', sim: { role: 'sink' } },
-      ],
-      edges: [{ id: 'e1', source: 'proc', target: 'sink' }],
+      nodes: [uncongestedTopology.nodes[1], uncongestedTopology.nodes[2]],
+      edges: [{ id: 'api-db', source: 'api', target: 'db', config: edgeConfig() }],
     })
     simulation.start()
     simulation.tick(200)
     expect(windows).toHaveLength(1)
-    expect(windows[0].nodes.proc.throughputPerSec).toBe(0)
-    expect(windows[0].nodes.proc.queueDepth).toBe(0)
+    expect(windows[0].nodes.api.throughputPerSec).toBe(0)
+    expect(windows[0].nodes.api.queueDepth).toBe(0)
   })
 
-  it('reset zeroes virtual time and metrics', () => {
+  it('reset zeroes virtual time and queue backlog', () => {
     const { sink, windows } = collectingSink()
+    const withQueue: SimTopology = {
+      nodes: [
+        { id: 'pool', sim: { kind: 'host', profile: 'client_pool', requestRatePerSec: 300 } },
+        { id: 'q', sim: { kind: 'queue' } },
+        {
+          id: 'api',
+          sim: {
+            kind: 'host',
+            profile: 'transactional_api',
+            configMode: 'manual',
+            manualBaselineLatencyMs: 10,
+            manualSaturationRPS: 100,
+            manualMaxRPS: 100,
+          },
+        },
+      ],
+      edges: [
+        { id: 'pool-q', source: 'pool', target: 'q', config: edgeConfig() },
+        { id: 'q-api', source: 'q', target: 'api', config: edgeConfig() },
+      ],
+    }
     const simulation = createSimulation(new PoissonTrafficSource(mulberry32(1)), sink, 200)
-    simulation.loadTopology(congestedTopology)
+    simulation.loadTopology(withQueue)
     simulation.start()
     simulation.tick(2000)
-    expect(windows.at(-1)?.nodes.proc.queueDepth).toBeGreaterThan(0)
+    expect(windows.at(-1)?.nodes.q.queue?.backlogGB).toBeGreaterThan(0)
 
     simulation.reset()
     windows.length = 0
     simulation.start()
     simulation.tick(200)
     expect(windows[0].windowEndSimTimeMs).toBe(200)
-    // Congestion restarts from an empty backlog, not from wherever it left
-    // off before reset — one 200ms window in isn't enough to rebuild the
-    // sizeable backlog asserted above.
-    expect(windows[0].nodes.proc.queueDepth).toBeLessThan(10)
+    // Backlog restarts from empty on reset, not from wherever it left off.
+    expect(windows[0].nodes.q.queue?.backlogGB).toBeLessThan(0.1)
   })
 })
 
 describe('createSimulation steady-state throughput (SC-003)', () => {
-  it('an uncongested processor (rate < serviceRate) reports throughput near the input rate with ~zero queue', () => {
+  it('an uncongested host (offered rate < capacity) forwards near the input rate at low saturation', () => {
     const { sink, windows } = collectingSink()
     const simulation = createSimulation(new PoissonTrafficSource(mulberry32(2)), sink, 200)
     simulation.loadTopology(uncongestedTopology)
@@ -115,13 +145,13 @@ describe('createSimulation steady-state throughput (SC-003)', () => {
     simulation.tick(10_000)
     const last = windows.at(-1)
     expect(last).toBeDefined()
-    const throughput = last!.nodes.proc.throughputPerSec
-    expect(throughput).toBeGreaterThan(90)
-    expect(throughput).toBeLessThan(110)
-    expect(last!.nodes.proc.queueDepth).toBeLessThan(5)
+    const forwarded = last!.nodes.api.host!.forwardedRPS
+    expect(forwarded).toBeGreaterThan(90)
+    expect(forwarded).toBeLessThan(110)
+    expect(last!.nodes.api.host!.saturationRatio).toBeLessThan(0.6)
   })
 
-  it('a congested processor (rate > serviceRate) plateaus near the service rate and its queue grows', () => {
+  it('a congested host (offered rate > maxRPS) sheds the excess and plateaus at maxRPS', () => {
     const { sink, windows } = collectingSink()
     const simulation = createSimulation(new PoissonTrafficSource(mulberry32(3)), sink, 200)
     simulation.loadTopology(congestedTopology)
@@ -129,13 +159,14 @@ describe('createSimulation steady-state throughput (SC-003)', () => {
     simulation.tick(10_000)
     const last = windows.at(-1)
     expect(last).toBeDefined()
-    const throughput = last!.nodes.proc.throughputPerSec
-    expect(throughput).toBeGreaterThan(190)
-    expect(throughput).toBeLessThan(210)
-    expect(last!.nodes.proc.queueDepth).toBeGreaterThan(50)
+    const host = last!.nodes.api.host!
+    expect(host.forwardedRPS).toBeGreaterThan(190)
+    expect(host.forwardedRPS).toBeLessThan(210)
+    expect(host.shedRPS).toBeGreaterThan(80)
+    expect(host.status).toBe('overloaded')
   })
 
-  it('the generator -> processor edge carries the input rate and the processor -> sink edge carries the served rate', () => {
+  it('the client-pool -> host edge carries the offered rate and the host -> external-api edge carries the forwarded rate', () => {
     const { sink, windows } = collectingSink()
     const simulation = createSimulation(new PoissonTrafficSource(mulberry32(4)), sink, 200)
     simulation.loadTopology(congestedTopology)
@@ -143,7 +174,8 @@ describe('createSimulation steady-state throughput (SC-003)', () => {
     simulation.tick(10_000)
     const last = windows.at(-1)
     expect(last).toBeDefined()
-    expect(last!.edges['gen-proc'].throughputPerSec).toBeGreaterThan(280)
-    expect(last!.edges['proc-sink'].throughputPerSec).toBeLessThan(220)
+    expect(last!.edges['pool-api'].throughputPerSec).toBeGreaterThan(280)
+    expect(last!.edges['api-db'].throughputPerSec).toBeLessThan(220)
   })
 })
+

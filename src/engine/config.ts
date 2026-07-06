@@ -102,13 +102,33 @@ export const DEFAULT_FLOW_SMOOTHING_CONFIG: FlowSmoothingConfig = {
   minStdDevFloor: 1,
 }
 
-// Kafka simulation model constants (feature 009). Kept here to preserve the
-// "single source of truth" rule for tunables used across engine modules.
-export const KAFKA_STATUS_SATURATION_THRESHOLD = 0.95
-export const KAFKA_CPU_MBPS_PER_VCPU = 180
-export const KAFKA_TLS_CPU_MULTIPLIER = 1.3
-export const KAFKA_ZSTD_CPU_MULTIPLIER = 1.5
-export const KAFKA_PAGE_CACHE_OVERHEAD_GIB = 2
-export const KAFKA_DISK_CLIFF_READ_FACTOR = 0.2
-export const KAFKA_BYTES_PER_MB = 1_000_000
-export const KAFKA_BYTES_PER_GIB = 1024 * 1024 * 1024
+// Host/queue/edge simulation model constants (feature 011). Single source
+// of truth for every tunable the host saturation curve, queue backlog
+// integration, and edge congestion treatment read from (CLAUDE.md).
+
+// ρ is clamped below 1 before it ever reaches the hockey-stick latency
+// curve (research.md D2) — division by (1 - rho) would otherwise explode
+// to Infinity exactly at saturation, violating the "every emitted number
+// is finite" contract (contracts/engine-ports.md guarantee 4).
+export const HOST_RHO_CLAMP = 0.99
+
+// A host's status becomes 'saturated' once ρ crosses this fraction of its
+// capacity (data-model.md HostNodeMetrics status derivation).
+export const HOST_SATURATION_THRESHOLD = 0.85
+
+// An edge is flagged congested once its target host's saturation ratio
+// crosses this threshold (data-model.md EdgeSimMetrics.isCongested).
+export const EDGE_CONGESTION_THRESHOLD = 0.85
+
+// Floor substituted for a host's own capacity denominator when computing
+// ρ if that capacity is configured to exactly zero — keeps ρ a finite
+// number (proportional to offered load) instead of dividing by zero,
+// without ever producing NaN/Infinity (research.md D2/D6, "zero-capacity
+// inputs yield zeros, never NaN").
+export const HOST_ZERO_CAPACITY_EPSILON = 1e-6
+
+// RPS <-> MB/s <-> GB/s unit conversions (data-model.md QueueNodeMetrics/
+// EdgeSimMetrics), kept centralized rather than re-declared per module.
+export const BYTES_PER_KB = 1024
+export const KB_PER_MB = 1024
+export const MB_PER_GB = 1024

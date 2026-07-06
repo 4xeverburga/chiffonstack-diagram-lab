@@ -259,73 +259,121 @@ describe('parseDiagram', () => {
     expect(reExported.edges[0].targetHandle).toBe('left')
   })
 
-  // --- Simulation role (008-simulation-engine-skeleton, US3) ---
+  // --- Simulation config (011-host-queue-model) ---
 
-  it('round-trips a generator/processor/sink role and its rate for each', () => {
+  it('round-trips client_pool/external_api hosts and a queue', () => {
     const nodes = [
-      { id: 'gen', type: 'labelNode', position: { x: 0, y: 0 }, data: { label: 'gen', sim: { role: 'generator', ratePerSec: 100 } } },
-      { id: 'proc', type: 'labelNode', position: { x: 100, y: 0 }, data: { label: 'proc', sim: { role: 'processor', serviceRatePerSec: 200 } } },
-      { id: 'sink', type: 'labelNode', position: { x: 200, y: 0 }, data: { label: 'sink', sim: { role: 'sink' } } },
+      {
+        id: 'pool',
+        type: 'labelNode',
+        position: { x: 0, y: 0 },
+        data: { label: 'pool', sim: { kind: 'host', profile: 'client_pool', requestRatePerSec: 100 } },
+      },
+      {
+        id: 'ext',
+        type: 'labelNode',
+        position: { x: 100, y: 0 },
+        data: { label: 'ext', sim: { kind: 'host', profile: 'external_api', manualBaselineLatencyMs: 40 } },
+      },
+      { id: 'q', type: 'labelNode', position: { x: 200, y: 0 }, data: { label: 'q', sim: { kind: 'queue' } } },
     ]
     const json = serializeDiagram(nodes, [])
     const { nodes: parsedNodes } = parseDiagram(json)
-    expect(parsedNodes.find((node) => node.id === 'gen')?.data.sim).toEqual({ role: 'generator', ratePerSec: 100 })
-    expect(parsedNodes.find((node) => node.id === 'proc')?.data.sim).toEqual({ role: 'processor', serviceRatePerSec: 200 })
-    expect(parsedNodes.find((node) => node.id === 'sink')?.data.sim).toEqual({ role: 'sink' })
+    expect(parsedNodes.find((node) => node.id === 'pool')?.data.sim).toEqual({
+      kind: 'host',
+      profile: 'client_pool',
+      requestRatePerSec: 100,
+    })
+    expect(parsedNodes.find((node) => node.id === 'ext')?.data.sim).toEqual({
+      kind: 'host',
+      profile: 'external_api',
+      manualBaselineLatencyMs: 40,
+    })
+    expect(parsedNodes.find((node) => node.id === 'q')?.data.sim).toEqual({ kind: 'queue' })
   })
 
-  it('round-trips producer/consumer/kafka roles and Kafka config fields', () => {
+  it('round-trips a manual-mode and a calculated-mode compute host', () => {
     const nodes = [
       {
-        id: 'producer',
+        id: 'manual',
         type: 'labelNode',
         position: { x: 0, y: 0 },
-        data: { label: 'producer', sim: { role: 'producer', messageRatePerSec: 1000, averagePayloadBytes: 1024 } },
-      },
-      {
-        id: 'kafka',
-        type: 'labelNode',
-        position: { x: 100, y: 0 },
         data: {
-          label: 'kafka',
+          label: 'manual',
           sim: {
-            role: 'kafka',
-            hardwareProfile: 'm6i.xlarge',
-            partitions: 12,
-            replicationFactor: 3,
-            tlsEnabled: true,
-            compression: 'zstd',
-            retentionBytes: 5000000000,
+            kind: 'host',
+            profile: 'transactional_api',
+            configMode: 'manual',
+            manualBaselineLatencyMs: 10,
+            manualSaturationRPS: 500,
+            manualMaxRPS: 600,
           },
         },
       },
       {
-        id: 'consumer',
+        id: 'calculated',
         type: 'labelNode',
-        position: { x: 200, y: 0 },
-        data: { label: 'consumer', sim: { role: 'consumer', consumeRatePerSec: 900 } },
+        position: { x: 100, y: 0 },
+        data: {
+          label: 'calculated',
+          sim: { kind: 'host', profile: 'database_server', configMode: 'calculated', cpuProcessingTimeMs: 16, maxWorkerThreads: 8 },
+        },
       },
     ]
     const json = serializeDiagram(nodes, [])
     const { nodes: parsedNodes } = parseDiagram(json)
-    expect(parsedNodes.find((node) => node.id === 'producer')?.data.sim).toEqual({
-      role: 'producer',
-      messageRatePerSec: 1000,
-      averagePayloadBytes: 1024,
+    expect(parsedNodes.find((node) => node.id === 'manual')?.data.sim).toEqual({
+      kind: 'host',
+      profile: 'transactional_api',
+      configMode: 'manual',
+      manualBaselineLatencyMs: 10,
+      manualSaturationRPS: 500,
+      manualMaxRPS: 600,
     })
-    expect(parsedNodes.find((node) => node.id === 'consumer')?.data.sim).toEqual({
-      role: 'consumer',
-      consumeRatePerSec: 900,
+    expect(parsedNodes.find((node) => node.id === 'calculated')?.data.sim).toEqual({
+      kind: 'host',
+      profile: 'database_server',
+      configMode: 'calculated',
+      cpuProcessingTimeMs: 16,
+      maxWorkerThreads: 8,
     })
-    expect(parsedNodes.find((node) => node.id === 'kafka')?.data.sim).toEqual({
-      role: 'kafka',
-      hardwareProfile: 'm6i.xlarge',
-      partitions: 12,
-      replicationFactor: 3,
-      tlsEnabled: true,
-      compression: 'zstd',
-      retentionBytes: 5000000000,
+  })
+
+  it('round-trips an edge simConfig', () => {
+    const nodes = [kitchenSinkNodes[0], kitchenSinkNodes[1]]
+    const edges = [
+      {
+        id: 'e1',
+        source: 'default-node',
+        target: 'active-node',
+        type: 'heat',
+        data: {
+          variant: 'default',
+          simConfig: { trafficShareRatio: 0.5, averagePayloadSizeKB: 12, targetComputeWeightMultiplier: 1.2, pathIoLatencyMs: 5 },
+        },
+      },
+    ]
+    const json = serializeDiagram(nodes, edges)
+    const { edges: parsedEdges } = parseDiagram(json)
+    expect(parsedEdges[0].data?.simConfig).toEqual({
+      trafficShareRatio: 0.5,
+      averagePayloadSizeKB: 12,
+      targetComputeWeightMultiplier: 1.2,
+      pathIoLatencyMs: 5,
     })
+  })
+
+  it('degrades a retired-role node (generator/processor/producer/consumer/sink/kafka) to a plain visual node on import', () => {
+    const json = JSON.stringify({
+      nodes: [
+        { id: 'gen', position: { x: 0, y: 0 }, data: { label: 'gen', sim: { role: 'generator', ratePerSec: 100 } } },
+        { id: 'kafka', position: { x: 100, y: 0 }, data: { label: 'kafka', sim: { role: 'kafka', hardwareProfile: 'm6i.large' } } },
+      ],
+      edges: [],
+    })
+    const { nodes } = parseDiagram(json)
+    expect(nodes.every((node) => node.data.sim === undefined)).toBe(true)
+    expect(nodes.map((node) => node.data.label)).toEqual(['gen', 'kafka'])
   })
 
   it('omits data.sim entirely for a node with no simulation role', () => {
@@ -341,7 +389,11 @@ describe('parseDiagram', () => {
         id: 'gen',
         type: 'labelNode',
         position: { x: 0, y: 0 },
-        data: { label: 'gen', sim: { role: 'generator', ratePerSec: 100 }, simMetrics: { throughputPerSec: 100, queueDepth: 0 } },
+        data: {
+          label: 'gen',
+          sim: { kind: 'host', profile: 'client_pool', requestRatePerSec: 100 },
+          simMetrics: { throughputPerSec: 100, queueDepth: 0 },
+        },
       },
     ]
     const json = JSON.parse(serializeDiagram(nodes, [])) as { nodes: Array<{ data: Record<string, unknown> }> }
@@ -363,12 +415,11 @@ describe('parseDiagram', () => {
     expect('simMetrics' in json.edges[0].data).toBe(false)
   })
 
-  it('drops an invalid sim role (bad rate, unrecognized role) rather than throwing', () => {
+  it('drops an invalid sim config (negative rate, unrecognized kind) rather than throwing', () => {
     const json = JSON.stringify({
       nodes: [
-        { id: 'a', position: { x: 0, y: 0 }, data: { label: 'a', sim: { role: 'generator', ratePerSec: -1 } } },
-        { id: 'b', position: { x: 100, y: 0 }, data: { label: 'b', sim: { role: 'processor', serviceRatePerSec: 0 } } },
-        { id: 'c', position: { x: 200, y: 0 }, data: { label: 'c', sim: { role: 'not-a-real-role' } } },
+        { id: 'a', position: { x: 0, y: 0 }, data: { label: 'a', sim: { kind: 'host', profile: 'client_pool', requestRatePerSec: -1 } } },
+        { id: 'b', position: { x: 100, y: 0 }, data: { label: 'b', sim: { kind: 'not-a-real-kind' } } },
       ],
       edges: [],
     })

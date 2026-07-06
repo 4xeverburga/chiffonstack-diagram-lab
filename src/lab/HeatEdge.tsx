@@ -45,6 +45,11 @@ export function HeatEdge({
   const direction = resolveDirection((data as { direction?: unknown } | undefined)?.direction)
   const isHeat = variant === 'heat-flow' || variant === 'heat-static'
   const gradientId = `heat-gradient-${id}`
+  // A congested edge (target host past EDGE_CONGESTION_THRESHOLD) always
+  // renders red, on top of whatever variant color it would otherwise use
+  // (FR-013) — driven by the same per-window simMetrics reading used for
+  // the flow animation below, not a separate selector round-trip.
+  const isCongested = Boolean((data as { simMetrics?: { sim?: { isCongested?: boolean } } } | undefined)?.simMetrics?.sim?.isCongested)
 
   // Bounded logistic mapping (constitution Principle V) from this edge's
   // last metrics-window throughput onto CSS variables consumed by the
@@ -114,7 +119,7 @@ export function HeatEdge({
         id={id}
         path={edgePath}
         markerEnd={markerEnd}
-        className={edgeStyleClassNames(variant, thickness, direction, 'lab-edge')}
+        className={`${edgeStyleClassNames(variant, thickness, direction, 'lab-edge')}${isCongested ? ' lab-edge-congested' : ''}`}
         style={{ ...(isHeat ? { stroke: `url(#${gradientId})` } : undefined), ...flowStyle }}
       />
       {selected && onCycleThickness && onReverseDirection ? (

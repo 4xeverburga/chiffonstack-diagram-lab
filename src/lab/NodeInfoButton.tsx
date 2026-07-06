@@ -1,20 +1,17 @@
 import type { ReactElement } from 'react'
-import type { NodeMetrics, SimRole } from '../engine/ports'
-import { resolveKafkaHardwareProfile } from '../engine/kafka/catalog'
-import { deriveBindingResource } from './kafkaBindingResource'
-import { formatDualUnitLabel } from './dualUnitLabel'
+import type { NodeMetrics, NodeSim } from '../engine/ports'
 
 // Hover-triggered detail popover beside a simulated node: the node itself
-// only ever needs to carry the minimal always-visible signal FR-006
+// only ever needs to carry the minimal always-visible signal FR-013
 // requires (the border color/style/blink treatment in App.css) —
-// everything else a user might want (rates, saturation meters, lag,
-// binding constraint, the producer's native-rate/MB-per-second dual-unit
-// reading) lives here instead, one hover away, without opening the
-// Inspector or permanently occupying canvas space. Pure CSS :hover/
-// :focus-within reveal (App.css) — no JS hover-state needed, consistent
-// with the rest of the app's flat/CSS-driven interaction model.
+// everything else a user might want (config values, incoming/forwarded
+// rate, saturation, latency, shed traffic, queue backlog) lives here
+// instead, one hover away, without opening the Inspector or permanently
+// occupying canvas space. Pure CSS :hover/:focus-within reveal (App.css) —
+// no JS hover-state needed, consistent with the rest of the app's flat/
+// CSS-driven interaction model.
 type NodeInfoButtonProps = {
-  sim: SimRole
+  sim: NodeSim
   metrics: NodeMetrics | undefined
 }
 
@@ -27,73 +24,59 @@ function formatRow(label: string, value: string): ReactElement {
   )
 }
 
-function renderRoleConfig(sim: SimRole): ReactElement[] {
-  switch (sim.role) {
-    case 'generator':
-      return [formatRow('Rate', `${sim.ratePerSec} req/s`)]
-    case 'processor':
-      return [formatRow('Service rate', `${sim.serviceRatePerSec} req/s`)]
-    case 'sink':
-      return []
-    case 'producer': {
-      const mbPerSec = (sim.messageRatePerSec * sim.averagePayloadBytes) / 1_000_000
-      return [
-        formatRow('Message rate', `${sim.messageRatePerSec} msg/s`),
-        formatRow('Avg payload', `${sim.averagePayloadBytes} bytes`),
-        formatRow('\u2248 dual-unit', formatDualUnitLabel(sim.messageRatePerSec, mbPerSec)),
-      ]
-    }
-    case 'consumer':
-      return [formatRow('Consume rate', `${sim.consumeRatePerSec} msg/s`)]
-    case 'kafka': {
-      const profile = resolveKafkaHardwareProfile(sim.hardwareProfile)
-      return [
-        formatRow('Hardware', profile.id),
-        formatRow('Partitions', String(sim.partitions)),
-        formatRow('Replication', String(sim.replicationFactor)),
-        formatRow('TLS', sim.tlsEnabled ? 'on' : 'off'),
-        formatRow('Compression', sim.compression),
-      ]
-    }
-    default:
-      return []
+function renderRoleConfig(sim: NodeSim): ReactElement[] {
+  if (sim.kind === 'queue') return []
+  if (sim.profile === 'client_pool') return [formatRow('Rate', `${sim.requestRatePerSec} req/s`)]
+  if (sim.profile === 'external_api') return [formatRow('Baseline latency', `${sim.manualBaselineLatencyMs} ms`)]
+  if (sim.configMode === 'manual') {
+    return [
+      formatRow('Baseline latency', `${sim.manualBaselineLatencyMs} ms`),
+      formatRow('Saturation RPS', `${sim.manualSaturationRPS}`),
+      formatRow('Max RPS', `${sim.manualMaxRPS}`),
+    ]
   }
-}
-
-function renderKafkaMetrics(metrics: NodeMetrics | undefined): ReactElement[] {
-  const kafka = metrics?.kafka
-  if (!kafka) return [formatRow('Status', 'no data')]
-  const binding = deriveBindingResource(metrics?.formulaDescriptors)
   return [
-    formatRow('Status', kafka.status),
-    formatRow('Ingress', `${kafka.ingressMBps.toFixed(2)} MB/s`),
-    formatRow('Egress', `${kafka.egressMBps.toFixed(2)} MB/s`),
-    formatRow('Network', `${(kafka.saturation.network * 100).toFixed(0)}%${binding === 'network' ? ' (binding)' : ''}`),
-    formatRow('CPU', `${(kafka.saturation.cpu * 100).toFixed(0)}%${binding === 'cpu' ? ' (binding)' : ''}`),
-    formatRow('Disk', `${(kafka.saturation.disk * 100).toFixed(0)}%${binding === 'disk' ? ' (binding)' : ''}`),
-    formatRow('Lag', `${kafka.consumerLagMessages.toFixed(0)} msgs`),
-    formatRow('Cache hit', `${(kafka.pageCacheHitRatio * 100).toFixed(0)}%`),
+    formatRow('CPU time', `${sim.cpuProcessingTimeMs} ms`),
+    formatRow('Worker threads', `${sim.maxWorkerThreads}`),
   ]
 }
 
-function renderGenericThroughput(sim: SimRole, metrics: NodeMetrics | undefined): ReactElement[] {
-  if (sim.role === 'kafka') return []
-  const rows = [formatRow('Throughput', metrics ? `${metrics.throughputPerSec.toFixed(1)} req/s` : '—')]
-  if (sim.role === 'processor') rows.push(formatRow('Queue depth', metrics ? metrics.queueDepth.toFixed(1) : '—'))
-  return rows
+function renderHostMetrics(metrics: NodeMetrics | undefined): ReactElement[] {
+  const host = metrics?.host
+  if (!host) return [formatRow('Status', 'no data')]
+  return [
+    formatRow('Status', host.status),
+    formatRow('Incoming', `${host.incomingRPS.toFixed(1)} req/s`),
+    formatRow('Forwarded', `${host.forwardedRPS.toFixed(1)} req/s`),
+    formatRow('Shed', `${host.shedRPS.toFixed(1)} req/s`),
+    formatRow('Saturation', `${(host.saturationRatio * 100).toFixed(0)}%`),
+    formatRow('Latency', `${host.latencyMs.toFixed(1)} ms`),
+  ]
+}
+
+function renderQueueMetrics(metrics: NodeMetrics | undefined): ReactElement[] {
+  const queue = metrics?.queue
+  if (!queue) return [formatRow('Status', 'no data')]
+  return [
+    formatRow('Inflow', `${queue.inflowMBps.toFixed(2)} MB/s`),
+    formatRow('Outflow', `${queue.outflowMBps.toFixed(2)} MB/s`),
+    formatRow('Backlog', `${queue.backlogGB.toFixed(3)} GB`),
+  ]
 }
 
 export function NodeInfoButton({ sim, metrics }: NodeInfoButtonProps) {
+  const title = sim.kind === 'queue' ? 'queue' : sim.profile
   return (
     <div className="node-info-button-wrapper nodrag nopan">
-      <button type="button" className="node-info-button" aria-label={`${sim.role} simulation details`}>
+      <button type="button" className="node-info-button" aria-label={`${title} simulation details`}>
         i
       </button>
       <div className="node-info-popover" role="tooltip">
-        <div className="node-info-popover-title">{sim.role}</div>
+        <div className="node-info-popover-title">{title}</div>
         {renderRoleConfig(sim)}
-        {sim.role === 'kafka' ? renderKafkaMetrics(metrics) : renderGenericThroughput(sim, metrics)}
+        {sim.kind === 'queue' ? renderQueueMetrics(metrics) : renderHostMetrics(metrics)}
       </div>
     </div>
   )
 }
+

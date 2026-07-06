@@ -1,4 +1,4 @@
-import type { FormulaDescriptor, SimRole } from '../engine/ports'
+import type { FormulaDescriptor, NodeSim } from '../engine/ports'
 import { FORMULA_PANEL_DISCLAIMER, describeFormulaPanelState } from './formulaPanelState'
 
 // Formula & sources panel (US4, FR-008/FR-009): renders every active
@@ -10,11 +10,11 @@ import { FORMULA_PANEL_DISCLAIMER, describeFormulaPanelState } from './formulaPa
 // unit testable without rendering JSX.
 type FormulaPanelProps = {
   formulaDescriptors: FormulaDescriptor[] | undefined
-  simRole: SimRole | undefined
+  sim: NodeSim | undefined
 }
 
-export function FormulaPanel({ formulaDescriptors, simRole }: FormulaPanelProps) {
-  const { hasFormulas, emptyMessage } = describeFormulaPanelState(formulaDescriptors, simRole)
+export function FormulaPanel({ formulaDescriptors, sim }: FormulaPanelProps) {
+  const { hasFormulas, emptyMessage } = describeFormulaPanelState(formulaDescriptors, sim)
 
   return (
     <div className="lab-formula-panel">
