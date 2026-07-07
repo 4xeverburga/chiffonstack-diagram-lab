@@ -28,23 +28,27 @@ function renderRoleConfig(sim: NodeSim): ReactElement[] {
   if (sim.kind === 'queue') return []
   if (sim.profile === 'client_pool') return [formatRow('Rate', `${sim.requestRatePerSec} req/s`)]
   if (sim.profile === 'external_api') return [formatRow('Baseline latency', `${sim.manualBaselineLatencyMs} ms`)]
-  if (sim.configMode === 'manual') {
-    return [
-      formatRow('Baseline latency', `${sim.manualBaselineLatencyMs} ms`),
-      formatRow('Saturation RPS', `${sim.manualSaturationRPS}`),
-      formatRow('Max RPS', `${sim.manualMaxRPS}`),
-    ]
+  const modeRows =
+    sim.configMode === 'manual'
+      ? [
+          formatRow('Baseline latency', `${sim.manualBaselineLatencyMs} ms`),
+          formatRow('Saturation RPS', `${sim.manualSaturationRPS}`),
+          formatRow('Max RPS', `${sim.manualMaxRPS}`),
+        ]
+      : [formatRow('CPU time', `${sim.cpuProcessingTimeMs} ms`), formatRow('Worker threads', `${sim.maxWorkerThreads}`)]
+  // Replica bounds (feature 013) — only shown once horizontal scaling is
+  // actually in play, matching the canvas group's own "min=max=1 is a
+  // plain host" rule.
+  if (sim.minReplicas !== sim.maxReplicas || sim.minReplicas > 1) {
+    modeRows.push(formatRow('Replica bounds', `${sim.minReplicas}\u2013${sim.maxReplicas}`))
   }
-  return [
-    formatRow('CPU time', `${sim.cpuProcessingTimeMs} ms`),
-    formatRow('Worker threads', `${sim.maxWorkerThreads}`),
-  ]
+  return modeRows
 }
 
 function renderHostMetrics(metrics: NodeMetrics | undefined): ReactElement[] {
   const host = metrics?.host
   if (!host) return [formatRow('Status', 'no data')]
-  return [
+  const rows = [
     formatRow('Status', host.status),
     formatRow('Incoming', `${host.incomingRPS.toFixed(1)} req/s`),
     formatRow('Forwarded', `${host.forwardedRPS.toFixed(1)} req/s`),
@@ -52,6 +56,21 @@ function renderHostMetrics(metrics: NodeMetrics | undefined): ReactElement[] {
     formatRow('Saturation', `${(host.saturationRatio * 100).toFixed(0)}%`),
     formatRow('Latency', `${host.latencyMs.toFixed(1)} ms`),
   ]
+  // Replica telemetry (feature 013) — only present on saturating profiles;
+  // a plain min=max=1 host's replicas.nominalCount is always 1, so this
+  // row is skipped entirely rather than showing a trivial "1 (1 serving)".
+  const replicas = host.replicas
+  if (replicas && (replicas.nominalCount > 1 || replicas.bootingCount > 0)) {
+    rows.push(
+      formatRow(
+        'Replicas',
+        replicas.bootingCount > 0
+          ? `${replicas.nominalCount} (${replicas.bootingCount} booting)`
+          : `${replicas.nominalCount}`,
+      ),
+    )
+  }
+  return rows
 }
 
 function renderQueueMetrics(metrics: NodeMetrics | undefined): ReactElement[] {

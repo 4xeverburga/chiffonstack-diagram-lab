@@ -67,6 +67,54 @@ function CalculatedComputeFields({
   )
 }
 
+function integerInput(label: string, value: number, disabled: boolean, min: number, onChange: (next: number) => void) {
+  const handleChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const parsed = Math.round(Number(event.target.value))
+    if (Number.isFinite(parsed) && parsed >= min) onChange(parsed)
+  }
+  return (
+    <label className="lab-field" key={label}>
+      <span>{label}</span>
+      <input type="number" min={min} step="1" value={value} onChange={handleChange} disabled={disabled} />
+    </label>
+  )
+}
+
+// Horizontal-scaling bounds + boot delay + watermarks (feature 013, FR-001;
+// boot delay and watermarks promoted from internal tunables to user-facing
+// capability parameters in constitution v3.2.0/v3.3.0) — the five new
+// user-facing parameters closed set. maxReplicas auto-clamps >= minReplicas,
+// and highWatermark auto-clamps > lowWatermark (and vice versa) on every
+// edit, mirroring the manualMaxRPS >= manualSaturationRPS pattern above,
+// instead of surfacing a separate validation-error message.
+function AutoscalingFields({
+  sim,
+  disabled,
+  onChange,
+}: {
+  sim: ComputeProfile
+  disabled: boolean
+  onChange: (next: HostNodeSim) => void
+}) {
+  return (
+    <>
+      {integerInput('Min replicas', sim.minReplicas, disabled, 1, (value) =>
+        onChange({ ...sim, minReplicas: value, maxReplicas: Math.max(sim.maxReplicas, value) }),
+      )}
+      {integerInput('Max replicas', sim.maxReplicas, disabled, 1, (value) =>
+        onChange({ ...sim, maxReplicas: Math.max(value, sim.minReplicas) }),
+      )}
+      {integerInput('Boot delay (ms)', sim.bootDelayMs, disabled, 0, (value) => onChange({ ...sim, bootDelayMs: value }))}
+      {numberInput('High watermark', sim.highWatermark, disabled, 0, (value) =>
+        onChange({ ...sim, highWatermark: value, lowWatermark: Math.min(sim.lowWatermark, value - 0.01) }),
+      )}
+      {numberInput('Low watermark', sim.lowWatermark, disabled, 0, (value) =>
+        onChange({ ...sim, lowWatermark: Math.min(value, sim.highWatermark - 0.01) }),
+      )}
+    </>
+  )
+}
+
 // Inspector config UI for host nodes (US2, FR-020): the profile/mode
 // selector lives in Inspector.tsx (same chip-row pattern as every other
 // closed choice in this app); this file renders exactly the FR-020 fields
@@ -97,9 +145,25 @@ export function HostConfigFields({ sim, disabled, onChange }: HostConfigFieldsPr
         manualBaselineLatencyMs: 10,
         manualSaturationRPS: 500,
         manualMaxRPS: 550,
+        minReplicas: sim.minReplicas,
+        maxReplicas: sim.maxReplicas,
+        bootDelayMs: sim.bootDelayMs,
+        highWatermark: sim.highWatermark,
+        lowWatermark: sim.lowWatermark,
       })
     } else {
-      onChange({ kind: 'host', profile: sim.profile, configMode: 'calculated', cpuProcessingTimeMs: 16, maxWorkerThreads: 8 })
+      onChange({
+        kind: 'host',
+        profile: sim.profile,
+        configMode: 'calculated',
+        cpuProcessingTimeMs: 16,
+        maxWorkerThreads: 8,
+        minReplicas: sim.minReplicas,
+        maxReplicas: sim.maxReplicas,
+        bootDelayMs: sim.bootDelayMs,
+        highWatermark: sim.highWatermark,
+        lowWatermark: sim.lowWatermark,
+      })
     }
   }
 
@@ -126,6 +190,7 @@ export function HostConfigFields({ sim, disabled, onChange }: HostConfigFieldsPr
       ) : (
         <CalculatedComputeFields sim={sim} disabled={disabled} onChange={onChange} />
       )}
+      <AutoscalingFields sim={sim} disabled={disabled} onChange={onChange} />
     </>
   )
 }

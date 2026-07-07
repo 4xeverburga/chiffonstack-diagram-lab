@@ -45,8 +45,22 @@ comparing scenarios, never as guarantees.
   components: saturation ratio, a smooth hockey-stick latency curve, and
   manual (known capability) vs calculated (CPU time × worker threads)
   configuration. Queues are deliberately generic zero-config buffers —
-  throughput and backlog telemetry only. The user-facing parameter set is
-  closed and small; new parameters require a constitution amendment.
+  throughput and backlog telemetry only. Saturating hosts also carry
+  `minReplicas`/`maxReplicas` replica bounds, a `bootDelayMs` capability
+  parameter, and `highWatermark`/`lowWatermark` saturation thresholds for
+  horizontal autoscaling — an internal scaler adds/removes replicas
+  proportionally to how far saturation sits past those thresholds (real
+  Kubernetes HPA-style), with newly-added replicas taking the declared
+  boot delay before serving traffic; the scaler's sustain window and
+  cooldown timing stay internal tunables, not user parameters. The
+  user-facing parameter set is closed and small; new parameters require a
+  constitution amendment.
+- **One saturation dimension, honestly.** Saturation is a single
+  resource-agnostic ratio, not split into CPU/memory/disk like k8s HPA's
+  separate metrics. CPU time is already an estimate; memory pressure (GC
+  pauses, working-set growth, OOM risk) would be a far shakier one, so SUGAR
+  doesn't fabricate a second number it can't source. One honestly-approximate
+  ρ beats two, one of which is guesswork.
 - **Traceable formulas.** Every formula the engine applies is a named,
   unit-tested function carrying structured source metadata (vendor docs,
   papers, benchmarks). Selecting a node shows its active formulas and

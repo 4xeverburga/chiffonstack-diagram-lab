@@ -8,6 +8,8 @@ import {
   buildHostSaturationDescriptor,
   buildHostShedDescriptor,
   buildQueueBacklogDescriptor,
+  buildReplicaDivisionDescriptor,
+  buildScalingPolicyDescriptor,
   validateFormulaDescriptorsHaveSources,
 } from '../../src/engine/formulaCatalog'
 
@@ -18,6 +20,15 @@ describe('formula catalog — every descriptor has >=1 source (SC-005)', () => {
       buildHostLatencyDescriptor({ baseLatencyMs: 10, saturationRatio: 0.2, latencyMs: 12.5 }),
       buildHostCapacityDescriptor({ maxWorkerThreads: 8, cpuProcessingTimeMs: 16, capacityRPS: 500 }),
       buildHostShedDescriptor({ incomingRPS: 700, manualMaxRPS: 550, shedRPS: 150 }),
+      buildReplicaDivisionDescriptor({ incomingRPS: 400, effectiveCount: 4, perReplicaRPS: 100 }),
+      buildScalingPolicyDescriptor({
+        perReplicaSaturation: 0.9,
+        highWatermark: 0.8,
+        lowWatermark: 0.3,
+        nominalCount: 2,
+        minReplicas: 1,
+        maxReplicas: 4,
+      }),
     ]
     expect(() => validateFormulaDescriptorsHaveSources(descriptors)).not.toThrow()
     for (const descriptor of descriptors) expect(descriptor.sources.length).toBeGreaterThan(0)
@@ -81,4 +92,36 @@ describe('formula catalog — inputs mirror the live computation at a known oper
     expect(buildQueueBacklogDescriptor({ inflowMBps: 20, outflowMBps: 10, backlogGB: 0.6 }).isBinding).toBe(true)
     expect(buildQueueBacklogDescriptor({ inflowMBps: 5, outflowMBps: 10, backlogGB: 0 }).isBinding).toBe(false)
   })
+
+  it('replica-division descriptor reports the exact incoming/effectiveCount/perReplica used to compute it (feature 013)', () => {
+    const descriptor = buildReplicaDivisionDescriptor({ incomingRPS: 400, effectiveCount: 4, perReplicaRPS: 100 })
+    expect(descriptor.inputs.incomingRPS).toBe(400)
+    expect(descriptor.inputs.effectiveCount).toBe(4)
+    expect(descriptor.inputs.perReplicaRPS).toBe(100)
+    expect(descriptor.isBinding).toBe(false)
+    expect(descriptor.sources.length).toBeGreaterThan(0)
+  })
+
+  it('scaling-policy descriptor is binding exactly when saturation is outside the hysteresis band (feature 013)', () => {
+    const inBand = buildScalingPolicyDescriptor({
+      perReplicaSaturation: 0.5,
+      highWatermark: 0.8,
+      lowWatermark: 0.3,
+      nominalCount: 2,
+      minReplicas: 1,
+      maxReplicas: 4,
+    })
+    expect(inBand.isBinding).toBe(false)
+    const aboveHigh = buildScalingPolicyDescriptor({
+      perReplicaSaturation: 0.9,
+      highWatermark: 0.8,
+      lowWatermark: 0.3,
+      nominalCount: 2,
+      minReplicas: 1,
+      maxReplicas: 4,
+    })
+    expect(aboveHigh.isBinding).toBe(true)
+    expect(aboveHigh.sources.length).toBeGreaterThan(0)
+  })
 })
+

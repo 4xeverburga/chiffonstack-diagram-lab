@@ -51,6 +51,11 @@ function defaultSimForChoice(choice: SimKindChoice): NodeSim | undefined {
         manualBaselineLatencyMs: 10,
         manualSaturationRPS: 500,
         manualMaxRPS: 550,
+        minReplicas: 1,
+        maxReplicas: 1,
+        bootDelayMs: 8000,
+        highWatermark: 0.8,
+        lowWatermark: 0.3,
       }
   }
 }
@@ -105,6 +110,27 @@ function HostAndQueueFields({ node, metrics, runStatus, onSetNodeSim }: HostAndQ
           <span>Shed: {metrics?.host ? `${metrics.host.shedRPS.toFixed(1)} req/s` : '\u2014'}</span>
           <span>Saturation: {metrics?.host ? `${(metrics.host.saturationRatio * 100).toFixed(0)}%` : '\u2014'}</span>
           <span>Latency: {metrics?.host ? `${metrics.host.latencyMs.toFixed(1)} ms` : '\u2014'}</span>
+        </div>
+      ) : null}
+      {/* Replica telemetry + scaling event history (feature 013, SC-005) —
+          only rendered for saturating profiles that actually carry a
+          replicas block (client_pool/external_api never do). */}
+      {sim && sim.kind === 'host' && metrics?.host?.replicas ? (
+        <div className="sim-host-metrics">
+          <span>Replicas: {metrics.host.replicas.nominalCount}</span>
+          <span>Booting: {metrics.host.replicas.bootingCount}</span>
+          <span>Effective: {metrics.host.replicas.effectiveCount}</span>
+          <span>Per-replica saturation: {(metrics.host.replicas.perReplicaSaturation * 100).toFixed(0)}%</span>
+          {metrics.host.replicas.events.length > 0 ? (
+            <ul className="sim-scaling-events">
+              {metrics.host.replicas.events.map((event, index) => (
+                <li key={`${event.simTimeMs}-${index}`}>
+                  {event.direction === 'up' ? '\u2191' : '\u2193'} scaled {event.direction === 'up' ? 'up' : 'down'} to {event.newCount} at
+                  t={(event.simTimeMs / 1000).toFixed(1)}s
+                </li>
+              ))}
+            </ul>
+          ) : null}
         </div>
       ) : null}
       {sim?.kind === 'queue' ? (

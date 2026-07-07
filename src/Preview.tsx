@@ -87,6 +87,11 @@ const MANUAL_API_SIM: NodeSim = {
   manualBaselineLatencyMs: 10,
   manualSaturationRPS: 500,
   manualMaxRPS: 550,
+  minReplicas: 1,
+  maxReplicas: 1,
+  bootDelayMs: 8000,
+  highWatermark: 0.8,
+  lowWatermark: 0.3,
 }
 const QUEUE_SIM: NodeSim = { kind: 'queue' }
 
