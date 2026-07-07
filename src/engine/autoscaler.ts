@@ -87,16 +87,27 @@ export interface ScalingDecisionOutput {
 }
 
 /** One deterministic per-window scaler evaluation (data-model.md "Scaler
- *  decision", research.md D1):
+ *  decision", research.md D1), proportional like real Kubernetes HPA
+ *  (`desiredReplicas = ceil(currentReplicas * currentMetric / targetMetric)`
+ *  — kubernetes.io HPA algorithm docs) rather than a fixed step of 1: a
+ *  host at 400% of its watermark jumps toward ~4x its replica count in a
+ *  single action instead of stepping 1-by-1 across several sustain+
+ *  cooldown cycles, exactly like real HPA does before its own rate-limit
+ *  policies apply. This engine has no separate rate-limit policy layer —
+ *  the existing cooldown (AUTOSCALE_COOLDOWN_MS) already bounds how often
+ *  an action can fire, which is what keeps a single oversized jump from
+ *  repeating every window.
  *  - saturation ≥ HIGH for ≥ SUSTAIN, count < max, cooldown elapsed → up
- *    by 1 (queues a boot entry; effective capacity is unchanged this
- *    window — spec FR-006/US1 scenario 2).
+ *    to ceil(count * saturation / HIGH), clamped to [count+1, max] so a
+ *    trigger always changes something (queues one boot entry per added
+ *    replica, all sharing the same readyAt; effective capacity is
+ *    unchanged this window — spec FR-006/US1 scenario 2).
  *  - saturation ≤ LOW for ≥ SUSTAIN, count > min, cooldown elapsed → down
- *    by 1 (cancels the newest booting entry first if one exists, otherwise
- *    removes a serving replica; nominalCount drops immediately, but the
- *    capacity DIVISOR this window was already fixed before this decision
- *    ran, so the drop in served capacity is only visible starting next
- *    window — spec US2 scenario 1).
+ *    to ceil(count * saturation / LOW), clamped to [min, count-1] (cancels
+ *    booting entries newest-first before removing serving replicas;
+ *    nominalCount drops immediately, but the capacity DIVISOR this window
+ *    was already fixed before this decision ran, so the drop in served
+ *    capacity is only visible starting next window — spec US2 scenario 1).
  *  - otherwise → hold; entering the band resets both accumulators. */
 export function evaluateScaling(input: ScalingDecisionInput): ScalingDecisionOutput {
   const { perReplicaSaturation, simTimeMs, windowSizeMs, minReplicas, maxReplicas, bootDelayMs } = input
@@ -111,13 +122,20 @@ export function evaluateScaling(input: ScalingDecisionInput): ScalingDecisionOut
   }
 
   if (runtime.timeAboveHighMs >= AUTOSCALE_SUSTAIN_MS && runtime.nominalCount < maxReplicas && cooldownElapsed(runtime, simTimeMs)) {
-    const newCount = runtime.nominalCount + 1
+    // Proportional desired count (kubernetes.io HPA formula), floored at
+    // count+1 so crossing the watermark always adds at least one replica
+    // even when the ratio itself rounds down to the current count.
+    const rawDesired = Math.ceil(runtime.nominalCount * (perReplicaSaturation / AUTOSCALE_HIGH_WATERMARK))
+    const newCount = Math.min(maxReplicas, Math.max(runtime.nominalCount + 1, rawDesired))
+    const addedCount = newCount - runtime.nominalCount
     const event: ScalingEvent = { direction: 'up', newCount, simTimeMs }
+    const readyAtSimTimeMs = simTimeMs + bootDelayMs
+    const newBootingEntries = Array.from({ length: addedCount }, () => ({ readyAtSimTimeMs }))
     return {
       runtime: {
         ...runtime,
         nominalCount: newCount,
-        booting: [...runtime.booting, { readyAtSimTimeMs: simTimeMs + bootDelayMs }],
+        booting: [...runtime.booting, ...newBootingEntries],
         timeAboveHighMs: 0,
         timeBelowLowMs: 0,
         lastActionSimTimeMs: simTimeMs,
@@ -128,9 +146,17 @@ export function evaluateScaling(input: ScalingDecisionInput): ScalingDecisionOut
   }
 
   if (runtime.timeBelowLowMs >= AUTOSCALE_SUSTAIN_MS && runtime.nominalCount > minReplicas && cooldownElapsed(runtime, simTimeMs)) {
-    const newCount = runtime.nominalCount - 1
+    // Symmetric proportional formula on the low side, floored at count-1
+    // so crossing the watermark always removes at least one replica.
+    const rawDesired = Math.ceil(runtime.nominalCount * (perReplicaSaturation / AUTOSCALE_LOW_WATERMARK))
+    const newCount = Math.max(minReplicas, Math.min(runtime.nominalCount - 1, rawDesired))
+    const removedCount = runtime.nominalCount - newCount
     const event: ScalingEvent = { direction: 'down', newCount, simTimeMs }
-    const booting = runtime.booting.length > 0 ? runtime.booting.slice(0, -1) : runtime.booting
+    // Cancel booting entries first (newest first), then let the remainder
+    // fall on serving replicas (research.md D2/D7 pattern, generalized
+    // from a single removal to `removedCount`).
+    const cancelBootingCount = Math.min(removedCount, runtime.booting.length)
+    const booting = cancelBootingCount > 0 ? runtime.booting.slice(0, runtime.booting.length - cancelBootingCount) : runtime.booting
     return {
       runtime: {
         ...runtime,

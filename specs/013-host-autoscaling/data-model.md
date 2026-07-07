@@ -62,13 +62,15 @@ interface HostNodeMetrics {
 
 Semantics (research D3): `perReplicaRPS = incomingRPS / effectiveCount`; 011 host math runs on `perReplicaRPS`; `forwardedRPS`/`shedRPS` scale back by `effectiveCount` (per-replica `manualMaxRPS` clamp ⇒ total cap = `effectiveCount × manualMaxRPS`). Queue drain toward the host uses `effectiveCount ×` per-replica remaining capacity (FR-011). With `minReplicas = maxReplicas = 1` every value equals the 011 output exactly (SC-003).
 
-## Scaler decision (pure, per window — research D1)
+## Scaler decision (pure, per window — research D1/D9)
 
 ```text
-saturation ≥ HIGH for ≥ SUSTAIN, count < max, cooldown elapsed  → up by 1 (boot entry queued)
-saturation ≤ LOW  for ≥ SUSTAIN, count > min, cooldown elapsed  → down by 1 (immediate; cancels a booting entry first)
+saturation ≥ HIGH for ≥ SUSTAIN, count < max, cooldown elapsed  → desiredCount = ceil(count * saturation / HIGH), clamped to [count+1, max] (one boot entry queued per added replica)
+saturation ≤ LOW  for ≥ SUSTAIN, count > min, cooldown elapsed  → desiredCount = ceil(count * saturation / LOW), clamped to [min, count-1] (immediate; cancels booting entries newest-first up to the removed count)
 otherwise                                                        → hold (band resets accumulators)
 ```
+
+Proportional like real Kubernetes HPA (research D9) — a single action can change the count by more than one replica when saturation is far past the triggering watermark, not just ±1.
 
 Deterministic: pure function of `(ReplicaRuntime, windowSaturation, simTime, config)` → `(ReplicaRuntime', event?)`.
 

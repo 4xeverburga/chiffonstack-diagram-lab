@@ -10,7 +10,7 @@
 
 ## Overview
 
-Deferred from the original SUGAR sketch and spec 011's out-of-scope list. Saturating host profiles (transactional API, worker/consumer, database) gain horizontal scaling: incoming load divides across replicas, each replica runs the existing 011 saturation/latency math, and an auto-scaler adds or removes one replica at a time in response to *sustained* saturation crossing high/low watermarks — with a realistic boot delay before a new replica contributes capacity, so users see latency spike before relief arrives.
+Deferred from the original SUGAR sketch and spec 011's out-of-scope list. Saturating host profiles (transactional API, worker/consumer, database) gain horizontal scaling: incoming load divides across replicas, each replica runs the existing 011 saturation/latency math, and an auto-scaler adds or removes replicas proportionally to how far saturation sits past the high/low watermarks (real-HPA-style, research.md D9 — a large overshoot can add more than one replica in a single action) in response to *sustained* saturation crossing those watermarks — with a realistic boot delay before a new replica contributes capacity, so users see latency spike before relief arrives.
 
 Exactly **three** new user-facing parameters: `minReplicas`, `maxReplicas`, and `bootDelayMs`. Scaling thresholds (watermarks), the sustain window, and cooldown between actions are internal engine tunables. `currentReplicaCount` is telemetry, not an input. Admitting the three fields requires a constitution amendment to Principle I (MINOR bump), in scope for this feature.
 
@@ -34,11 +34,11 @@ An architect sets an API host to minReplicas 1 / maxReplicas 4 and ramps client 
 
 **Why this priority**: The scale-out loop with visible boot lag is the feature's core teaching value.
 
-**Independent Test**: Ramp offered load on a 1–4 replica host to 3× single-replica capacity; verify replicas step 1→2→3 at the right saturation conditions, capacity relief arrives only after the boot delay, and the count never exceeds 4.
+**Independent Test**: Ramp offered load on a 1–4 replica host to 3× single-replica capacity; verify the scaler adds replicas proportionally to how far saturation is past the high watermark (a large overshoot may jump more than one replica in a single action, like real HPA), capacity relief arrives only after the boot delay, and the count never exceeds 4.
 
 **Acceptance Scenarios**:
 
-1. **Given** a host at 1 replica whose saturation stays above the high watermark for the sustain window and count < maxReplicas, **When** the scaler evaluates, **Then** the replica count increments by exactly one.
+1. **Given** a host at 1 replica whose saturation stays above the high watermark for the sustain window and count < maxReplicas, **When** the scaler evaluates, **Then** the replica count increases toward `ceil(count * saturation / highWatermark)` (at least by one, clamped to maxReplicas) — a host far past the watermark (e.g. ~400% saturation) may jump by more than one replica in a single action, like real Kubernetes HPA.
 2. **Given** a replica was just added, **When** windows elapse within the boot delay, **Then** effective capacity is unchanged (latency continues to reflect the pre-scale capacity) until the delay expires.
 3. **Given** the booted replica comes online, **When** the next window computes, **Then** per-replica load = incomingRPS ÷ new count and saturation/latency drop accordingly.
 4. **Given** the count equals maxReplicas and saturation stays high, **When** the scaler evaluates, **Then** no further replicas are added and the host saturates/overloads per existing 011 behavior at the scaled capacity.
@@ -48,7 +48,7 @@ An architect sets an API host to minReplicas 1 / maxReplicas 4 and ramps client 
 
 ### User Story 2 - Scale back in when load drops (Priority: P1)
 
-When load falls and saturation stays below the low watermark for the sustain window, replicas are removed one at a time (respecting the cooldown between actions) down to minReplicas. Scale-down capacity change is immediate.
+When load falls and saturation stays below the low watermark for the sustain window, replicas are removed proportionally (respecting the cooldown between actions) down to minReplicas — a large undershoot can remove more than one replica in a single action, symmetric with scale-up (research.md D9). Scale-down capacity change is immediate.
 
 **Why this priority**: Without scale-in the loop is half a story; hysteresis between watermarks prevents flapping.
 
@@ -56,7 +56,7 @@ When load falls and saturation stays below the low watermark for the sustain win
 
 **Acceptance Scenarios**:
 
-1. **Given** a host at 3 replicas with saturation below the low watermark for the sustain window, **When** the scaler evaluates, **Then** the count decrements by exactly one and capacity reflects it in the next window.
+1. **Given** a host at 3 replicas with saturation below the low watermark for the sustain window, **When** the scaler evaluates, **Then** the count decreases toward `ceil(count * saturation / lowWatermark)` (at least by one, clamped to minReplicas) and capacity reflects it in the next window.
 2. **Given** a scale action just fired, **When** conditions still warrant another, **Then** the next action waits at least the cooldown interval.
 3. **Given** the count equals minReplicas, **When** saturation is low, **Then** no further scale-down occurs.
 4. **Given** saturation sits between the low and high watermarks, **When** the scaler evaluates, **Then** the count holds steady (hysteresis band).
@@ -117,7 +117,7 @@ A scaled host renders as a **scaling group**: a box-styled parent container enca
 - **FR-001**: Saturating host profiles (transactional API, worker/consumer, database) MUST accept exactly three new parameters: `minReplicas`, `maxReplicas` (integers ≥ 1, min ≤ max), and `bootDelayMs` (≥ 0). `client_pool` and `external_api` MUST NOT expose them; queues remain zero-config.
 - **FR-002**: `currentReplicaCount` MUST be runtime telemetry, initialized to minReplicas, never a user input, always within [minReplicas, maxReplicas].
 - **FR-003**: Per-window host math MUST divide incoming load across replicas (per-replica load = incomingRPS ÷ currentReplicaCount) and apply the existing 011 saturation/latency formulas per replica, in both manual and calculated config modes; `manualMaxRPS` clamping and shedding apply per replica.
-- **FR-004**: The auto-scaler MUST add one replica when saturation has exceeded the high watermark for the sustain window and count < maxReplicas; remove one when saturation has stayed below the low watermark for the sustain window and count > minReplicas; and otherwise hold (hysteresis band).
+- **FR-004**: The auto-scaler MUST compute a proportional desired replica count (real-HPA-style: `ceil(count * saturation / watermark)`) when saturation has exceeded the high watermark for the sustain window and count < maxReplicas (clamped to `[count+1, maxReplicas]`), or stayed below the low watermark for the sustain window and count > minReplicas (clamped to `[minReplicas, count-1]`); otherwise hold (hysteresis band). A single action MAY change the count by more than one replica when saturation is far past the triggering watermark.
 - **FR-005**: Scaling watermarks, sustain window, cooldown between actions, and boot delay MUST be internal tunables in the central engine config — not user parameters.
 - **FR-006**: A newly added replica MUST NOT contribute capacity until the boot delay elapses; scale-down takes effect immediately.
 - **FR-007**: At most one scaling action may fire per cooldown interval per host.

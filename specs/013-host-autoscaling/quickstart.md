@@ -21,7 +21,7 @@ npm run build      # tsc + vite build
 
 ## Scale-in walkthrough (User Story 2)
 
-7. Drop the client rate to a trickle. Saturation sits below the low watermark; after the sustain window (and respecting the cooldown between steps) chips disappear one at a time down to minReplicas.
+7. Drop the client rate to a trickle. Saturation sits below the low watermark; after the sustain window (and respecting the cooldown between steps) chips disappear proportionally to how far below the watermark saturation sits (a large drop may remove more than one at once) down to minReplicas.
 
 ## Regression check (User Story 3)
 

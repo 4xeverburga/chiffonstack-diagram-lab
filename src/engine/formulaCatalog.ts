@@ -38,7 +38,7 @@ const SOURCE_PRODUCT_DATA_MODEL: FormulaSource = {
 const SOURCE_HPA_DOCS: FormulaSource = {
   title: 'Kubernetes Horizontal Pod Autoscaler (HPA) documentation',
   url: 'https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/',
-  note: 'Threshold-based scaling policy shape (watermarks, stabilization/sustain window, cooldown, step actions) referenced here (research.md D6).',
+  note: 'Proportional desiredReplicas = ceil(currentReplicas * currentMetric / targetMetric) scaling formula, plus the watermark/stabilization-window/cooldown policy shape referenced here (research.md D6, revised 2026-07-07 from a fixed +-1 step to match real HPA proportional sizing).',
 }
 
 export function buildHostSaturationDescriptor(input: {
@@ -204,9 +204,9 @@ export function buildScalingPolicyDescriptor(input: {
 }): FormulaDescriptor {
   return {
     id: 'host.scaling-policy',
-    name: 'Threshold scaling policy',
+    name: 'Proportional scaling policy',
     expression:
-      'saturation >= high for sustainMs & count < max => scale up by 1 (after boot delay); saturation <= low for sustainMs & count > min => scale down by 1 (immediate); otherwise hold',
+      'saturation >= high for sustainMs & count < max => desiredCount = ceil(count * saturation / high), clamped to [count+1, max] (after boot delay); saturation <= low for sustainMs & count > min => desiredCount = ceil(count * saturation / low), clamped to [min, count-1] (immediate); otherwise hold',
     inputs: {
       perReplicaSaturation: input.perReplicaSaturation,
       highWatermark: input.highWatermark,

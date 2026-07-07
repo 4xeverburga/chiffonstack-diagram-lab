@@ -113,6 +113,53 @@ describe('evaluateScaling — scale-up half (US1)', () => {
     expect(slowBoot.runtime.booting[0].readyAtSimTimeMs).toBe(AUTOSCALE_SUSTAIN_MS + 60_000)
   })
 
+  it('jumps proportionally in one action when saturation is far past the watermark, like real HPA (research.md D9)', () => {
+    // 1 replica at 400% of the watermark (e.g. 4x the target saturation)
+    // should ask for ~4x the replica count in a single action, not step
+    // 1 -> 2 -> 3 -> 4 across separate sustain+cooldown cycles.
+    const farOverSaturation = AUTOSCALE_HIGH_WATERMARK * 4
+    const decision = evaluateScaling({
+      runtime: { ...createReplicaRuntime(1), timeAboveHighMs: AUTOSCALE_SUSTAIN_MS },
+      perReplicaSaturation: farOverSaturation,
+      simTimeMs: AUTOSCALE_SUSTAIN_MS,
+      windowSizeMs: WINDOW_MS,
+      minReplicas: 1,
+      maxReplicas: 10,
+      bootDelayMs: BOOT_DELAY_MS,
+    })
+    expect(decision.event).toEqual({ direction: 'up', newCount: 4, simTimeMs: AUTOSCALE_SUSTAIN_MS })
+    // One boot entry per newly-added replica, all ready at the same time.
+    expect(decision.runtime.booting).toHaveLength(3)
+    expect(decision.runtime.booting.every((entry) => entry.readyAtSimTimeMs === AUTOSCALE_SUSTAIN_MS + BOOT_DELAY_MS)).toBe(true)
+  })
+
+  it('still clamps a far-oversaturated jump to maxReplicas in one action', () => {
+    const decision = evaluateScaling({
+      runtime: { ...createReplicaRuntime(1), timeAboveHighMs: AUTOSCALE_SUSTAIN_MS },
+      perReplicaSaturation: AUTOSCALE_HIGH_WATERMARK * 10,
+      simTimeMs: AUTOSCALE_SUSTAIN_MS,
+      windowSizeMs: WINDOW_MS,
+      minReplicas: 1,
+      maxReplicas: 4,
+      bootDelayMs: BOOT_DELAY_MS,
+    })
+    expect(decision.event?.newCount).toBe(4)
+    expect(decision.runtime.nominalCount).toBe(4)
+  })
+
+  it('still adds exactly one replica when only barely over the watermark (proportional math floors at +1)', () => {
+    const decision = evaluateScaling({
+      runtime: { ...createReplicaRuntime(3), timeAboveHighMs: AUTOSCALE_SUSTAIN_MS },
+      perReplicaSaturation: AUTOSCALE_HIGH_WATERMARK + 0.001,
+      simTimeMs: AUTOSCALE_SUSTAIN_MS,
+      windowSizeMs: WINDOW_MS,
+      minReplicas: 1,
+      maxReplicas: 10,
+      bootDelayMs: BOOT_DELAY_MS,
+    })
+    expect(decision.event?.newCount).toBe(4)
+  })
+
   it('respects cooldown: a second sustained high period right after the first does not fire again immediately', () => {
     const runtime = createReplicaRuntime(1)
     const windowCount = Math.ceil(AUTOSCALE_SUSTAIN_MS / WINDOW_MS) + Math.ceil(AUTOSCALE_COOLDOWN_MS / WINDOW_MS)
@@ -193,6 +240,30 @@ describe('evaluateScaling — scale-down half (US2)', () => {
     expect(events[fireIndex]?.direction).toBe('down')
     expect(runtimes[fireIndex].nominalCount).toBe(1)
     expect(runtimes[fireIndex].booting).toHaveLength(0)
+  })
+
+  it('cancels multiple booting entries when a proportional down-jump removes more than one replica at once', () => {
+    const runtime: ReplicaRuntime = {
+      ...createReplicaRuntime(1),
+      nominalCount: 6,
+      booting: [{ readyAtSimTimeMs: 999_999 }, { readyAtSimTimeMs: 999_999 }],
+    }
+    // Deep in the low band (far below LOW watermark) => a large
+    // proportional drop, mirroring the up-side jump symmetrically.
+    const decision = evaluateScaling({
+      runtime: { ...runtime, timeBelowLowMs: AUTOSCALE_SUSTAIN_MS },
+      perReplicaSaturation: AUTOSCALE_LOW_WATERMARK * 0.1,
+      simTimeMs: AUTOSCALE_SUSTAIN_MS,
+      windowSizeMs: WINDOW_MS,
+      minReplicas: 1,
+      maxReplicas: 10,
+      bootDelayMs: BOOT_DELAY_MS,
+    })
+    expect(decision.event?.direction).toBe('down')
+    expect(decision.event!.newCount).toBeLessThan(6)
+    // Both booting entries get cancelled first, before any serving replica
+    // is removed (research.md D2/D7 pattern, generalized to N removals).
+    expect(decision.runtime.booting).toHaveLength(0)
   })
 
   it('never scales down past minReplicas', () => {

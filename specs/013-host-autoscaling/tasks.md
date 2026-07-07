@@ -22,7 +22,7 @@
 
 ## Phase 3: User Story 1 — Watch a service scale out under rising load (P1)
 
-**Goal**: sustained high saturation adds replicas one at a time up to maxReplicas, with boot-delay lag before capacity relief.
+**Goal**: sustained high saturation adds replicas proportionally to how far past the watermark saturation sits (real-HPA-style, research D9) up to maxReplicas, with boot-delay lag before capacity relief.
 **Independent test**: ramp a 1–4 host to 3× single-replica capacity; replicas step 1→2→3 only after sustain, capacity relief arrives exactly one boot delay after each event, count never exceeds 4.
 
 - [X] T006 [P] [US1] Create `src/engine/autoscaler.ts`: pure per-window decision `(ReplicaRuntime, perReplicaSaturation, simTimeMs, windowSizeMs) → (ReplicaRuntime', ScalingEvent | undefined)` — scale-up path per research D1/D2: sustain accumulator `timeAboveHighMs`, cooldown gate, boot-entry queue (`readyAt = now + AUTOSCALE_BOOT_DELAY_MS`), boot draining, event ring append trimmed to `SCALING_EVENT_HISTORY_LIMIT`
