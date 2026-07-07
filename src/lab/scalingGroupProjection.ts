@@ -63,3 +63,35 @@ export function projectScalingGroup(telemetry: HostReplicaTelemetry, pulse: 'up'
   const groupHeightPx = GROUP_PADDING_PX * 2 + visibleChips.length * CHIP_HEIGHT_PX + Math.max(0, visibleChips.length - 1) * CHIP_GAP_PX
   return { visibleChips, overflowCount, groupHeightPx, pulse }
 }
+
+// Whether a host's sim currently warrants rendering the scaling-group
+// visual at all (ScalingGroupNode.tsx) — kept alongside isScalingGroupHost
+// here (rather than in the .tsx component file) purely so that file only
+// ever exports a React component, which oxlint's react/only-export-
+// components fast-refresh rule requires (see FormulaPanel.tsx/
+// formulaPanelState.ts for the existing precedent of this split).
+export function shouldRenderScalingGroup(
+  sim: { minReplicas: number; maxReplicas: number } | undefined,
+): sim is { minReplicas: number; maxReplicas: number } {
+  return Boolean(sim) && isScalingGroupHost(sim!.minReplicas, sim!.maxReplicas)
+}
+
+// Falls back to a static "minReplicas, nothing booting, no events"
+// telemetry snapshot before the simulation has ever produced a metrics
+// window (data.simMetrics is undefined at idle) — so the box/chip count
+// already reflects the CONFIGURED bounds instead of only appearing once
+// Start is clicked.
+export function resolveReplicaTelemetry(
+  sim: { minReplicas: number; maxReplicas: number },
+  liveTelemetry: HostReplicaTelemetry | undefined,
+): HostReplicaTelemetry {
+  return (
+    liveTelemetry ?? {
+      nominalCount: sim.minReplicas,
+      bootingCount: 0,
+      effectiveCount: sim.minReplicas,
+      perReplicaSaturation: 0,
+      events: [],
+    }
+  )
+}

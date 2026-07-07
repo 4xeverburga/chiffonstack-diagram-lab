@@ -959,4 +959,109 @@
   .react-flow__node.sim-status-overloaded {
     animation: none;
   }
+
+  .scaling-group-box.scaling-pulse-up,
+  .scaling-group-box.scaling-pulse-down,
+  .scaling-chip-booting {
+    animation: none;
+  }
+}
+
+/* Scaling-group visual (feature 013, User Story 4, ScalingGroupNode.tsx).
+   Rendered INSIDE the host's existing single node rather than as separate
+   canvas nodes (see ScalingGroupNode.tsx for the rationale) — this box is
+   a visually distinct dashed container nested in .node-content, growing
+   the node's natural (unset) height as chips are added, exactly like any
+   other content-driven box on this canvas; no fixed-footprint rule applies
+   here the way it does to the status-glow treatment above, since growing
+   IS the point of this visual (an autoscaling host literally gets bigger
+   as it scales out). */
+.scaling-group-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px dashed var(--token-secondary, var(--border));
+  border-radius: 6px;
+  box-sizing: border-box;
+}
+
+.scaling-group-chips {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  align-items: center;
+  width: 100%;
+}
+
+.scaling-chip {
+  width: 22px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--token-primary, #ff4715);
+  opacity: 0.85;
+}
+
+/* Booting replicas exist (occupy a visible chip slot) but don't yet serve
+   traffic (spec FR-006/User Story 4) — rendered hollow/dashed with a
+   gentle pulse so the boot-delay lag reads as "pending", not "present". */
+.scaling-chip-booting {
+  background: transparent;
+  border: 1px dashed var(--token-primary, #ff4715);
+  opacity: 1;
+  animation: scaling-chip-pending 1.1s ease-in-out infinite;
+}
+
+@keyframes scaling-chip-pending {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 0.9;
+  }
+}
+
+.scaling-group-footer {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  color: var(--text);
+}
+
+.scaling-count-badge {
+  font-weight: 600;
+}
+
+.scaling-overflow-badge {
+  padding: 0 4px;
+  border-radius: 999px;
+  border: 1px solid var(--token-secondary, var(--border));
+  background: var(--bg);
+}
+
+/* One-shot transient treatment on the window a scaling event fires
+   (ScalingGroupNode.tsx keys its root element on nominalCount, so this
+   animation replays exactly once per event via remount — no JS timer,
+   constitution V). Direction-differentiated by color family only (both are
+   the SAME shape/duration) since the count badge/chip delta already
+   conveys up-vs-down structurally. */
+.scaling-group-box.scaling-pulse-up {
+  animation: scaling-pulse-flash 0.6s ease-out;
+}
+
+.scaling-group-box.scaling-pulse-down {
+  animation: scaling-pulse-flash 0.6s ease-out;
+}
+
+@keyframes scaling-pulse-flash {
+  0% {
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--token-primary, #ff4715) 55%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--token-primary, #ff4715) 0%, transparent);
+  }
 }

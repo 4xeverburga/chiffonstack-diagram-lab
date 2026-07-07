@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isScalingGroupHost, projectScalingGroup } from '../../src/lab/scalingGroupProjection'
+import { isScalingGroupHost, projectScalingGroup, resolveReplicaTelemetry, shouldRenderScalingGroup } from '../../src/lab/scalingGroupProjection'
 import type { HostReplicaTelemetry } from '../../src/engine/ports'
 
 function telemetry(overrides: Partial<HostReplicaTelemetry> = {}): HostReplicaTelemetry {
@@ -90,5 +90,32 @@ describe('projectScalingGroup — layout metrics', () => {
     const atCap = projectScalingGroup(telemetry({ nominalCount: 4 }), null)
     const overCap = projectScalingGroup(telemetry({ nominalCount: 8 }), null)
     expect(overCap.groupHeightPx).toBe(atCap.groupHeightPx)
+  })
+})
+
+describe('shouldRenderScalingGroup', () => {
+  it('is false for undefined sim bounds (non-saturating profiles)', () => {
+    expect(shouldRenderScalingGroup(undefined)).toBe(false)
+  })
+
+  it('is false for min = max = 1 (plain host, spec User Story 4 scenario 1)', () => {
+    expect(shouldRenderScalingGroup({ minReplicas: 1, maxReplicas: 1 })).toBe(false)
+  })
+
+  it('is true whenever scaling is actually possible', () => {
+    expect(shouldRenderScalingGroup({ minReplicas: 1, maxReplicas: 4 })).toBe(true)
+    expect(shouldRenderScalingGroup({ minReplicas: 3, maxReplicas: 3 })).toBe(true)
+  })
+})
+
+describe('resolveReplicaTelemetry', () => {
+  it('falls back to a static minReplicas snapshot before any metrics window exists', () => {
+    const resolved = resolveReplicaTelemetry({ minReplicas: 2, maxReplicas: 4 }, undefined)
+    expect(resolved).toEqual({ nominalCount: 2, bootingCount: 0, effectiveCount: 2, perReplicaSaturation: 0, events: [] })
+  })
+
+  it('passes live telemetry straight through once a metrics window exists', () => {
+    const live: HostReplicaTelemetry = { nominalCount: 3, bootingCount: 1, effectiveCount: 2, perReplicaSaturation: 0.5, events: [] }
+    expect(resolveReplicaTelemetry({ minReplicas: 1, maxReplicas: 4 }, live)).toBe(live)
   })
 })

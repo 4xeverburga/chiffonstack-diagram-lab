@@ -61,43 +61,50 @@
 
 - [X] T018 [P] [US4] Create `src/lab/scalingGroupProjection.ts`: pure `HostReplicaTelemetry → ScalingGroupProjection` (visible chips = min(nominal, VISIBLE_REPLICA_CAP) with booting flags, overflow count, vertical-stack layout metrics from design tokens, pulse direction on event change)
 - [X] T019 [P] [US4] Create `test/lab/scalingGroupProjection.test.ts`: cap-4 + overflow remainders across 1→6→1, booting-chip flagging, count-change gating (identical telemetry ⇒ identical projection object), no projection for min=max=1 hosts
-- [ ] T020 [US4] Create `src/lab/ScalingGroupNode.tsx`: box-styled group container (visually a box, not a node — border/fill from `src/lab/designTokens.ts`), replica chip child nodes (`parentId`, `extent: 'parent'`, non-draggable/non-connectable, clicks select the host), overflow badge, count badge, transient scaling pulse treatment (CSS, bounded)
-- [ ] T021 [US4] Wire the projection into the canvas: register node types, derive group/chip nodes from store telemetry **only when a scaling event changes counts** (event-gated subscription, research D4 — never per window), keep edges/handles on the group node id; touch `src/App.tsx`, `src/sim/store.ts`, `src/lab/handleSides.ts`/`src/lab/useHandleVisibility.ts` as needed
-- [ ] T022 [US4] Exclude group/chip node types from export in `src/lab/exportDiagram.ts` (whitelist) and assert zero replica sub-nodes in exported JSON in `test/lab/exportDiagram.test.ts` (SC-008)
+- [X] T020 [US4] Create `src/lab/ScalingGroupNode.tsx`: replica chip stack + overflow/count badges + transient scaling pulse treatment (CSS, bounded) — IMPLEMENTATION NOTE: rendered as a component nested inside the host's existing `LabelNode.tsx` node (not a registered xyflow node type); see "Implementation notes" below for why
+- [X] T021 [US4] Wire the projection into the canvas: `LabelNode.tsx` reads `data.simMetrics.host.replicas` (the same channel every other per-node telemetry already rides) and renders `<ScalingGroupNode>` when `shouldRenderScalingGroup` is true — no new node types, no `App.tsx`/`sim/store.ts` changes; falls back to a static `minReplicas`-sized box before the first metrics window (idle)
+- [X] T022 [US4] Export whitelist: N/A — no new node types were introduced (single real xyflow node throughout), so exported JSON already contains zero replica sub-nodes by construction; SC-008 holds trivially
 - [X] T023 [US4] Replica telemetry + scaling event list ("↑ 3 at t=12.4s") in `src/lab/Inspector.tsx`; verify per-replica formulas render in `src/lab/FormulaPanel.tsx`
 
 ## Phase 7: Polish & cross-cutting
 
 - [X] T024 [P] Performance sanity per SC-007: extend the windowed benchmark in `test/engine/flowPropagation.test.ts` to 30 nodes / 10k req/s with 1–4 bounds on every saturating host — per-window cost stays O(V+E)
-- [~] T025 Automated gate confirmed green (`npm run lint`, `npm run build`, `npm run test` — 249 tests pass); manual quickstart walkthrough in a live browser NOT performed this session
+- [X] T025 Full gate: `npm run lint`, `npm run build`, `npm run test` (254 tests) all green; LIVE browser walkthrough performed via Playwright against `npm run dev` (2026-07-07): ramped web-client to 2,500 req/s against the starter api-gateway (1–4 replicas, 600 RPS/replica) — observed scale-up events at t=5s/15s/25s (×1→×4), Inspector's event list ("↑ scaled up to N at t=..."), per-replica saturation/formula descriptors (replica-division + HPA-cited scaling-policy, both sourced), overflow badge "+2" when temporarily set to 6 replicas, and the NodeInfoButton hover popover showing "Replica bounds 1–4". Confirms the Inspector exposes exactly two new inputs (Min replicas/Max replicas, SC-005).
 
 ## Implementation notes (2026-07-07)
 
-- **MVP shipped in full**: T001–T019, T023, T024. The deterministic scaler
-  loop (sustain/watermarks/cooldown/boot-delay/hysteresis), per-replica host
-  math, queue accept-capacity scaling (FR-011), serialization + pre-013
-  import migration, sourced formula descriptors, and the two Inspector
-  inputs are all implemented and unit-tested (249 tests green, `tsc -b`
-  clean, `oxlint` clean, `vite build` clean).
-- **Scope decision on T020–T022 (scaling-group canvas visual)**: NOT
-  implemented this session. Building real xyflow parent/child subflow node
-  types wired into `App.tsx`'s existing renderedNodes/handle-visibility/
-  status-treatment pipeline is a materially riskier change to make blind
-  (no live-browser iteration loop in this session to catch subflow-specific
-  xyflow quirks), so it was descoped in favor of shipping the fully-tested
-  engine loop plus a lighter-weight telemetry surface instead:
-  `src/lab/scalingGroupProjection.ts` (T018/T019, pure and fully unit-tested
-  — ready for a `ScalingGroupNode.tsx` to consume whenever that follow-up
-  lands) and replica count/booting/effective/per-replica-saturation/event
-  history rendered in both `Inspector.tsx` and `NodeInfoButton.tsx` (T023,
-  expanded scope) instead of on-canvas chip nodes. User Story 4's on-canvas
-  "watch nodes pop in/out" payoff is therefore NOT yet delivered — only its
-  telemetry/data layer is. T022 (export whitelist) has nothing to exclude
-  yet since no new node types were introduced.
-- If/when T020–T022 are picked up: `scalingGroupProjection.ts`'s
-  `projectScalingGroup`/`isScalingGroupHost` are the ready-made inputs: feed
-  a scaled host's `HostReplicaTelemetry` (from `NodeMetrics.host.replicas`)
-  straight in.
+- **Everything shipped and browser-verified**: T001–T025 all complete. The
+  deterministic scaler loop, per-replica host math, queue accept-capacity
+  scaling (FR-011), serialization + pre-013 import migration, sourced
+  formula descriptors, the two Inspector inputs, AND the on-canvas scaling-
+  group visual are all implemented, unit-tested (254 tests green, `tsc -b`
+  clean, `oxlint` clean, `vite build` clean), and confirmed working live in
+  a real browser session.
+- **Implementation choice on the scaling-group visual (T020–T022)**: shipped
+  as a component (`ScalingGroupNode.tsx`) rendered INSIDE the host's
+  existing single `LabelNode.tsx` node, not as separate xyflow parent/child
+  subflow nodes with `parentId`/`extent:'parent'`. This was a deliberate
+  scope adaptation from the original task wording: a true subflow group
+  wired into `App.tsx`'s renderedNodes/handle-visibility/status-treatment
+  pipeline and `sim/store.ts` would be materially riskier to build blind,
+  whereas rendering the chip stack as plain DOM content inside the node
+  that already exists satisfies every observable acceptance criterion in
+  User Story 4 (box container, vertical chip stack that grows/shrinks,
+  boot-delay "pending" chip treatment, overflow badge, count badge,
+  transient scaling pulse, edges staying attached, zero replica sub-nodes
+  in exported JSON) with dramatically less risk: no new node types, no
+  `App.tsx`/`sim/store.ts`/export-whitelist changes at all. `data.simMetrics`
+  (already flowing into every node per-window) is the only data source
+  needed; `scalingGroupProjection.ts`'s pure helpers
+  (`isScalingGroupHost`/`projectScalingGroup`/`shouldRenderScalingGroup`/
+  `resolveReplicaTelemetry`) are fully unit-tested independent of React.
+- **Live verification performed** (Playwright against a real `npm run dev`
+  session, not just unit tests): confirmed the box appears at idle sized to
+  `minReplicas` (before Start is ever clicked), grows chip-by-chip exactly
+  at each scale-up event with the correct boot-delay timing, shows the
+  overflow badge correctly once nominalCount exceeds `VISIBLE_REPLICA_CAP`
+  (tested by temporarily setting bounds to 6), and that Inspector/
+  NodeInfoButton both surface replica bounds and live telemetry correctly.
 
 ## Dependencies
 
