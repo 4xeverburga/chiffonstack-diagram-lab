@@ -1,25 +1,41 @@
-import type { ChangeEvent } from 'react'
+import { useState, useEffect, type ChangeEvent } from 'react'
 import type { HostNodeSim } from '../engine/ports'
 
 type ComputeProfile = Extract<HostNodeSim, { profile: 'transactional_api' | 'worker_consumer' | 'database_server' }>
 
 const CONFIG_MODES = ['manual', 'calculated'] as const
 
-function numberInput(
-  label: string,
-  value: number,
-  disabled: boolean,
-  min: number,
-  onChange: (next: number) => void,
-) {
+type NumberInputProps = {
+  label: string
+  value: number
+  disabled: boolean
+  min: number
+  onChange: (next: number) => void
+}
+
+function NumberInput({ label, value, disabled, min, onChange }: NumberInputProps) {
+  const [draft, setDraft] = useState(String(value))
+
+  useEffect(() => {
+    setDraft(String(value))
+  }, [value])
+
   const handleChange = (event: ChangeEvent<HTMLInputElement>) => {
-    const parsed = Number(event.target.value)
+    const text = event.target.value
+    setDraft(text)
+    const parsed = Number(text)
     if (Number.isFinite(parsed) && parsed >= min) onChange(parsed)
   }
+
+  const handleBlur = () => {
+    const parsed = Number(draft)
+    if (!Number.isFinite(parsed) || parsed < min) setDraft(String(value))
+  }
+
   return (
-    <label className="lab-field" key={label}>
+    <label className="lab-field">
       <span>{label}</span>
-      <input type="number" min={min} step="any" value={value} onChange={handleChange} disabled={disabled} />
+      <input type="number" min={min} step="any" value={draft} onChange={handleChange} onBlur={handleBlur} disabled={disabled} />
     </label>
   )
 }
@@ -33,17 +49,31 @@ function ManualComputeFields({
   disabled: boolean
   onChange: (next: HostNodeSim) => void
 }) {
+  const rpsConflict = sim.manualMaxRPS < sim.manualSaturationRPS
   return (
     <>
-      {numberInput('Baseline latency (ms)', sim.manualBaselineLatencyMs, disabled, 0, (value) =>
-        onChange({ ...sim, manualBaselineLatencyMs: value }),
-      )}
-      {numberInput('Saturation RPS', sim.manualSaturationRPS, disabled, 0, (value) =>
-        onChange({ ...sim, manualSaturationRPS: value, manualMaxRPS: Math.max(sim.manualMaxRPS, value) }),
-      )}
-      {numberInput('Max RPS', sim.manualMaxRPS, disabled, 0, (value) =>
-        onChange({ ...sim, manualMaxRPS: Math.max(value, sim.manualSaturationRPS) }),
-      )}
+      <NumberInput
+        label="Baseline latency (ms)"
+        value={sim.manualBaselineLatencyMs}
+        disabled={disabled}
+        min={0}
+        onChange={(value) => onChange({ ...sim, manualBaselineLatencyMs: value })}
+      />
+      <NumberInput
+        label="Saturation RPS"
+        value={sim.manualSaturationRPS}
+        disabled={disabled}
+        min={0}
+        onChange={(value) => onChange({ ...sim, manualSaturationRPS: value })}
+      />
+      <NumberInput
+        label="Max RPS"
+        value={sim.manualMaxRPS}
+        disabled={disabled}
+        min={0}
+        onChange={(value) => onChange({ ...sim, manualMaxRPS: value })}
+      />
+      {rpsConflict && <div className="lab-warning">Max RPS must be ≥ Saturation RPS</div>}
     </>
   )
 }
@@ -59,10 +89,20 @@ function CalculatedComputeFields({
 }) {
   return (
     <>
-      {numberInput('CPU processing time (ms)', sim.cpuProcessingTimeMs, disabled, 0, (value) =>
-        onChange({ ...sim, cpuProcessingTimeMs: value }),
-      )}
-      {numberInput('Max worker threads', sim.maxWorkerThreads, disabled, 0, (value) => onChange({ ...sim, maxWorkerThreads: value }))}
+      <NumberInput
+        label="CPU processing time (ms)"
+        value={sim.cpuProcessingTimeMs}
+        disabled={disabled}
+        min={0}
+        onChange={(value) => onChange({ ...sim, cpuProcessingTimeMs: value })}
+      />
+      <NumberInput
+        label="Max worker threads"
+        value={sim.maxWorkerThreads}
+        disabled={disabled}
+        min={0}
+        onChange={(value) => onChange({ ...sim, maxWorkerThreads: value })}
+      />
     </>
   )
 }
@@ -79,11 +119,25 @@ type HostConfigFieldsProps = {
 
 export function HostConfigFields({ sim, disabled, onChange }: HostConfigFieldsProps) {
   if (sim.profile === 'client_pool') {
-    return numberInput('Rate (req/s)', sim.requestRatePerSec, disabled, 0, (value) => onChange({ ...sim, requestRatePerSec: value }))
+    return (
+      <NumberInput
+        label="Rate (req/s)"
+        value={sim.requestRatePerSec}
+        disabled={disabled}
+        min={0}
+        onChange={(value) => onChange({ ...sim, requestRatePerSec: value })}
+      />
+    )
   }
   if (sim.profile === 'external_api') {
-    return numberInput('Baseline latency (ms)', sim.manualBaselineLatencyMs, disabled, 0, (value) =>
-      onChange({ ...sim, manualBaselineLatencyMs: value }),
+    return (
+      <NumberInput
+        label="Baseline latency (ms)"
+        value={sim.manualBaselineLatencyMs}
+        disabled={disabled}
+        min={0}
+        onChange={(value) => onChange({ ...sim, manualBaselineLatencyMs: value })}
+      />
     )
   }
 
