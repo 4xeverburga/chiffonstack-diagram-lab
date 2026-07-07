@@ -3,6 +3,8 @@ import { HANDLE_SIDES, HANDLE_SIDE_POSITION } from './handleSides'
 import { heightForRatioLockedWidth } from './imageFit'
 import { labelBandFor, resolveTextSize } from './textSizes'
 import { NodeInfoButton } from './NodeInfoButton'
+import { ScalingGroupNode } from './ScalingGroupNode'
+import { shouldRenderScalingGroup } from './scalingGroupProjection'
 import type { NodeMetrics, NodeSim } from '../engine/ports'
 
 // Custom node used for every diagram box: keeps the existing className-driven
@@ -37,6 +39,12 @@ export function LabelNode({ id, data, selected }: NodeProps) {
   const labelSize = resolveTextSize(data.labelSize)
   const sim = data.sim as NodeSim | undefined
   const metrics = data.simMetrics as NodeMetrics | undefined
+  // Scaling-group visual (feature 013, User Story 4) — only saturating
+  // host profiles carry minReplicas/maxReplicas at all; see ScalingGroupNode.tsx
+  // for why this renders inside the existing node rather than as separate
+  // canvas nodes.
+  const scalingBounds =
+    sim && sim.kind === 'host' && 'minReplicas' in sim ? { minReplicas: sim.minReplicas, maxReplicas: sim.maxReplicas } : undefined
   const imageAspect =
     typeof data.imageAspect === 'number' && Number.isFinite(data.imageAspect) && data.imageAspect > 0
       ? data.imageAspect
@@ -71,6 +79,9 @@ export function LabelNode({ id, data, selected }: NodeProps) {
       <div className="node-content">
         {image ? <img className="node-image" src={image} alt="" /> : null}
         {label.trim() ? <span className={`node-label node-label-${labelSize}`}>{label}</span> : null}
+        {shouldRenderScalingGroup(scalingBounds) ? (
+          <ScalingGroupNode sim={scalingBounds} liveTelemetry={metrics?.host?.replicas} hostMetrics={metrics?.host} />
+        ) : null}
       </div>
       {sim ? <NodeInfoButton sim={sim} metrics={metrics} /> : null}
     </>

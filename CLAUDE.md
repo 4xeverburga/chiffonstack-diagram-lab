@@ -3,7 +3,7 @@
 Guidance for Claude Code when working in this repository.
 
 <!-- SPECKIT START -->
-Current feature plan: specs/011-host-queue-model/plan.md (constitution: .specify/memory/constitution.md v3.0.0)
+Current feature plan: specs/013-host-autoscaling/plan.md (constitution: .specify/memory/constitution.md v3.0.0; feature includes v3.1.0 amendment)
 <!-- SPECKIT END -->
 
 ## Coding conventions

@@ -1,6 +1,7 @@
 import { EventQueue } from './eventQueue'
 import { batchSizeForSubinterval, buildTopologyGraph, detectCycle, generatorUsesBatchMode, type TopologyGraph } from './components'
 import { propagateWindow } from './flowPropagation'
+import { createReplicaRuntime, reclampReplicaRuntime, type ReplicaRuntime } from './autoscaler'
 import {
   CycleError,
   type MetricsSinkPort,
@@ -34,6 +35,12 @@ export function createSimulation(
   const queue = new EventQueue<GeneratorEvent>()
   const queueBacklogGB = new Map<string, number>()
   let clientPoolArrivalAccumulator = new Map<string, number>()
+  // Per-host autoscaler runtime (feature 013) — lives alongside
+  // queueBacklogGB as engine-owned cross-window state; the graph swap
+  // below re-clamps or (re-)creates one entry per saturating host so a
+  // mid-run topology/bounds edit never leaves a stale or missing runtime
+  // (research.md D7, FR-014).
+  let replicaRuntimeByNode = new Map<string, ReplicaRuntime>()
 
   function resetRuntimeState(): void {
     queue.clear()
@@ -41,9 +48,33 @@ export function createSimulation(
     clientPoolArrivalAccumulator = new Map()
     virtualTimeMs = 0
     timeIntoWindowMs = 0
+    replicaRuntimeByNode = new Map()
     for (const nodeId of graph.nodeIds) {
       const sim = graph.simByNode.get(nodeId)
       if (sim?.kind === 'queue') queueBacklogGB.set(nodeId, 0)
+      if (sim?.kind === 'host' && (sim.profile === 'transactional_api' || sim.profile === 'worker_consumer' || sim.profile === 'database_server')) {
+        replicaRuntimeByNode.set(nodeId, createReplicaRuntime(sim.minReplicas))
+      }
+    }
+  }
+
+  // Re-clamps every scaled host's runtime into its current [min, max]
+  // (research.md D7) without resetting sustain/cooldown state — called
+  // whenever the topology is reloaded WITHOUT a full reset (i.e. a live
+  // config edit, not start-from-idle or reset()).
+  function reclampReplicaRuntimes(): void {
+    for (const nodeId of graph.nodeIds) {
+      const sim = graph.simByNode.get(nodeId)
+      if (!sim || sim.kind !== 'host' || (sim.profile !== 'transactional_api' && sim.profile !== 'worker_consumer' && sim.profile !== 'database_server')) continue
+      const existing = replicaRuntimeByNode.get(nodeId) ?? createReplicaRuntime(sim.minReplicas)
+      replicaRuntimeByNode.set(nodeId, reclampReplicaRuntime(existing, sim.minReplicas, sim.maxReplicas))
+    }
+    // Drop runtime for any host id no longer present/no longer saturating.
+    for (const nodeId of replicaRuntimeByNode.keys()) {
+      const sim = graph.simByNode.get(nodeId)
+      if (!sim || sim.kind !== 'host' || (sim.profile !== 'transactional_api' && sim.profile !== 'worker_consumer' && sim.profile !== 'database_server')) {
+        replicaRuntimeByNode.delete(nodeId)
+      }
     }
   }
 
@@ -85,8 +116,16 @@ export function createSimulation(
     for (const [nodeId, count] of clientPoolArrivalAccumulator) {
       clientPoolMeasuredRPS.set(nodeId, (count / windowSizeMs) * 1000)
     }
-    const result = propagateWindow({ graph, windowSizeMs, clientPoolMeasuredRPS, queueBacklogGB })
+    const result = propagateWindow({
+      graph,
+      windowSizeMs,
+      clientPoolMeasuredRPS,
+      queueBacklogGB,
+      replicaRuntimeByNode,
+      simTimeMs: virtualTimeMs,
+    })
     for (const [nodeId, backlog] of result.nextQueueBacklogGB) queueBacklogGB.set(nodeId, backlog)
+    replicaRuntimeByNode = result.nextReplicaRuntimeByNode
     const window: MetricsWindow = {
       windowEndSimTimeMs: virtualTimeMs,
       nodes: Object.fromEntries(result.nodeMetricsById),
@@ -107,8 +146,21 @@ export function createSimulation(
       const nextGraph = buildTopologyGraph(topology)
       const cycle = detectCycle(nextGraph)
       if (cycle) throw new CycleError(cycle)
+      const isFirstLoad = graph.nodeIds.length === 0 && status === 'idle' && virtualTimeMs === 0
       graph = nextGraph
-      resetRuntimeState()
+      if (isFirstLoad) {
+        resetRuntimeState()
+      } else {
+        // A live topology/config update (not the very first load, not a
+        // reset()): re-clamp bounds rather than wiping sustain/cooldown
+        // progress (research.md D7) — queue backlog also needs fresh
+        // entries for any newly-added queue node.
+        for (const nodeId of graph.nodeIds) {
+          const sim = graph.simByNode.get(nodeId)
+          if (sim?.kind === 'queue' && !queueBacklogGB.has(nodeId)) queueBacklogGB.set(nodeId, 0)
+        }
+        reclampReplicaRuntimes()
+      }
     },
 
     start(): void {
