@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   calculatedCapacityRPS,
+  collapseForwardedRPS,
   computeClientPoolMetrics,
   computeExternalApiMetrics,
   computeHostMetrics,
@@ -17,6 +18,7 @@ function manualSim(overrides: Partial<Extract<HostNodeSim, { configMode: 'manual
     manualBaselineLatencyMs: 10,
     manualSaturationRPS: 500,
     manualMaxRPS: 550,
+    overloadBehavior: 'clamp' as const,
     minReplicas: 1,
     maxReplicas: 1,
     bootDelayMs: 8000,
@@ -33,6 +35,7 @@ function calculatedSim(overrides: Partial<Extract<HostNodeSim, { configMode: 'ca
     configMode: 'calculated' as const,
     cpuProcessingTimeMs: 16,
     maxWorkerThreads: 8,
+    overloadBehavior: 'clamp' as const,
     minReplicas: 1,
     maxReplicas: 1,
     bootDelayMs: 8000,
@@ -317,5 +320,192 @@ describe('computeHostMetrics — per-replica division (feature 013, research.md 
     expect(scaled.saturationRatio).toBeCloseTo(single.saturationRatio / 5, 5)
     expect(scaled.forwardedRPS).toBeCloseTo(500, 5)
     expect(scaled.shedRPS).toBe(0)
+  })
+})
+
+// Feature 012 (Overload Collapse), research.md D1-D5.
+describe('collapseForwardedRPS (research.md D2)', () => {
+  it('passes through unchanged at/below the knee', () => {
+    expect(collapseForwardedRPS(300, 500)).toBe(300)
+    expect(collapseForwardedRPS(500, 500)).toBe(500)
+  })
+
+  it('decays retrograde past the knee, ~11% of peak at 3x offered load (SC-001)', () => {
+    expect(collapseForwardedRPS(1000, 500)).toBeCloseTo(500 / 3, 5) // 2x -> decay 1/3
+    const atThreeX = collapseForwardedRPS(1500, 500) // 3x -> decay 1/9
+    expect(atThreeX).toBeCloseTo(500 / 9, 5)
+    expect(atThreeX / 500).toBeLessThan(0.2)
+  })
+
+  it('collapses toward zero at extreme overload (~100x) without ever reaching exactly zero or Infinity/NaN', () => {
+    const atHundredX = collapseForwardedRPS(50_000, 500)
+    expect(atHundredX).toBeGreaterThan(0)
+    expect(atHundredX).toBeLessThan(1)
+    expect(Number.isFinite(atHundredX)).toBe(true)
+  })
+
+  it('zero-capacity guard: kneeRPS <= HOST_ZERO_CAPACITY_EPSILON forwards zero, never NaN/Infinity', () => {
+    expect(collapseForwardedRPS(100, 0)).toBe(0)
+    expect(Number.isFinite(collapseForwardedRPS(100, 0))).toBe(true)
+  })
+
+  it('is stateless: the same offered load yields the same goodput whether reached ramping up or down (SC-004)', () => {
+    const loads = [250, 500, 1000, 1500, 2500]
+    const rampUp = loads.map((rps) => collapseForwardedRPS(rps, 500))
+    const rampDown = [...loads].reverse().map((rps) => collapseForwardedRPS(rps, 500))
+    expect(rampDown).toEqual([...rampUp].reverse())
+  })
+})
+
+describe('computeHostMetrics — collapse mode, manual (research.md D1/D6)', () => {
+  it('below/at the knee is byte-identical to clamp mode (SC-002 knee-continuity)', () => {
+    for (const incomingRPS of [300, 500]) {
+      const clamp = computeHostMetrics({
+        sim: manualSim({ overloadBehavior: 'clamp' }),
+        incomingRPS,
+        effectiveReplicas: 1,
+        inboundWeightedComputeMultiplier: 1,
+        outboundWeightedIoLatencyMs: 0,
+      })
+      const collapse = computeHostMetrics({
+        sim: manualSim({ overloadBehavior: 'collapse' }),
+        incomingRPS,
+        effectiveReplicas: 1,
+        inboundWeightedComputeMultiplier: 1,
+        outboundWeightedIoLatencyMs: 0,
+      })
+      expect(collapse.forwardedRPS).toBe(clamp.forwardedRPS)
+      expect(collapse.shedRPS).toBe(clamp.shedRPS)
+      expect(collapse.latencyMs).toBeCloseTo(clamp.latencyMs, 10)
+    }
+  })
+
+  it('bends back down past the knee instead of plateauing, unlike clamp mode', () => {
+    const clamp = computeHostMetrics({
+      sim: manualSim({ overloadBehavior: 'clamp' }),
+      incomingRPS: 1650, // 3x the 550 knee (manualMaxRPS)
+      effectiveReplicas: 1,
+      inboundWeightedComputeMultiplier: 1,
+      outboundWeightedIoLatencyMs: 0,
+    })
+    const collapse = computeHostMetrics({
+      sim: manualSim({ overloadBehavior: 'collapse' }),
+      incomingRPS: 1650,
+      effectiveReplicas: 1,
+      inboundWeightedComputeMultiplier: 1,
+      outboundWeightedIoLatencyMs: 0,
+    })
+    expect(clamp.forwardedRPS).toBe(550) // unchanged clamp regression (SC-003)
+    expect(collapse.forwardedRPS).toBeCloseTo(550 / 9, 5) // knee is manualMaxRPS=550
+    expect(collapse.forwardedRPS).toBeLessThan(clamp.forwardedRPS)
+  })
+
+  it('reports collapsed status once forwardedRPS falls below half the knee, checked before overloaded (research.md D5)', () => {
+    const mildlyOver = computeHostMetrics({
+      // 1.2x the knee (550): decay ~0.926, forwardedRPS well above the 0.5x threshold.
+      sim: manualSim({ overloadBehavior: 'collapse' }),
+      incomingRPS: 660,
+      effectiveReplicas: 1,
+      inboundWeightedComputeMultiplier: 1,
+      outboundWeightedIoLatencyMs: 0,
+    })
+    expect(mildlyOver.status).toBe('overloaded')
+
+    const collapsed = computeHostMetrics({
+      sim: manualSim({ overloadBehavior: 'collapse' }),
+      incomingRPS: 1650, // 3x the 550 knee
+      effectiveReplicas: 1,
+      inboundWeightedComputeMultiplier: 1,
+      outboundWeightedIoLatencyMs: 0,
+    })
+    expect(collapsed.status).toBe('collapsed')
+  })
+
+  it('never sheds/collapses for a clamp-mode host, regardless of load (SC-003 regression)', () => {
+    const metrics = computeHostMetrics({
+      sim: manualSim({ overloadBehavior: 'clamp' }),
+      incomingRPS: 5000,
+      effectiveReplicas: 1,
+      inboundWeightedComputeMultiplier: 1,
+      outboundWeightedIoLatencyMs: 0,
+    })
+    expect(metrics.status).toBe('overloaded')
+    expect(metrics.status).not.toBe('collapsed')
+  })
+
+  it('latency never improves as goodput collapses past the knee (FR-013)', () => {
+    const sim = manualSim({ overloadBehavior: 'collapse', manualSaturationRPS: 2000, manualMaxRPS: 500 })
+    const points = [250, 500, 1000, 1500, 2500].map((incomingRPS) =>
+      computeHostMetrics({ sim, incomingRPS, effectiveReplicas: 1, inboundWeightedComputeMultiplier: 1, outboundWeightedIoLatencyMs: 0 }),
+    )
+    // Goodput rises then collapses past the knee...
+    expect(points[1].forwardedRPS).toBeGreaterThan(points[0].forwardedRPS)
+    expect(points[4].forwardedRPS).toBeLessThan(points[1].forwardedRPS)
+    // ...but latency only ever rises, even as goodput craters.
+    let previousLatency = points[0].latencyMs
+    for (const point of points.slice(1)) {
+      expect(point.latencyMs).toBeGreaterThanOrEqual(previousLatency)
+      previousLatency = point.latencyMs
+    }
+  })
+})
+
+describe('computeHostMetrics — collapse mode, calculated (research.md D1/D3)', () => {
+  it('below/at the knee is byte-identical to clamp mode (SC-002)', () => {
+    for (const incomingRPS of [200, 500]) {
+      const clamp = computeHostMetrics({
+        sim: calculatedSim({ overloadBehavior: 'clamp' }),
+        incomingRPS,
+        effectiveReplicas: 1,
+        inboundWeightedComputeMultiplier: 1,
+        outboundWeightedIoLatencyMs: 0,
+      })
+      const collapse = computeHostMetrics({
+        sim: calculatedSim({ overloadBehavior: 'collapse' }),
+        incomingRPS,
+        effectiveReplicas: 1,
+        inboundWeightedComputeMultiplier: 1,
+        outboundWeightedIoLatencyMs: 0,
+      })
+      expect(collapse.forwardedRPS).toBeCloseTo(clamp.forwardedRPS, 5)
+      expect(collapse.shedRPS).toBe(clamp.shedRPS)
+    }
+  })
+
+  it('sheds past rho=1 for the first time — clamp mode never sheds in calculated mode (SC-003 regression)', () => {
+    // 16ms * 8 threads => 500 req/s knee at weight 1.
+    const clamp = computeHostMetrics({
+      sim: calculatedSim({ overloadBehavior: 'clamp' }),
+      incomingRPS: 1500,
+      effectiveReplicas: 1,
+      inboundWeightedComputeMultiplier: 1,
+      outboundWeightedIoLatencyMs: 0,
+    })
+    expect(clamp.forwardedRPS).toBe(1500)
+    expect(clamp.shedRPS).toBe(0)
+
+    const collapse = computeHostMetrics({
+      sim: calculatedSim({ overloadBehavior: 'collapse' }),
+      incomingRPS: 1500,
+      effectiveReplicas: 1,
+      inboundWeightedComputeMultiplier: 1,
+      outboundWeightedIoLatencyMs: 0,
+    })
+    expect(collapse.forwardedRPS).toBeCloseTo(500 / 9, 5)
+    expect(collapse.shedRPS).toBeGreaterThan(0)
+    expect(collapse.status).toBe('collapsed')
+  })
+
+  it('zero-capacity edge case (0 threads) forwards zero via the zero-capacity guard, staying finite', () => {
+    const metrics = computeHostMetrics({
+      sim: calculatedSim({ overloadBehavior: 'collapse', maxWorkerThreads: 0 }),
+      incomingRPS: 100,
+      effectiveReplicas: 1,
+      inboundWeightedComputeMultiplier: 1,
+      outboundWeightedIoLatencyMs: 0,
+    })
+    expect(metrics.forwardedRPS).toBe(0)
+    expect(Number.isFinite(metrics.latencyMs)).toBe(true)
+    expect(Number.isFinite(metrics.saturationRatio)).toBe(true)
   })
 })
