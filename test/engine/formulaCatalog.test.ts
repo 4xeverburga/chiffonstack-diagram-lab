@@ -4,6 +4,7 @@ import {
   buildEdgeConnectionsDescriptor,
   buildEdgeRateDescriptor,
   buildHostCapacityDescriptor,
+  buildHostCollapseDescriptor,
   buildHostLatencyDescriptor,
   buildHostSaturationDescriptor,
   buildHostShedDescriptor,
@@ -122,6 +123,29 @@ describe('formula catalog — inputs mirror the live computation at a known oper
     })
     expect(aboveHigh.isBinding).toBe(true)
     expect(aboveHigh.sources.length).toBeGreaterThan(0)
+  })
+})
+
+// Feature 012 (Overload Collapse), US4 (T017).
+describe('buildHostCollapseDescriptor (research.md D2/D7)', () => {
+  it('carries at least one literature source citation (SC-005/constitution II)', () => {
+    const descriptor = buildHostCollapseDescriptor({ incomingRPS: 1500, kneeRPS: 500, overloadRatio: 3, forwardedRPS: 500 / 9 })
+    expect(descriptor.sources.length).toBeGreaterThan(0)
+  })
+
+  it('is binding once incomingRPS exceeds kneeRPS, not below it', () => {
+    const belowKnee = buildHostCollapseDescriptor({ incomingRPS: 300, kneeRPS: 500, overloadRatio: 0.6, forwardedRPS: 300 })
+    expect(belowKnee.isBinding).toBe(false)
+    const pastKnee = buildHostCollapseDescriptor({ incomingRPS: 1500, kneeRPS: 500, overloadRatio: 3, forwardedRPS: 500 / 9 })
+    expect(pastKnee.isBinding).toBe(true)
+  })
+
+  it('reports the exact live incomingRPS/kneeRPS/overloadRatio/forwardedRPS used to compute it', () => {
+    const descriptor = buildHostCollapseDescriptor({ incomingRPS: 1650, kneeRPS: 550, overloadRatio: 3, forwardedRPS: 550 / 9 })
+    expect(descriptor.inputs.incomingRPS).toBe(1650)
+    expect(descriptor.inputs.kneeRPS).toBe(550)
+    expect(descriptor.inputs.overloadRatio).toBe(3)
+    expect(descriptor.inputs.forwardedRPS).toBeCloseTo(550 / 9, 10)
   })
 })
 

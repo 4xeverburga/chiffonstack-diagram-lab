@@ -32,6 +32,7 @@ describe('propagateWindow — 3-host chain (US1)', () => {
           manualBaselineLatencyMs: 10,
           manualSaturationRPS: 500,
           manualMaxRPS: 550,
+          overloadBehavior: 'clamp',
           minReplicas: 1,
           maxReplicas: 1,
           bootDelayMs: 8000,
@@ -139,6 +140,7 @@ describe('propagateWindow — fan-out share splits', () => {
             manualBaselineLatencyMs: 10,
             manualSaturationRPS: 500,
             manualMaxRPS: 500,
+            overloadBehavior: 'clamp',
             minReplicas: 1,
             maxReplicas: 1,
             bootDelayMs: 8000,
@@ -155,6 +157,7 @@ describe('propagateWindow — fan-out share splits', () => {
             manualBaselineLatencyMs: 10,
             manualSaturationRPS: 5000,
             manualMaxRPS: 5000,
+            overloadBehavior: 'clamp',
             minReplicas: 1,
             maxReplicas: 1,
             bootDelayMs: 8000,
@@ -188,6 +191,7 @@ describe('propagateWindow — host -> queue -> host (US3)', () => {
           manualBaselineLatencyMs: 5,
           manualSaturationRPS: 50,
           manualMaxRPS: 50,
+          overloadBehavior: 'clamp',
           minReplicas: 1,
           maxReplicas: 1,
           bootDelayMs: 8000,
@@ -284,6 +288,7 @@ describe('propagateWindow — performance sanity (SC-006/SC-007)', () => {
           manualBaselineLatencyMs: 5,
           manualSaturationRPS: 50_000,
           manualMaxRPS: 50_000,
+          overloadBehavior: 'clamp',
           minReplicas: 1,
           maxReplicas: 4,
           bootDelayMs: 8000,
@@ -320,6 +325,7 @@ describe('propagateWindow — autoscaling (feature 013)', () => {
       manualBaselineLatencyMs: 10,
       manualSaturationRPS: 500,
       manualMaxRPS: 500,
+      overloadBehavior: 'clamp',
       minReplicas,
       maxReplicas,
       bootDelayMs: 8000,
@@ -434,6 +440,7 @@ describe('propagateWindow — autoscaling (feature 013)', () => {
               manualBaselineLatencyMs: 10,
               manualSaturationRPS: 500,
               manualMaxRPS: 500,
+              overloadBehavior: 'clamp',
               minReplicas: 1,
               maxReplicas: 1,
               bootDelayMs: 8000,
@@ -473,6 +480,7 @@ describe('propagateWindow — autoscaling (feature 013)', () => {
             manualBaselineLatencyMs: 5,
             manualSaturationRPS: 50,
             manualMaxRPS: 50,
+            overloadBehavior: 'clamp',
             minReplicas: 3,
             maxReplicas: 3,
             bootDelayMs: 8000,
@@ -498,6 +506,150 @@ describe('propagateWindow — autoscaling (feature 013)', () => {
     // 3 replicas x 50 req/s cap = 150 req/s accepted from the queue.
     expect(result.edgeMetricsById.get('queue-consumer')?.sim?.currentRPS).toBeCloseTo(150, 3)
     expect(result.nodeMetricsById.get('consumer')?.host?.forwardedRPS).toBeCloseTo(150, 3)
+  })
+})
+
+// Feature 012 (Overload Collapse), US3 (T014): collapse is deliberately
+// near-zero-code for propagation (research.md D4) — a collapsed host's low
+// goodput rides the SAME, unmodified edge/queue mechanics as clamp mode.
+// Two inbound paths into the collapsing host are required: a queue's
+// outbound edge toward it is always capped at hostAcceptCapacityRPS
+// (unaffected by overloadBehavior), so a queue-only chain could never push
+// a host past its own knee — only an unbounded direct client-pool edge can.
+describe('propagateWindow — overload collapse propagation regression (feature 012, US3/FR-009)', () => {
+  function twoPathTopology(overloadBehavior: 'clamp' | 'collapse'): SimTopology {
+    return {
+      nodes: [
+        { id: 'direct-source', sim: { kind: 'host', profile: 'client_pool', requestRatePerSec: 2000 } },
+        { id: 'queue-source', sim: { kind: 'host', profile: 'client_pool', requestRatePerSec: 500 } },
+        { id: 'queue', sim: { kind: 'queue' } },
+        {
+          id: 'b',
+          sim: {
+            kind: 'host',
+            profile: 'transactional_api',
+            configMode: 'manual',
+            manualBaselineLatencyMs: 5,
+            manualSaturationRPS: 500,
+            manualMaxRPS: 500,
+            overloadBehavior,
+            minReplicas: 1,
+            maxReplicas: 1,
+            bootDelayMs: 8000,
+            highWatermark: 0.8,
+            lowWatermark: 0.3,
+          },
+        },
+        { id: 'c', sim: { kind: 'host', profile: 'external_api', manualBaselineLatencyMs: 1 } },
+      ],
+      edges: [
+        { id: 'direct-source-b', source: 'direct-source', target: 'b', config: edgeConfig() },
+        { id: 'queue-source-queue', source: 'queue-source', target: 'queue', config: edgeConfig() },
+        { id: 'queue-b', source: 'queue', target: 'b', config: edgeConfig() },
+        { id: 'b-c', source: 'b', target: 'c', config: edgeConfig() },
+      ],
+    }
+  }
+
+  it('AS1: a downstream host tracks a collapsed host\u2019s goodput, not its offered load, once pushed well past the knee', () => {
+    const result = run(
+      twoPathTopology('collapse'),
+      new Map([
+        ['direct-source', 2000],
+        ['queue-source', 500],
+      ]),
+      new Map([['queue', 0]]),
+    )
+    const b = result.nodeMetricsById.get('b')?.host
+    const c = result.nodeMetricsById.get('c')?.host
+    expect(b?.status).toBe('collapsed')
+    expect(b!.incomingRPS).toBeGreaterThan(b!.forwardedRPS * 5) // far past the knee
+    expect(c?.incomingRPS).toBeCloseTo(b!.forwardedRPS, 5) // downstream tracks the COLLAPSED goodput...
+    expect(c!.incomingRPS).toBeLessThan(100) // ...nowhere near the ~2500 offered
+  })
+
+  it("FR-009/D4: hostAcceptCapacityRPS (the queue's backpressure sizing) is unaffected by overloadBehavior \u2014 manual mode", () => {
+    const inputs = new Map([
+      ['direct-source', 2000],
+      ['queue-source', 500],
+    ])
+    const backlog = new Map([['queue', 0]])
+    const clampResult = run(twoPathTopology('clamp'), inputs, backlog)
+    const collapseResult = run(twoPathTopology('collapse'), inputs, backlog)
+    // Same queue inflow/outflow/backlog dynamics regardless of the
+    // downstream host's overloadBehavior — zero new propagation code
+    // (research.md D4's "deliberately zero-line-diff" guarantee).
+    expect(collapseResult.edgeMetricsById.get('queue-b')?.sim?.currentRPS).toBeCloseTo(
+      clampResult.edgeMetricsById.get('queue-b')?.sim?.currentRPS ?? -1,
+      10,
+    )
+    expect(collapseResult.nodeMetricsById.get('queue')?.queue?.outflowMBps).toBeCloseTo(
+      clampResult.nodeMetricsById.get('queue')?.queue?.outflowMBps ?? -1,
+      10,
+    )
+    expect(collapseResult.nextQueueBacklogGB.get('queue')).toBeCloseTo(clampResult.nextQueueBacklogGB.get('queue') ?? -1, 10)
+    // B's own forwardedRPS legitimately DIFFERS between modes (that's the
+    // whole feature) — confirming the two runs aren't just identical
+    // end to end, only the queue-facing accept capacity is unaffected.
+    expect(collapseResult.nodeMetricsById.get('b')?.host?.forwardedRPS).not.toBeCloseTo(
+      clampResult.nodeMetricsById.get('b')?.host?.forwardedRPS ?? -1,
+      2,
+    )
+  })
+
+  it("FR-009/D4: hostAcceptCapacityRPS is unaffected by overloadBehavior \u2014 calculated mode (always unbounded, both ways)", () => {
+    const calcTopology = (overloadBehavior: 'clamp' | 'collapse'): SimTopology => ({
+      nodes: [
+        { id: 'source', sim: { kind: 'host', profile: 'client_pool', requestRatePerSec: 1000 } },
+        { id: 'queue', sim: { kind: 'queue' } },
+        {
+          id: 'b',
+          sim: {
+            kind: 'host',
+            profile: 'worker_consumer',
+            configMode: 'calculated',
+            cpuProcessingTimeMs: 16,
+            maxWorkerThreads: 8,
+            overloadBehavior,
+            minReplicas: 1,
+            maxReplicas: 1,
+            bootDelayMs: 8000,
+            highWatermark: 0.8,
+            lowWatermark: 0.3,
+          },
+        },
+      ],
+      edges: [
+        { id: 'source-queue', source: 'source', target: 'queue', config: edgeConfig() },
+        { id: 'queue-b', source: 'queue', target: 'b', config: edgeConfig() },
+      ],
+    })
+    const inputs = new Map([['source', 1000]])
+    const backlog = new Map([['queue', 0]])
+    const clampResult = run(calcTopology('clamp'), inputs, backlog)
+    const collapseResult = run(calcTopology('collapse'), inputs, backlog)
+    expect(collapseResult.edgeMetricsById.get('queue-b')?.sim?.currentRPS).toBeCloseTo(
+      clampResult.edgeMetricsById.get('queue-b')?.sim?.currentRPS ?? -1,
+      10,
+    )
+  })
+
+  it('US4/T018: the collapse formula descriptor is present for a collapse-mode host at any load, and absent for a clamp-mode host', () => {
+    const lightLoad = new Map([
+      ['direct-source', 100],
+      ['queue-source', 50],
+    ])
+    const collapseResult = run(twoPathTopology('collapse'), lightLoad, new Map([['queue', 0]]))
+    const clampResult = run(twoPathTopology('clamp'), lightLoad, new Map([['queue', 0]]))
+    const collapseDescriptors = collapseResult.nodeMetricsById.get('b')?.formulaDescriptors ?? []
+    const clampDescriptors = clampResult.nodeMetricsById.get('b')?.formulaDescriptors ?? []
+    expect(collapseDescriptors.some((d) => d.id === 'host.overload-collapse')).toBe(true)
+    expect(clampDescriptors.some((d) => d.id === 'host.overload-collapse')).toBe(false)
+    // Regression: clamp mode's descriptor set is otherwise unchanged (SC-003
+    // extends to the formula panel, research.md D7).
+    expect(clampDescriptors.map((d) => d.id).sort()).toEqual(
+      collapseDescriptors.filter((d) => d.id !== 'host.overload-collapse').map((d) => d.id).sort(),
+    )
   })
 })
 

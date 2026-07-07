@@ -11,7 +11,7 @@
 
 import { EDGE_CONGESTION_THRESHOLD, KB_PER_MB } from './config'
 import { edgeTrafficShare, type TopologyGraph } from './components'
-import { calculatedCapacityRPS, computeClientPoolMetrics, computeExternalApiMetrics, computeHostMetrics } from './hostModel'
+import { calculatedCapacityRPS, computeClientPoolMetrics, computeExternalApiMetrics, computeHostMetrics, hostKneeRPS } from './hostModel'
 import { computeQueueMetrics } from './queueModel'
 import { createReplicaRuntime, drainBootQueue, effectiveReplicas, evaluateScaling, type ReplicaRuntime } from './autoscaler'
 import {
@@ -19,6 +19,7 @@ import {
   buildEdgeConnectionsDescriptor,
   buildEdgeRateDescriptor,
   buildHostCapacityDescriptor,
+  buildHostCollapseDescriptor,
   buildHostLatencyDescriptor,
   buildHostSaturationDescriptor,
   buildHostShedDescriptor,
@@ -266,6 +267,18 @@ export function propagateWindow(input: FlowPropagationInput): FlowPropagationOut
       descriptors.push(buildHostCapacityDescriptor({ maxWorkerThreads: sim.maxWorkerThreads, cpuProcessingTimeMs: sim.cpuProcessingTimeMs, capacityRPS }))
     } else {
       descriptors.push(buildHostShedDescriptor({ incomingRPS: perReplicaIncomingRPS, manualMaxRPS: sim.manualMaxRPS, shedRPS: metrics.shedRPS / Math.max(1, effective) }))
+    }
+    // Feature 012 (US4): the collapse formula only appears for
+    // overloadBehavior === 'collapse' hosts (research.md D7) — a
+    // clamp-mode host's descriptor set is unchanged (SC-003 regression
+    // extends to the formula panel).
+    if (sim.overloadBehavior === 'collapse') {
+      const kneeRPS = hostKneeRPS(sim, inboundWeightedComputeMultiplier)
+      const perReplicaForwardedRPS = metrics.forwardedRPS / Math.max(1, effective)
+      const overloadRatio = kneeRPS > 0 ? perReplicaIncomingRPS / kneeRPS : 0
+      descriptors.push(
+        buildHostCollapseDescriptor({ incomingRPS: perReplicaIncomingRPS, kneeRPS, overloadRatio, forwardedRPS: perReplicaForwardedRPS }),
+      )
     }
     validateFormulaDescriptorsHaveSources(descriptors)
     nodeMetricsById.set(nodeId, { throughputPerSec: metrics.forwardedRPS, queueDepth: 0, host: hostMetrics, formulaDescriptors: descriptors })
