@@ -2,7 +2,10 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    # dev no longer requires a PR to update (feature branches merge directly
+    # into dev, PR-gated only into main) — CI must still run on direct
+    # pushes/merges to dev, not just on PRs, or dev would go unverified.
+    branches: [main, dev]
   pull_request:
 
 jobs:
