@@ -80,7 +80,7 @@ export function LabelNode({ id, data, selected }: NodeProps) {
         {image ? <img className="node-image" src={image} alt="" /> : null}
         {label.trim() ? <span className={`node-label node-label-${labelSize}`}>{label}</span> : null}
         {shouldRenderScalingGroup(scalingBounds) ? (
-          <ScalingGroupNode sim={scalingBounds} liveTelemetry={metrics?.host?.replicas} />
+          <ScalingGroupNode sim={scalingBounds} liveTelemetry={metrics?.host?.replicas} hostMetrics={metrics?.host} />
         ) : null}
       </div>
       {sim ? <NodeInfoButton sim={sim} metrics={metrics} /> : null}
