@@ -155,11 +155,6 @@ export const AUTOSCALE_SUSTAIN_MS = 5000
 // (spec FR-007), independent of the sustain window.
 export const AUTOSCALE_COOLDOWN_MS = 10000
 
-// Simulated time a newly added replica takes before it contributes capacity
-// (spec FR-006) — long enough that the latency spike during boot is
-// clearly observable at this engine's typical window/tick cadence.
-export const AUTOSCALE_BOOT_DELAY_MS = 8000
-
 // Bounded ring size for a host's recent scaling-event history (data-model.md
 // ReplicaRuntime.events) — keeps the telemetry payload finite regardless of
 // how long a simulation runs.
@@ -168,4 +163,15 @@ export const SCALING_EVENT_HISTORY_LIMIT = 10
 // Maximum replica chips rendered inside a scaling group on the canvas
 // before the rest collapse into a "+N" overflow badge (spec User Story 4).
 export const VISIBLE_REPLICA_CAP = 4
+
+// Migration-only fallback (constitution v3.2.0, research.md D5-style
+// backward-compat): `bootDelayMs` is now a user-facing capability
+// parameter (`HostNodeSim.bootDelayMs`), NOT an internal tunable — this
+// constant exists solely so importing a pre-3.2.0 diagram (which predates
+// the field entirely) can fill it in explicitly with the value that
+// produced its previous behavior, rather than guessing a "reasonable"
+// default in a function signature (CLAUDE.md's no-default-parameters rule
+// still applies to code; this is a named, documented migration value used
+// once at the import call site — see src/lab/exportDiagram.ts).
+export const LEGACY_BOOT_DELAY_MS_FOR_IMPORT = 8000
 

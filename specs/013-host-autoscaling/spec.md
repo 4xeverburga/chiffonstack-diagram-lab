@@ -12,7 +12,7 @@
 
 Deferred from the original SUGAR sketch and spec 011's out-of-scope list. Saturating host profiles (transactional API, worker/consumer, database) gain horizontal scaling: incoming load divides across replicas, each replica runs the existing 011 saturation/latency math, and an auto-scaler adds or removes one replica at a time in response to *sustained* saturation crossing high/low watermarks — with a realistic boot delay before a new replica contributes capacity, so users see latency spike before relief arrives.
 
-Exactly **two** new user-facing parameters: `minReplicas` and `maxReplicas`. Scaling thresholds, the sustain window, cooldown between actions, and boot delay are internal engine tunables. `currentReplicaCount` is telemetry, not an input. Admitting the two fields requires a constitution amendment to Principle I (MINOR bump), in scope for this feature.
+Exactly **three** new user-facing parameters: `minReplicas`, `maxReplicas`, and `bootDelayMs`. Scaling thresholds (watermarks), the sustain window, and cooldown between actions are internal engine tunables. `currentReplicaCount` is telemetry, not an input. Admitting the three fields requires a constitution amendment to Principle I (MINOR bump), in scope for this feature.
 
 This feature is independent of 012-overload-collapse; if both land, overload behavior applies per replica (integration assumption, no conflict by design).
 
@@ -21,6 +21,10 @@ This feature is independent of 012-overload-collapse; if both land, overload beh
 ### Session 2026-07-06
 
 - Directive (product owner): scaling must be **visually explicit on the canvas** — a scaled host renders as a *scaling group*: a parent container styled as a box (visually distinct from a node), encasing one small replica node per running replica. A new replica pops into the group vertically when a scale-up completes; a removed replica disappears. At most 4 replica nodes are shown to avoid overwhelming the canvas; beyond 4, the group shows 4 nodes plus an overflow count (e.g. "+2"). The group is a visual projection only — the engine still simulates one host, edges attach to the group, and selecting the group or any replica opens the same host Inspector. This supersedes the original out-of-scope line "per-replica visualization as separate canvas nodes".
+
+### Session 2026-07-07
+
+- Directive (product owner, post-implementation review): `bootDelayMs` is promoted from an internal engine tunable to a third user-facing parameter. Rationale: unlike watermarks/sustain/cooldown (which are scaler ALGORITHM policy — how aggressive the scaler is, not a property of the modeled system), boot delay is a real, observable characteristic of the actual infrastructure being modeled — container cold-start, JVM warmup, and VM boot vary by orders of magnitude, and this product's existing philosophy is to let users declare such capability parameters explicitly (`cpuProcessingTimeMs`, `manualBaselineLatencyMs`, etc.), not hardcode one value for every host. This is FR-001/FR-015's parameter count changing from two to three; watermarks/sustain/cooldown/visible-replica-cap remain internal tunables. Constitution amended v3.1.0 → v3.2.0 in the same change.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -110,7 +114,7 @@ A scaled host renders as a **scaling group**: a box-styled parent container enca
 
 ### Functional Requirements
 
-- **FR-001**: Saturating host profiles (transactional API, worker/consumer, database) MUST accept exactly two new parameters: `minReplicas` and `maxReplicas` (integers ≥ 1, min ≤ max). `client_pool` and `external_api` MUST NOT expose them; queues remain zero-config.
+- **FR-001**: Saturating host profiles (transactional API, worker/consumer, database) MUST accept exactly three new parameters: `minReplicas`, `maxReplicas` (integers ≥ 1, min ≤ max), and `bootDelayMs` (≥ 0). `client_pool` and `external_api` MUST NOT expose them; queues remain zero-config.
 - **FR-002**: `currentReplicaCount` MUST be runtime telemetry, initialized to minReplicas, never a user input, always within [minReplicas, maxReplicas].
 - **FR-003**: Per-window host math MUST divide incoming load across replicas (per-replica load = incomingRPS ÷ currentReplicaCount) and apply the existing 011 saturation/latency formulas per replica, in both manual and calculated config modes; `manualMaxRPS` clamping and shedding apply per replica.
 - **FR-004**: The auto-scaler MUST add one replica when saturation has exceeded the high watermark for the sustain window and count < maxReplicas; remove one when saturation has stayed below the low watermark for the sustain window and count > minReplicas; and otherwise hold (hysteresis band).
@@ -127,11 +131,11 @@ A scaled host renders as a **scaling group**: a box-styled parent container enca
 - **FR-012**: Per-replica load division and the scaling policy MUST ship formula descriptors with at least one cited source (e.g., Kubernetes HPA policy documentation or autoscaling literature).
 - **FR-013**: min = max MUST disable scaler dynamics entirely; min = max = 1 MUST reproduce pre-feature host metrics exactly. Hosts from diagrams saved before this feature import as min = max = 1.
 - **FR-014**: `reset()` MUST return counts to minReplicas, clear event history, and cancel pending boot timers.
-- **FR-015**: This feature MUST include the constitution amendment to Principle I admitting `minReplicas`/`maxReplicas` (MINOR bump), landing with the feature.
+- **FR-015**: This feature MUST include the constitution amendment to Principle I admitting `minReplicas`/`maxReplicas`/`bootDelayMs` (MINOR bump), landing with the feature.
 
 ### Key Entities
 
-- **Replica bounds**: the two new host parameters (minReplicas, maxReplicas) bounding the scaler.
+- **Replica bounds**: the three new host parameters (minReplicas, maxReplicas, bootDelayMs) bounding/configuring the scaler.
 - **Replica state**: per-host runtime — current count, booting replicas with remaining boot time, last-action timestamp (cooldown), saturation sustain tracker.
 - **Scaling event**: telemetry record (direction, new count, simulated time) surfaced in the Inspector.
 - **Scaling group visual**: box-styled parent container encasing up to 4 replica nodes (plus overflow indicator) — a render-only projection of replica telemetry, never part of the simulated or serialized topology.
@@ -144,7 +148,7 @@ A scaled host renders as a **scaling group**: a box-styled parent container enca
 - **SC-002**: A load drop to 10% of scaled capacity produces stepwise scale-down to minReplicas with at least the cooldown between events, and no oscillation (no up-down-up within three consecutive evaluations) at steady load anywhere in the hysteresis band.
 - **SC-003**: min = max = 1 hosts produce metric streams identical to pre-feature behavior across an overload sweep (regression guarantee).
 - **SC-004**: Two runs with identical inputs produce identical scaling event sequences (determinism).
-- **SC-005**: The Inspector exposes exactly two new inputs; replica count, per-replica saturation, and scaling events are visible; scaling formulas carry ≥1 citation.
+- **SC-005**: The Inspector exposes exactly three new inputs; replica count, per-replica saturation, and scaling events are visible; scaling formulas carry ≥1 citation.
 - **SC-008**: Across a 1→6→1 replica sweep, the on-canvas group always shows min(count, 4) replica nodes with the correct overflow remainder, replica nodes appear/disappear only when scaling actions complete, and exported topology JSON contains zero replica sub-nodes.
 - **SC-006**: A user can demonstrate "system absorbs 3× load by scaling out, then scales back in" in under 5 minutes without documentation.
 - **SC-007**: Canvas fluidity is preserved at the 011 performance bar (≥30 nodes, ≥10,000 req/s) with scaling active on every host.

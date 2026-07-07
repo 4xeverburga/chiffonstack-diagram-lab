@@ -309,6 +309,7 @@ describe('parseDiagram', () => {
             manualMaxRPS: 600,
             minReplicas: 1,
             maxReplicas: 3,
+            bootDelayMs: 8000,
           },
         },
       },
@@ -326,6 +327,7 @@ describe('parseDiagram', () => {
             maxWorkerThreads: 8,
             minReplicas: 2,
             maxReplicas: 2,
+            bootDelayMs: 8000,
           },
         },
       },
@@ -341,6 +343,7 @@ describe('parseDiagram', () => {
       manualMaxRPS: 600,
       minReplicas: 1,
       maxReplicas: 3,
+      bootDelayMs: 8000,
     })
     expect(parsedNodes.find((node) => node.id === 'calculated')?.data.sim).toEqual({
       kind: 'host',
@@ -350,6 +353,7 @@ describe('parseDiagram', () => {
       maxWorkerThreads: 8,
       minReplicas: 2,
       maxReplicas: 2,
+      bootDelayMs: 8000,
     })
   })
 
@@ -385,6 +389,45 @@ describe('parseDiagram', () => {
       manualMaxRPS: 600,
       minReplicas: 1,
       maxReplicas: 1,
+      bootDelayMs: 8000,
+    })
+  })
+
+  it('imports a pre-3.2.0 host (minReplicas/maxReplicas present, no bootDelayMs) with the legacy boot delay filled in (constitution v3.2.0)', () => {
+    const pre320Json = JSON.stringify({
+      nodes: [
+        {
+          id: 'scaled-api',
+          type: 'labelNode',
+          position: { x: 0, y: 0 },
+          data: {
+            label: 'scaled api',
+            sim: {
+              kind: 'host',
+              profile: 'transactional_api',
+              configMode: 'manual',
+              manualBaselineLatencyMs: 10,
+              manualSaturationRPS: 500,
+              manualMaxRPS: 600,
+              minReplicas: 1,
+              maxReplicas: 4,
+            },
+          },
+        },
+      ],
+      edges: [],
+    })
+    const { nodes: parsedNodes } = parseDiagram(pre320Json)
+    expect(parsedNodes[0].data.sim).toEqual({
+      kind: 'host',
+      profile: 'transactional_api',
+      configMode: 'manual',
+      manualBaselineLatencyMs: 10,
+      manualSaturationRPS: 500,
+      manualMaxRPS: 600,
+      minReplicas: 1,
+      maxReplicas: 4,
+      bootDelayMs: 8000,
     })
   })
 

@@ -5,14 +5,7 @@
 // watermark crossing, cooldown, boot-queue draining, bounds re-clamp) is
 // directly unit-testable (constitution VI) and deterministic (FR-008).
 
-import {
-  AUTOSCALE_BOOT_DELAY_MS,
-  AUTOSCALE_COOLDOWN_MS,
-  AUTOSCALE_HIGH_WATERMARK,
-  AUTOSCALE_LOW_WATERMARK,
-  AUTOSCALE_SUSTAIN_MS,
-  SCALING_EVENT_HISTORY_LIMIT,
-} from './config'
+import { AUTOSCALE_COOLDOWN_MS, AUTOSCALE_HIGH_WATERMARK, AUTOSCALE_LOW_WATERMARK, AUTOSCALE_SUSTAIN_MS, SCALING_EVENT_HISTORY_LIMIT } from './config'
 import type { ScalingEvent } from './ports'
 
 /** Per-host, cross-window scaler state (data-model.md). */
@@ -81,6 +74,10 @@ export interface ScalingDecisionInput {
   windowSizeMs: number
   minReplicas: number
   maxReplicas: number
+  /** User-declared capability parameter (feature 013, promoted from an
+   *  internal tunable — constitution v3.2.0): simulated ms a newly-added
+   *  replica takes before it serves traffic. */
+  bootDelayMs: number
 }
 
 export interface ScalingDecisionOutput {
@@ -102,7 +99,7 @@ export interface ScalingDecisionOutput {
  *    window — spec US2 scenario 1).
  *  - otherwise → hold; entering the band resets both accumulators. */
 export function evaluateScaling(input: ScalingDecisionInput): ScalingDecisionOutput {
-  const { perReplicaSaturation, simTimeMs, windowSizeMs, minReplicas, maxReplicas } = input
+  const { perReplicaSaturation, simTimeMs, windowSizeMs, minReplicas, maxReplicas, bootDelayMs } = input
   let runtime = input.runtime
 
   if (perReplicaSaturation >= AUTOSCALE_HIGH_WATERMARK) {
@@ -120,7 +117,7 @@ export function evaluateScaling(input: ScalingDecisionInput): ScalingDecisionOut
       runtime: {
         ...runtime,
         nominalCount: newCount,
-        booting: [...runtime.booting, { readyAtSimTimeMs: simTimeMs + AUTOSCALE_BOOT_DELAY_MS }],
+        booting: [...runtime.booting, { readyAtSimTimeMs: simTimeMs + bootDelayMs }],
         timeAboveHighMs: 0,
         timeBelowLowMs: 0,
         lastActionSimTimeMs: simTimeMs,

@@ -1,18 +1,24 @@
 <!--
 Sync Impact Report
-- Version change: 3.0.0 → 3.1.0
-- Bump rationale: MINOR — Principle I's closed parameter set gains exactly
-  two new user-facing parameters (feature 013-host-autoscaling): saturating
-  host profiles gain `minReplicas`/`maxReplicas`, admitting horizontal
-  scaling via the "each new parameter admitted past the closed-parameter
-  gate" clause. Scaler dynamics (watermarks, sustain window, cooldown, boot
-  delay) and the visible-replica cap stay internal tunables in
-  `src/engine/config.ts`, not user parameters.
+- Version change: 3.1.0 → 3.2.0
+- Bump rationale: MINOR — Principle I's closed parameter set gains a third
+  new user-facing parameter (feature 013-host-autoscaling, revised same
+  day): saturating host profiles gain `bootDelayMs` alongside `minReplicas`/
+  `maxReplicas`. Boot delay is reclassified from "internal scaler tunable"
+  to "user-facing capability parameter" — unlike watermarks/sustain/
+  cooldown (which are scaler ALGORITHM policy, not a property of the
+  modeled system), boot delay is a real, observable characteristic of the
+  actual infrastructure being modeled (container cold-start vs. JVM warmup
+  vs. VM boot vary by orders of magnitude), matching this product's
+  existing philosophy of explicit user-declared capability parameters
+  (`cpuProcessingTimeMs`, `manualBaselineLatencyMs`, etc.). Watermarks,
+  sustain window, cooldown, and the visible-replica cap remain internal
+  tunables in `src/engine/config.ts`.
 - Modified principles:
   - I. Host-First Model Depth, Closed Parameter Set — closed list extended
-    with `minReplicas`/`maxReplicas` on transactional_api/worker_consumer/
-    database_server; explicit note that scaler internals are tunables, not
-    parameters.
+    with `bootDelayMs` on transactional_api/worker_consumer/
+    database_server (alongside 3.1.0's `minReplicas`/`maxReplicas`);
+    updated wording to no longer list boot delay among internal tunables.
 - Added sections: none
 - Removed sections: none
 - Templates requiring updates:
@@ -21,7 +27,7 @@ Sync Impact Report
   - ✅ .specify/templates/spec-template.md — no constitution-specific references
   - ✅ .specify/templates/tasks-template.md — no constitution-specific references
   - ✅ PRODUCT.md — "Hosts first, lean parameters" bullet updated to mention
-    replica bounds in the same change
+    bootDelayMs in the same change
 - Follow-up TODOs: none
 -->
 
@@ -58,19 +64,23 @@ they cannot eyeball is how hosts interact and where saturation appears first:
   multipliers, hardware instance profiles) is dead weight and MUST be removed,
   not maintained.
 - The user-facing simulation parameter set is **closed** to the lean list in
-  spec 011 FR-020 plus spec 013's replica bounds: host — `requestRatePerSec`
-  (client pool) | `manualBaselineLatencyMs`, `manualSaturationRPS`,
-  `manualMaxRPS` (manual) | `cpuProcessingTimeMs`, `maxWorkerThreads`
-  (calculated) | `minReplicas`, `maxReplicas` (transactional_api/
-  worker_consumer/database_server only, either config mode); edge —
-  `trafficShareRatio`, `averagePayloadSizeKB`, `targetComputeWeightMultiplier`,
-  `pathIoLatencyMs`; queue — none. Adding any new user-facing parameter or
-  resource dimension (network bandwidth ceilings, disk/IO velocity,
-  RAM/page-cache sizing, hardware instance profiles) REQUIRES a constitution
-  amendment. Internal engine tunables in central config are exempt but MUST
-  NOT surface as user inputs — this explicitly includes the autoscaler's
-  watermarks, sustain window, cooldown, boot delay, and the visible-replica
-  cap on the canvas, all of which live in `src/engine/config.ts`.
+  spec 011 FR-020 plus spec 013's replica bounds and boot delay: host —
+  `requestRatePerSec` (client pool) | `manualBaselineLatencyMs`,
+  `manualSaturationRPS`, `manualMaxRPS` (manual) | `cpuProcessingTimeMs`,
+  `maxWorkerThreads` (calculated) | `minReplicas`, `maxReplicas`,
+  `bootDelayMs` (transactional_api/worker_consumer/database_server only,
+  either config mode); edge — `trafficShareRatio`, `averagePayloadSizeKB`,
+  `targetComputeWeightMultiplier`, `pathIoLatencyMs`; queue — none. Adding
+  any new user-facing parameter or resource dimension (network bandwidth
+  ceilings, disk/IO velocity, RAM/page-cache sizing, hardware instance
+  profiles) REQUIRES a constitution amendment. Internal engine tunables in
+  central config are exempt but MUST NOT surface as user inputs — this
+  explicitly includes the autoscaler's watermarks, sustain window, cooldown,
+  and the visible-replica cap on the canvas, all of which live in
+  `src/engine/config.ts`. Boot delay is a user-declared capability
+  parameter (`bootDelayMs`), not an internal tunable — it varies by real
+  infrastructure (container vs. VM vs. serverless cold start), unlike the
+  scaler's own algorithm-policy constants.
 
 Rationale: a lean model users fully understand beats a detailed model they
 must trust blindly; parameter bloat is the failure mode that killed the
@@ -230,4 +240,4 @@ confidently change it — doubly so when the code encodes physics formulas.
 - **Compliance review**: the `/speckit-plan` Constitution Check is the standing
   gate; re-check after design (Phase 1) as the plan template requires.
 
-**Version**: 3.1.0 | **Ratified**: 2026-07-04 | **Last Amended**: 2026-07-07
+**Version**: 3.2.0 | **Ratified**: 2026-07-04 | **Last Amended**: 2026-07-07

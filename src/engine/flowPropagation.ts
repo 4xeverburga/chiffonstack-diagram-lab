@@ -224,6 +224,7 @@ export function propagateWindow(input: FlowPropagationInput): FlowPropagationOut
           windowSizeMs,
           minReplicas: sim.minReplicas,
           maxReplicas: sim.maxReplicas,
+          bootDelayMs: sim.bootDelayMs,
         })
       : { runtime: drained, event: undefined }
     nextReplicaRuntimeByNode.set(nodeId, decision.runtime)

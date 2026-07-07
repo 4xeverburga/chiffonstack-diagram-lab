@@ -11,13 +11,14 @@ Delta on 011's shapes ([011 data-model](../011-host-queue-model/data-model.md)).
 {
   minReplicas: number   // integer ≥ 1
   maxReplicas: number   // integer ≥ minReplicas
+  bootDelayMs: number    // ≥ 0 — simulated ms a new replica takes before serving traffic
 }
 // client_pool and external_api variants are UNCHANGED (no replica fields).
 ```
 
-Validation: integers ≥ 1; `minReplicas ≤ maxReplicas` (enforced in Inspector fields and guarded in the engine). Import of pre-013 JSON writes `minReplicas: 1, maxReplicas: 1` explicitly (research D5).
+Validation: integers ≥ 1 for min/max, `minReplicas ≤ maxReplicas` (enforced in Inspector fields and guarded in the engine); `bootDelayMs ≥ 0`. Import of pre-013 JSON writes `minReplicas: 1, maxReplicas: 1, bootDelayMs: LEGACY_BOOT_DELAY_MS_FOR_IMPORT` explicitly (research D5); import of pre-3.2.0 JSON (has min/max, lacks `bootDelayMs`) fills in just the missing field the same way.
 
-**Closed parameter set after this feature (constitution v3.1.0)**: 011's FR-020 list **plus** `minReplicas`, `maxReplicas`. Watermarks, sustain window, cooldown, boot delay, visible-replica cap, and event-history limit are internal tunables in `src/engine/config.ts`.
+**Closed parameter set after this feature (constitution v3.2.0)**: 011's FR-020 list **plus** `minReplicas`, `maxReplicas`, `bootDelayMs`. Watermarks, sustain window, cooldown, visible-replica cap, and event-history limit are internal tunables in `src/engine/config.ts` — boot delay is NOT among them (promoted to a user-facing capability parameter, since it varies by real infrastructure rather than being scaler algorithm policy).
 
 ## Engine runtime state (per scaled host, cross-window)
 

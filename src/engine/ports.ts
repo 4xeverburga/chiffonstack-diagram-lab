@@ -30,8 +30,8 @@ export type HostRuntimeProfile =
   | 'external_api'
 
 /** A host node's behavior plus its configuration (data-model.md). Exactly
- *  the closed parameter set from FR-020 plus 013's replica bounds —
- *  nothing else is user-facing. */
+ *  the closed parameter set from FR-020 plus 013's replica bounds/boot
+ *  delay — nothing else is user-facing. */
 export type HostNodeSim =
   | { kind: 'host'; profile: 'client_pool'; requestRatePerSec: number }
   | { kind: 'host'; profile: 'external_api'; manualBaselineLatencyMs: number }
@@ -44,6 +44,12 @@ export type HostNodeSim =
       manualMaxRPS: number
       minReplicas: number
       maxReplicas: number
+      /** Simulated ms a newly-added replica takes before it serves traffic
+       *  (data-model.md 013 delta) — a real, user-known infrastructure
+       *  characteristic (container cold-start vs. VM boot vary by orders
+       *  of magnitude), unlike the scaler's internal watermark/sustain/
+       *  cooldown policy constants. */
+      bootDelayMs: number
     }
   | {
       kind: 'host'
@@ -53,6 +59,7 @@ export type HostNodeSim =
       maxWorkerThreads: number
       minReplicas: number
       maxReplicas: number
+      bootDelayMs: number
     }
 
 /** A zero-configuration buffer node (data-model.md, FR-010). */

@@ -15,6 +15,7 @@ import {
 } from '../../src/engine/config'
 
 const WINDOW_MS = 1000
+const BOOT_DELAY_MS = 8000
 
 function runWindows(
   runtime: ReplicaRuntime,
@@ -36,6 +37,7 @@ function runWindows(
       windowSizeMs: WINDOW_MS,
       minReplicas,
       maxReplicas,
+      bootDelayMs: BOOT_DELAY_MS,
     })
     current = decision.runtime
     runtimes.push(current)
@@ -79,8 +81,36 @@ describe('evaluateScaling — scale-up half (US1)', () => {
     expect(events[fireIndex]).toEqual({ direction: 'up', newCount: 2, simTimeMs: (fireIndex + 1) * WINDOW_MS })
     expect(runtimes[fireIndex].nominalCount).toBe(2)
     expect(runtimes[fireIndex].booting).toHaveLength(1)
+    // The boot entry's readyAt reflects the CONFIGURED bootDelayMs (feature
+    // 013, promoted to a user-facing parameter in constitution v3.2.0), not
+    // a hardcoded engine constant.
+    expect(runtimes[fireIndex].booting[0].readyAtSimTimeMs).toBe((fireIndex + 1) * WINDOW_MS + BOOT_DELAY_MS)
     // Capacity unchanged until boot delay elapses (spec FR-006/US1 scenario 2).
     expect(effectiveReplicas(runtimes[fireIndex])).toBe(1)
+  })
+
+  it('a different bootDelayMs changes exactly when the booting replica starts serving (it is a real parameter, not a fixed constant)', () => {
+    const fireAt = evaluateScaling({
+      runtime: { ...createReplicaRuntime(1), timeAboveHighMs: AUTOSCALE_SUSTAIN_MS },
+      perReplicaSaturation: AUTOSCALE_HIGH_WATERMARK + 0.05,
+      simTimeMs: AUTOSCALE_SUSTAIN_MS,
+      windowSizeMs: WINDOW_MS,
+      minReplicas: 1,
+      maxReplicas: 4,
+      bootDelayMs: 2000,
+    })
+    expect(fireAt.runtime.booting[0].readyAtSimTimeMs).toBe(AUTOSCALE_SUSTAIN_MS + 2000)
+
+    const slowBoot = evaluateScaling({
+      runtime: { ...createReplicaRuntime(1), timeAboveHighMs: AUTOSCALE_SUSTAIN_MS },
+      perReplicaSaturation: AUTOSCALE_HIGH_WATERMARK + 0.05,
+      simTimeMs: AUTOSCALE_SUSTAIN_MS,
+      windowSizeMs: WINDOW_MS,
+      minReplicas: 1,
+      maxReplicas: 4,
+      bootDelayMs: 60_000,
+    })
+    expect(slowBoot.runtime.booting[0].readyAtSimTimeMs).toBe(AUTOSCALE_SUSTAIN_MS + 60_000)
   })
 
   it('respects cooldown: a second sustained high period right after the first does not fire again immediately', () => {

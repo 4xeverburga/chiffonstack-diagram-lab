@@ -80,10 +80,12 @@ function integerInput(label: string, value: number, disabled: boolean, min: numb
   )
 }
 
-// Horizontal-scaling bounds (feature 013, FR-001) — the two new user-facing
-// parameters, closed set per constitution v3.1.0. maxReplicas auto-clamps
-// >= minReplicas on every edit, mirroring the manualMaxRPS >= manualSaturationRPS
-// pattern above, instead of surfacing a separate validation-error message.
+// Horizontal-scaling bounds + boot delay (feature 013, FR-001; boot delay
+// promoted from an internal tunable to a user-facing capability parameter
+// in constitution v3.2.0) — the three new user-facing parameters closed
+// set. maxReplicas auto-clamps >= minReplicas on every edit, mirroring the
+// manualMaxRPS >= manualSaturationRPS pattern above, instead of surfacing
+// a separate validation-error message.
 function ReplicaBoundsFields({
   sim,
   disabled,
@@ -101,6 +103,7 @@ function ReplicaBoundsFields({
       {integerInput('Max replicas', sim.maxReplicas, disabled, 1, (value) =>
         onChange({ ...sim, maxReplicas: Math.max(value, sim.minReplicas) }),
       )}
+      {integerInput('Boot delay (ms)', sim.bootDelayMs, disabled, 0, (value) => onChange({ ...sim, bootDelayMs: value }))}
     </>
   )
 }
@@ -137,6 +140,7 @@ export function HostConfigFields({ sim, disabled, onChange }: HostConfigFieldsPr
         manualMaxRPS: 550,
         minReplicas: sim.minReplicas,
         maxReplicas: sim.maxReplicas,
+        bootDelayMs: sim.bootDelayMs,
       })
     } else {
       onChange({
@@ -147,6 +151,7 @@ export function HostConfigFields({ sim, disabled, onChange }: HostConfigFieldsPr
         maxWorkerThreads: 8,
         minReplicas: sim.minReplicas,
         maxReplicas: sim.maxReplicas,
+        bootDelayMs: sim.bootDelayMs,
       })
     }
   }

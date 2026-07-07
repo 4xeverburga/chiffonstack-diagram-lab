@@ -53,6 +53,7 @@ function defaultSimForChoice(choice: SimKindChoice): NodeSim | undefined {
         manualMaxRPS: 550,
         minReplicas: 1,
         maxReplicas: 1,
+        bootDelayMs: 8000,
       }
   }
 }

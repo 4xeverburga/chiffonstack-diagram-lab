@@ -3,6 +3,7 @@ import { HEAT_VARIANTS, type HeatVariant } from './heatVariants'
 import { LEGACY_SOURCE_SIDE, LEGACY_TARGET_SIDE, resolveHandleSide } from './handleSides'
 import { resolveDirection, resolveThickness } from './edgeStyle'
 import { resolveTextSize } from './textSizes'
+import { LEGACY_BOOT_DELAY_MS_FOR_IMPORT } from '../engine/config'
 import type { EdgeSimConfig, NodeSim } from '../engine/ports'
 
 // Tracks whether the current parseDiagram() call dropped any retired-role
@@ -45,6 +46,14 @@ function plainNodeSim(value: unknown): NodeSim | undefined {
   const hasReplicaFields = 'minReplicas' in value || 'maxReplicas' in value
   const minReplicas = hasReplicaFields && isValidReplicaBound(value.minReplicas) ? value.minReplicas : 1
   const maxReplicas = hasReplicaFields && isValidReplicaBound(value.maxReplicas) && value.maxReplicas >= minReplicas ? value.maxReplicas : 1
+  // Boot delay (constitution v3.2.0): a user-facing capability parameter,
+  // not an internal tunable. JSON written before this promotion (even if
+  // it already has minReplicas/maxReplicas from the earlier 013 shape) has
+  // no bootDelayMs at all — that absence fills in the exact value the
+  // engine used internally back then (LEGACY_BOOT_DELAY_MS_FOR_IMPORT),
+  // reproducing identical behavior rather than guessing (CLAUDE.md).
+  const bootDelayMs =
+    isFiniteNumber(value.bootDelayMs) && value.bootDelayMs >= 0 ? value.bootDelayMs : LEGACY_BOOT_DELAY_MS_FOR_IMPORT
   if (
     value.configMode === 'manual' &&
     isFiniteNumber(value.manualBaselineLatencyMs) &&
@@ -63,6 +72,7 @@ function plainNodeSim(value: unknown): NodeSim | undefined {
       manualMaxRPS: value.manualMaxRPS,
       minReplicas,
       maxReplicas,
+      bootDelayMs,
     }
   }
   if (
@@ -80,6 +90,7 @@ function plainNodeSim(value: unknown): NodeSim | undefined {
       maxWorkerThreads: value.maxWorkerThreads,
       minReplicas,
       maxReplicas,
+      bootDelayMs,
     }
   }
   return undefined

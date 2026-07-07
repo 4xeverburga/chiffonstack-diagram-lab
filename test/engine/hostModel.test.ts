@@ -19,6 +19,7 @@ function manualSim(overrides: Partial<Extract<HostNodeSim, { configMode: 'manual
     manualMaxRPS: 550,
     minReplicas: 1,
     maxReplicas: 1,
+    bootDelayMs: 8000,
     ...overrides,
   }
 }
@@ -32,6 +33,7 @@ function calculatedSim(overrides: Partial<Extract<HostNodeSim, { configMode: 'ca
     maxWorkerThreads: 8,
     minReplicas: 1,
     maxReplicas: 1,
+    bootDelayMs: 8000,
     ...overrides,
   }
 }

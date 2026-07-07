@@ -89,6 +89,7 @@ const MANUAL_API_SIM: NodeSim = {
   manualMaxRPS: 550,
   minReplicas: 1,
   maxReplicas: 1,
+  bootDelayMs: 8000,
 }
 const QUEUE_SIM: NodeSim = { kind: 'queue' }
 

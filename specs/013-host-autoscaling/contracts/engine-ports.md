@@ -6,14 +6,14 @@ Delta on [011's contract](../../011-host-queue-model/contracts/engine-ports.md).
 
 | Type | 011 | 013 |
 |---|---|---|
-| `HostNodeSim` (saturating variants) | manual/calculated fields | + `minReplicas: number`, `maxReplicas: number` (integers, 1 ≤ min ≤ max) |
+| `HostNodeSim` (saturating variants) | manual/calculated fields | + `minReplicas: number`, `maxReplicas: number` (integers, 1 ≤ min ≤ max), `bootDelayMs: number` (≥ 0) |
 | `HostNodeMetrics` | 011 fields | + `replicas?: HostReplicaTelemetry` (saturating profiles only); `saturationRatio`/`latencyMs` become per-replica values on scaled hosts |
 
 ## Behavioral guarantees
 
 1. **Regression**: `minReplicas = maxReplicas = 1` produces metrics bit-identical to 011 for any input stream (SC-003).
 2. **Determinism**: identical topology + seed + tick sequence ⇒ identical scaling event sequence and telemetry (FR-008); the scaler is a pure per-window function of runtime state, window saturation, and sim time.
-3. **Boot lag**: a scale-up increments `nominalCount` immediately but `effectiveCount` (the capacity divisor) only after `AUTOSCALE_BOOT_DELAY_MS` of simulated time; scale-down affects capacity in the next window.
+3. **Boot lag**: a scale-up increments `nominalCount` immediately but `effectiveCount` (the capacity divisor) only after the host's own `bootDelayMs` (a user-facing capability parameter, constitution v3.2.0 — not a global engine constant) of simulated time; scale-down affects capacity in the next window.
 4. **Rate limits**: at most one scaling action per host per `AUTOSCALE_COOLDOWN_MS`; actions require the watermark condition to hold for `AUTOSCALE_SUSTAIN_MS` of simulated time; the band between watermarks never scales (hysteresis).
 5. **Bounds**: `nominalCount ∈ [minReplicas, maxReplicas]` always, including after mid-run bounds edits (re-clamped next window, booting entries beyond the new max cancelled).
 6. **Composition with 011 semantics**: per-replica `manualMaxRPS` clamping/shedding (total cap = effectiveCount × cap); queue drain toward a scaled consumer = effectiveCount × per-replica remaining capacity.
