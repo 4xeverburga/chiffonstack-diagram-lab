@@ -30,7 +30,8 @@ export type HostRuntimeProfile =
   | 'external_api'
 
 /** A host node's behavior plus its configuration (data-model.md). Exactly
- *  the closed parameter set from FR-020 — nothing else is user-facing. */
+ *  the closed parameter set from FR-020 plus 013's replica bounds —
+ *  nothing else is user-facing. */
 export type HostNodeSim =
   | { kind: 'host'; profile: 'client_pool'; requestRatePerSec: number }
   | { kind: 'host'; profile: 'external_api'; manualBaselineLatencyMs: number }
@@ -41,6 +42,8 @@ export type HostNodeSim =
       manualBaselineLatencyMs: number
       manualSaturationRPS: number
       manualMaxRPS: number
+      minReplicas: number
+      maxReplicas: number
     }
   | {
       kind: 'host'
@@ -48,6 +51,8 @@ export type HostNodeSim =
       configMode: 'calculated'
       cpuProcessingTimeMs: number
       maxWorkerThreads: number
+      minReplicas: number
+      maxReplicas: number
     }
 
 /** A zero-configuration buffer node (data-model.md, FR-010). */
@@ -77,6 +82,29 @@ export interface SimTopology {
   edges: { id: string; source: string; target: string; config: EdgeSimConfig }[]
 }
 
+/** One autoscaler action, retained for the bounded event ring
+ *  (data-model.md ReplicaRuntime.events). */
+export interface ScalingEvent {
+  direction: 'up' | 'down'
+  newCount: number
+  simTimeMs: number
+}
+
+/** Per-window replica telemetry for a scaled host (data-model.md
+ *  HostReplicaTelemetry) — present only on saturating profiles. */
+export interface HostReplicaTelemetry {
+  /** What the scaler manages; shown as the count badge. */
+  nominalCount: number
+  /** Replicas added but not yet past their boot delay. */
+  bootingCount: number
+  /** nominalCount - bootingCount; the serving-capacity divisor. */
+  effectiveCount: number
+  /** Saturation ratio of a single serving replica. */
+  perReplicaSaturation: number
+  /** Bounded ring, most recent last (SCALING_EVENT_HISTORY_LIMIT). */
+  events: ScalingEvent[]
+}
+
 /** Per-window host telemetry (data-model.md). */
 export interface HostNodeMetrics {
   incomingRPS: number
@@ -84,11 +112,15 @@ export interface HostNodeMetrics {
   forwardedRPS: number
   /** Derived display value, not an input. */
   shedRPS: number
-  /** Unclamped; display may exceed 1.0. */
+  /** Unclamped; display may exceed 1.0. Per-replica on scaled hosts
+   *  (data-model.md 013 delta). */
   saturationRatio: number
-  /** base × (1 + ρ/(1−ρ)), ρ ≤ HOST_RHO_CLAMP (research.md D2). */
+  /** base × (1 + ρ/(1−ρ)), ρ ≤ HOST_RHO_CLAMP (research.md D2). Per-replica
+   *  on scaled hosts. */
   latencyMs: number
   status: 'healthy' | 'saturated' | 'overloaded'
+  /** Present only for saturating profiles (data-model.md 013 delta). */
+  replicas?: HostReplicaTelemetry
 }
 
 /** Per-window queue telemetry (data-model.md). */

@@ -10,6 +10,11 @@ import type { HostNodeMetrics, HostNodeSim } from './ports'
 export interface HostComputeInput {
   sim: Extract<HostNodeSim, { profile: 'transactional_api' | 'worker_consumer' | 'database_server' }>
   incomingRPS: number
+  /** effectiveReplicas from the autoscaler runtime (feature 013,
+   *  research.md D3) — the divisor host math runs on. Always ≥ 1; a host
+   *  with minReplicas = maxReplicas = 1 passes 1 here and this function's
+   *  output is bit-identical to pre-013 behavior (SC-003). */
+  effectiveReplicas: number
   /** Traffic-weighted mean of inbound edges' targetComputeWeightMultiplier
    *  (calculated mode only; research.md D3). */
   inboundWeightedComputeMultiplier: number
@@ -122,8 +127,24 @@ export function calculatedCapacityRPS(cpuProcessingTimeMs: number, maxWorkerThre
   return threads > 0 && cpuTimeSec > 0 ? threads / cpuTimeSec : 0
 }
 
+// Per-replica division by composition (research.md D3): 011's manual/
+// calculated math runs unchanged on perReplicaRPS = incomingRPS /
+// effectiveReplicas (so ρ/latency/status are PER REPLICA, matching
+// data-model.md's 013 delta), then forwardedRPS/shedRPS scale back up by
+// effectiveReplicas so the per-replica manualMaxRPS clamp composes into a
+// total cap of effectiveReplicas × manualMaxRPS (FR-003/FR-011).
 export function computeHostMetrics(input: HostComputeInput): HostNodeMetrics {
-  const { sim, incomingRPS, inboundWeightedComputeMultiplier, outboundWeightedIoLatencyMs } = input
-  if (sim.configMode === 'manual') return computeManualMetrics(sim, incomingRPS)
-  return computeCalculatedMetrics(sim, incomingRPS, inboundWeightedComputeMultiplier, outboundWeightedIoLatencyMs)
+  const { sim, incomingRPS, effectiveReplicas, inboundWeightedComputeMultiplier, outboundWeightedIoLatencyMs } = input
+  const replicas = Math.max(1, effectiveReplicas)
+  const perReplicaRPS = Math.max(0, incomingRPS) / replicas
+  const perReplica =
+    sim.configMode === 'manual'
+      ? computeManualMetrics(sim, perReplicaRPS)
+      : computeCalculatedMetrics(sim, perReplicaRPS, inboundWeightedComputeMultiplier, outboundWeightedIoLatencyMs)
+  return {
+    ...perReplica,
+    incomingRPS: Math.max(0, incomingRPS),
+    forwardedRPS: perReplica.forwardedRPS * replicas,
+    shedRPS: perReplica.shedRPS * replicas,
+  }
 }

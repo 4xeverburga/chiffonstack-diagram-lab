@@ -17,6 +17,8 @@ function manualSim(overrides: Partial<Extract<HostNodeSim, { configMode: 'manual
     manualBaselineLatencyMs: 10,
     manualSaturationRPS: 500,
     manualMaxRPS: 550,
+    minReplicas: 1,
+    maxReplicas: 1,
     ...overrides,
   }
 }
@@ -28,6 +30,8 @@ function calculatedSim(overrides: Partial<Extract<HostNodeSim, { configMode: 'ca
     configMode: 'calculated' as const,
     cpuProcessingTimeMs: 16,
     maxWorkerThreads: 8,
+    minReplicas: 1,
+    maxReplicas: 1,
     ...overrides,
   }
 }
@@ -61,6 +65,7 @@ describe('computeHostMetrics — manual mode', () => {
     const metrics = computeHostMetrics({
       sim: manualSim(),
       incomingRPS: 100,
+      effectiveReplicas: 1,
       inboundWeightedComputeMultiplier: 1,
       outboundWeightedIoLatencyMs: 0,
     })
@@ -73,6 +78,7 @@ describe('computeHostMetrics — manual mode', () => {
     const metrics = computeHostMetrics({
       sim: manualSim(),
       incomingRPS: 400,
+      effectiveReplicas: 1,
       inboundWeightedComputeMultiplier: 1,
       outboundWeightedIoLatencyMs: 0,
     })
@@ -84,6 +90,7 @@ describe('computeHostMetrics — manual mode', () => {
     const metrics = computeHostMetrics({
       sim: manualSim(),
       incomingRPS: 700,
+      effectiveReplicas: 1,
       inboundWeightedComputeMultiplier: 1,
       outboundWeightedIoLatencyMs: 0,
     })
@@ -97,6 +104,7 @@ describe('computeHostMetrics — manual mode', () => {
     const metrics = computeHostMetrics({
       sim: manualSim(),
       incomingRPS: 460,
+      effectiveReplicas: 1,
       inboundWeightedComputeMultiplier: 1,
       outboundWeightedIoLatencyMs: 0,
     })
@@ -108,6 +116,7 @@ describe('computeHostMetrics — manual mode', () => {
     const metrics = computeHostMetrics({
       sim: manualSim({ manualSaturationRPS: 0, manualMaxRPS: 0 }),
       incomingRPS: 100,
+      effectiveReplicas: 1,
       inboundWeightedComputeMultiplier: 1,
       outboundWeightedIoLatencyMs: 0,
     })
@@ -128,12 +137,14 @@ describe('computeHostMetrics — calculated mode (research.md D3)', () => {
     const manual = computeHostMetrics({
       sim: manualSim({ manualBaselineLatencyMs: 16 }),
       incomingRPS: 400,
+      effectiveReplicas: 1,
       inboundWeightedComputeMultiplier: 1,
       outboundWeightedIoLatencyMs: 0,
     })
     const calculated = computeHostMetrics({
       sim: calculatedSim(),
       incomingRPS: 400,
+      effectiveReplicas: 1,
       inboundWeightedComputeMultiplier: 1,
       outboundWeightedIoLatencyMs: 0,
     })
@@ -146,12 +157,14 @@ describe('computeHostMetrics — calculated mode (research.md D3)', () => {
     const base = computeHostMetrics({
       sim: calculatedSim(),
       incomingRPS: 200,
+      effectiveReplicas: 1,
       inboundWeightedComputeMultiplier: 1,
       outboundWeightedIoLatencyMs: 0,
     })
     const doubled = computeHostMetrics({
       sim: calculatedSim(),
       incomingRPS: 200,
+      effectiveReplicas: 1,
       inboundWeightedComputeMultiplier: 2,
       outboundWeightedIoLatencyMs: 0,
     })
@@ -162,6 +175,7 @@ describe('computeHostMetrics — calculated mode (research.md D3)', () => {
     const withIo = computeHostMetrics({
       sim: calculatedSim(),
       incomingRPS: 0,
+      effectiveReplicas: 1,
       inboundWeightedComputeMultiplier: 1,
       outboundWeightedIoLatencyMs: 5,
     })
@@ -173,6 +187,7 @@ describe('computeHostMetrics — calculated mode (research.md D3)', () => {
     const metrics = computeHostMetrics({
       sim: calculatedSim(),
       incomingRPS: 5000,
+      effectiveReplicas: 1,
       inboundWeightedComputeMultiplier: 1,
       outboundWeightedIoLatencyMs: 0,
     })
@@ -185,6 +200,7 @@ describe('computeHostMetrics — calculated mode (research.md D3)', () => {
     const metrics = computeHostMetrics({
       sim: calculatedSim({ maxWorkerThreads: 0 }),
       incomingRPS: 100,
+      effectiveReplicas: 1,
       inboundWeightedComputeMultiplier: 1,
       outboundWeightedIoLatencyMs: 0,
     })
@@ -229,5 +245,71 @@ describe('HOST_RHO_CLAMP sanity', () => {
   it('is strictly below 1', () => {
     expect(HOST_RHO_CLAMP).toBeLessThan(1)
     expect(HOST_RHO_CLAMP).toBeGreaterThan(0)
+  })
+})
+
+describe('computeHostMetrics — per-replica division (feature 013, research.md D3)', () => {
+  it('effectiveReplicas=1 is bit-identical to the single-instance computation (SC-003)', () => {
+    const single = computeHostMetrics({
+      sim: manualSim(),
+      incomingRPS: 400,
+      effectiveReplicas: 1,
+      inboundWeightedComputeMultiplier: 1,
+      outboundWeightedIoLatencyMs: 0,
+    })
+    expect(single.saturationRatio).toBeCloseTo(0.8, 5)
+    expect(single.forwardedRPS).toBe(400)
+  })
+
+  it('divides incomingRPS by effectiveReplicas before computing rho/latency, then scales forwarded/shed back up', () => {
+    // 4 replicas at 400 total => 100 per replica => rho = 100/500 = 0.2,
+    // identical to the single-replica 100-req/s fixture above.
+    const scaled = computeHostMetrics({
+      sim: manualSim(),
+      incomingRPS: 400,
+      effectiveReplicas: 4,
+      inboundWeightedComputeMultiplier: 1,
+      outboundWeightedIoLatencyMs: 0,
+    })
+    expect(scaled.saturationRatio).toBeCloseTo(0.2, 5)
+    expect(scaled.latencyMs).toBeCloseTo(hockeyStickLatencyMs(10, 0.2), 5)
+    expect(scaled.forwardedRPS).toBeCloseTo(400, 5)
+    expect(scaled.shedRPS).toBe(0)
+  })
+
+  it('composes the per-replica manualMaxRPS clamp into a total cap of effectiveReplicas x manualMaxRPS (FR-003/FR-011)', () => {
+    // 3 replicas, manualMaxRPS=550 each => total cap 1650; offered 2000 =>
+    // 2000/3 ~= 666.7 per replica, clamped to 550 per replica, so shed
+    // per replica ~= 116.7, scaled back up by 3.
+    const metrics = computeHostMetrics({
+      sim: manualSim(),
+      incomingRPS: 2000,
+      effectiveReplicas: 3,
+      inboundWeightedComputeMultiplier: 1,
+      outboundWeightedIoLatencyMs: 0,
+    })
+    expect(metrics.forwardedRPS).toBeCloseTo(1650, 5)
+    expect(metrics.shedRPS).toBeCloseTo(350, 5)
+    expect(metrics.status).toBe('overloaded')
+  })
+
+  it('calculated mode also divides by effectiveReplicas (no shedding either way)', () => {
+    const single = computeHostMetrics({
+      sim: calculatedSim(),
+      incomingRPS: 500,
+      effectiveReplicas: 1,
+      inboundWeightedComputeMultiplier: 1,
+      outboundWeightedIoLatencyMs: 0,
+    })
+    const scaled = computeHostMetrics({
+      sim: calculatedSim(),
+      incomingRPS: 500,
+      effectiveReplicas: 5,
+      inboundWeightedComputeMultiplier: 1,
+      outboundWeightedIoLatencyMs: 0,
+    })
+    expect(scaled.saturationRatio).toBeCloseTo(single.saturationRatio / 5, 5)
+    expect(scaled.forwardedRPS).toBeCloseTo(500, 5)
+    expect(scaled.shedRPS).toBe(0)
   })
 })

@@ -132,3 +132,40 @@ export const HOST_ZERO_CAPACITY_EPSILON = 1e-6
 export const BYTES_PER_KB = 1024
 export const KB_PER_MB = 1024
 export const MB_PER_GB = 1024
+
+// Autoscaler tunables (feature 013, data-model.md/research.md D1/D2).
+// Internal-only per constitution v3.1.0 Principle I — never surfaced as a
+// user parameter, unlike minReplicas/maxReplicas.
+
+// Saturation ratio (per replica) above which the scaler starts accumulating
+// toward a scale-up (research.md D1's hysteresis band, high side).
+export const AUTOSCALE_HIGH_WATERMARK = 0.8
+
+// Saturation ratio (per replica) below which the scaler starts accumulating
+// toward a scale-down (research.md D1's hysteresis band, low side). Between
+// the two watermarks the scaler holds (no action, accumulators reset).
+export const AUTOSCALE_LOW_WATERMARK = 0.3
+
+// How long (simulated ms) saturation must stay past a watermark before the
+// scaler acts — absorbs brief spikes/dips without flapping (spec.md
+// acceptance scenario "no flapping on transients").
+export const AUTOSCALE_SUSTAIN_MS = 5000
+
+// Minimum simulated time between two scaling actions on the same host
+// (spec FR-007), independent of the sustain window.
+export const AUTOSCALE_COOLDOWN_MS = 10000
+
+// Simulated time a newly added replica takes before it contributes capacity
+// (spec FR-006) — long enough that the latency spike during boot is
+// clearly observable at this engine's typical window/tick cadence.
+export const AUTOSCALE_BOOT_DELAY_MS = 8000
+
+// Bounded ring size for a host's recent scaling-event history (data-model.md
+// ReplicaRuntime.events) — keeps the telemetry payload finite regardless of
+// how long a simulation runs.
+export const SCALING_EVENT_HISTORY_LIMIT = 10
+
+// Maximum replica chips rendered inside a scaling group on the canvas
+// before the rest collapse into a "+N" overflow badge (spec User Story 4).
+export const VISIBLE_REPLICA_CAP = 4
+

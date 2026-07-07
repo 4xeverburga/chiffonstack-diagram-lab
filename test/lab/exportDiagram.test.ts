@@ -307,6 +307,8 @@ describe('parseDiagram', () => {
             manualBaselineLatencyMs: 10,
             manualSaturationRPS: 500,
             manualMaxRPS: 600,
+            minReplicas: 1,
+            maxReplicas: 3,
           },
         },
       },
@@ -316,7 +318,15 @@ describe('parseDiagram', () => {
         position: { x: 100, y: 0 },
         data: {
           label: 'calculated',
-          sim: { kind: 'host', profile: 'database_server', configMode: 'calculated', cpuProcessingTimeMs: 16, maxWorkerThreads: 8 },
+          sim: {
+            kind: 'host',
+            profile: 'database_server',
+            configMode: 'calculated',
+            cpuProcessingTimeMs: 16,
+            maxWorkerThreads: 8,
+            minReplicas: 2,
+            maxReplicas: 2,
+          },
         },
       },
     ]
@@ -329,6 +339,8 @@ describe('parseDiagram', () => {
       manualBaselineLatencyMs: 10,
       manualSaturationRPS: 500,
       manualMaxRPS: 600,
+      minReplicas: 1,
+      maxReplicas: 3,
     })
     expect(parsedNodes.find((node) => node.id === 'calculated')?.data.sim).toEqual({
       kind: 'host',
@@ -336,6 +348,43 @@ describe('parseDiagram', () => {
       configMode: 'calculated',
       cpuProcessingTimeMs: 16,
       maxWorkerThreads: 8,
+      minReplicas: 2,
+      maxReplicas: 2,
+    })
+  })
+
+  it('imports a pre-013 host (no minReplicas/maxReplicas fields at all) as minReplicas = maxReplicas = 1 (research.md D5/FR-013)', () => {
+    const pre013Json = JSON.stringify({
+      nodes: [
+        {
+          id: 'legacy-api',
+          type: 'labelNode',
+          position: { x: 0, y: 0 },
+          data: {
+            label: 'legacy api',
+            sim: {
+              kind: 'host',
+              profile: 'transactional_api',
+              configMode: 'manual',
+              manualBaselineLatencyMs: 10,
+              manualSaturationRPS: 500,
+              manualMaxRPS: 600,
+            },
+          },
+        },
+      ],
+      edges: [],
+    })
+    const { nodes: parsedNodes } = parseDiagram(pre013Json)
+    expect(parsedNodes[0].data.sim).toEqual({
+      kind: 'host',
+      profile: 'transactional_api',
+      configMode: 'manual',
+      manualBaselineLatencyMs: 10,
+      manualSaturationRPS: 500,
+      manualMaxRPS: 600,
+      minReplicas: 1,
+      maxReplicas: 1,
     })
   })
 

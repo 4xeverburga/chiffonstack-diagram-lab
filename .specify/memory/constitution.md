@@ -1,27 +1,27 @@
 <!--
 Sync Impact Report
-- Version change: 2.0.0 → 3.0.0
-- Bump rationale: MAJOR — Principle I is redefined. The 2026-07-06 product
-  decision (feature 011-host-queue-model) reverses the Kafka-first strategy:
-  the deep Kafka model is retired and compute Host nodes become the deeply
-  modeled focus, with Queue nodes as deliberately generic zero-config buffers
-  and a closed user-facing parameter set.
+- Version change: 3.0.0 → 3.1.0
+- Bump rationale: MINOR — Principle I's closed parameter set gains exactly
+  two new user-facing parameters (feature 013-host-autoscaling): saturating
+  host profiles gain `minReplicas`/`maxReplicas`, admitting horizontal
+  scaling via the "each new parameter admitted past the closed-parameter
+  gate" clause. Scaler dynamics (watermarks, sustain window, cooldown, boot
+  delay) and the visible-replica cap stay internal tunables in
+  `src/engine/config.ts`, not user parameters.
 - Modified principles:
-  - I. Kafka-First Model Depth → I. Host-First Model Depth, Closed Parameter Set
-  - V. Render Discipline: Aggregate, Never Per-Event — example node-data
-    fields updated from Kafka vocabulary (consumerLag, pageCacheHitRatio) to
-    host/queue vocabulary (saturation, latency, backlog); rule unchanged.
+  - I. Host-First Model Depth, Closed Parameter Set — closed list extended
+    with `minReplicas`/`maxReplicas` on transactional_api/worker_consumer/
+    database_server; explicit note that scaler internals are tunables, not
+    parameters.
 - Added sections: none
 - Removed sections: none
-- Preamble: "assign real hardware profiles (vCPU, RAM, disk)" replaced with
-  lean host-capability wording to match the closed parameter set.
 - Templates requiring updates:
   - ✅ .specify/templates/plan-template.md — Constitution Check gate is
     generic; derives from this file, no edit needed
   - ✅ .specify/templates/spec-template.md — no constitution-specific references
   - ✅ .specify/templates/tasks-template.md — no constitution-specific references
-  - ✅ PRODUCT.md — "Kafka first" differentiator and hardware-profile wording
-    rewritten for the host-first model in the same change
+  - ✅ PRODUCT.md — "Hosts first, lean parameters" bullet updated to mention
+    replica bounds in the same change
 - Follow-up TODOs: none
 -->
 
@@ -58,15 +58,19 @@ they cannot eyeball is how hosts interact and where saturation appears first:
   multipliers, hardware instance profiles) is dead weight and MUST be removed,
   not maintained.
 - The user-facing simulation parameter set is **closed** to the lean list in
-  spec 011 FR-020: host — `requestRatePerSec` (client pool) |
-  `manualBaselineLatencyMs`, `manualSaturationRPS`, `manualMaxRPS` (manual) |
-  `cpuProcessingTimeMs`, `maxWorkerThreads` (calculated); edge —
+  spec 011 FR-020 plus spec 013's replica bounds: host — `requestRatePerSec`
+  (client pool) | `manualBaselineLatencyMs`, `manualSaturationRPS`,
+  `manualMaxRPS` (manual) | `cpuProcessingTimeMs`, `maxWorkerThreads`
+  (calculated) | `minReplicas`, `maxReplicas` (transactional_api/
+  worker_consumer/database_server only, either config mode); edge —
   `trafficShareRatio`, `averagePayloadSizeKB`, `targetComputeWeightMultiplier`,
   `pathIoLatencyMs`; queue — none. Adding any new user-facing parameter or
   resource dimension (network bandwidth ceilings, disk/IO velocity,
   RAM/page-cache sizing, hardware instance profiles) REQUIRES a constitution
   amendment. Internal engine tunables in central config are exempt but MUST
-  NOT surface as user inputs.
+  NOT surface as user inputs — this explicitly includes the autoscaler's
+  watermarks, sustain window, cooldown, boot delay, and the visible-replica
+  cap on the canvas, all of which live in `src/engine/config.ts`.
 
 Rationale: a lean model users fully understand beats a detailed model they
 must trust blindly; parameter bloat is the failure mode that killed the
@@ -226,4 +230,4 @@ confidently change it — doubly so when the code encodes physics formulas.
 - **Compliance review**: the `/speckit-plan` Constitution Check is the standing
   gate; re-check after design (Phase 1) as the plan template requires.
 
-**Version**: 3.0.0 | **Ratified**: 2026-07-04 | **Last Amended**: 2026-07-06
+**Version**: 3.1.0 | **Ratified**: 2026-07-04 | **Last Amended**: 2026-07-07

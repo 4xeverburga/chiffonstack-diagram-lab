@@ -35,6 +35,12 @@ const SOURCE_PRODUCT_DATA_MODEL: FormulaSource = {
   note: 'Definitional conversion/integration used by this product, not an external citation.',
 }
 
+const SOURCE_HPA_DOCS: FormulaSource = {
+  title: 'Kubernetes Horizontal Pod Autoscaler (HPA) documentation',
+  url: 'https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/',
+  note: 'Threshold-based scaling policy shape (watermarks, stabilization/sustain window, cooldown, step actions) referenced here (research.md D6).',
+}
+
 export function buildHostSaturationDescriptor(input: {
   incomingRPS: number
   capacityRPS: number
@@ -167,6 +173,50 @@ export function buildQueueBacklogDescriptor(input: {
     inputs: { inflowMBps: input.inflowMBps, outflowMBps: input.outflowMBps, backlogGB: input.backlogGB },
     sources: [SOURCE_PRODUCT_DATA_MODEL],
     isBinding: input.inflowMBps > input.outflowMBps,
+  }
+}
+
+// Feature 013 (Host Autoscaling): replica-division and threshold-scaling-
+// policy descriptors, sourced per research.md D6.
+
+export function buildReplicaDivisionDescriptor(input: {
+  incomingRPS: number
+  effectiveCount: number
+  perReplicaRPS: number
+}): FormulaDescriptor {
+  return {
+    id: 'host.replica-division',
+    name: 'Per-replica load division',
+    expression: 'perReplicaRPS = incomingRPS / effectiveCount',
+    inputs: { incomingRPS: input.incomingRPS, effectiveCount: input.effectiveCount, perReplicaRPS: input.perReplicaRPS },
+    sources: [SOURCE_DENNING_BUZEN],
+    isBinding: false,
+  }
+}
+
+export function buildScalingPolicyDescriptor(input: {
+  perReplicaSaturation: number
+  highWatermark: number
+  lowWatermark: number
+  nominalCount: number
+  minReplicas: number
+  maxReplicas: number
+}): FormulaDescriptor {
+  return {
+    id: 'host.scaling-policy',
+    name: 'Threshold scaling policy',
+    expression:
+      'saturation >= high for sustainMs & count < max => scale up by 1 (after boot delay); saturation <= low for sustainMs & count > min => scale down by 1 (immediate); otherwise hold',
+    inputs: {
+      perReplicaSaturation: input.perReplicaSaturation,
+      highWatermark: input.highWatermark,
+      lowWatermark: input.lowWatermark,
+      nominalCount: input.nominalCount,
+      minReplicas: input.minReplicas,
+      maxReplicas: input.maxReplicas,
+    },
+    sources: [SOURCE_HPA_DOCS],
+    isBinding: input.perReplicaSaturation >= input.highWatermark || input.perReplicaSaturation <= input.lowWatermark,
   }
 }
 

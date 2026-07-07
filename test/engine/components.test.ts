@@ -30,6 +30,8 @@ const threeNodeTopology: SimTopology = {
         manualBaselineLatencyMs: 10,
         manualSaturationRPS: 500,
         manualMaxRPS: 600,
+        minReplicas: 1,
+        maxReplicas: 1,
       },
     },
     { id: 'db', sim: { kind: 'host', profile: 'external_api', manualBaselineLatencyMs: 5 } },

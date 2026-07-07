@@ -36,6 +36,15 @@ function plainNodeSim(value: unknown): NodeSim | undefined {
   const computeProfile = value.profile === 'transactional_api' || value.profile === 'worker_consumer' || value.profile === 'database_server'
   if (!computeProfile) return undefined
   const profile = value.profile as 'transactional_api' | 'worker_consumer' | 'database_server'
+  // Replica bounds (feature 013): integers >= 1, min <= max. Old JSON
+  // written before this feature has no such fields at all — that absence
+  // (not just an invalid value) fills in minReplicas = maxReplicas = 1
+  // explicitly (research.md D5/FR-013), reproducing exact pre-013 behavior
+  // rather than guessing a default in a function signature (CLAUDE.md).
+  const isValidReplicaBound = (n: unknown): n is number => isFiniteNumber(n) && Number.isInteger(n) && n >= 1
+  const hasReplicaFields = 'minReplicas' in value || 'maxReplicas' in value
+  const minReplicas = hasReplicaFields && isValidReplicaBound(value.minReplicas) ? value.minReplicas : 1
+  const maxReplicas = hasReplicaFields && isValidReplicaBound(value.maxReplicas) && value.maxReplicas >= minReplicas ? value.maxReplicas : 1
   if (
     value.configMode === 'manual' &&
     isFiniteNumber(value.manualBaselineLatencyMs) &&
@@ -52,6 +61,8 @@ function plainNodeSim(value: unknown): NodeSim | undefined {
       manualBaselineLatencyMs: value.manualBaselineLatencyMs,
       manualSaturationRPS: value.manualSaturationRPS,
       manualMaxRPS: value.manualMaxRPS,
+      minReplicas,
+      maxReplicas,
     }
   }
   if (
@@ -67,6 +78,8 @@ function plainNodeSim(value: unknown): NodeSim | undefined {
       configMode: 'calculated',
       cpuProcessingTimeMs: value.cpuProcessingTimeMs,
       maxWorkerThreads: value.maxWorkerThreads,
+      minReplicas,
+      maxReplicas,
     }
   }
   return undefined
