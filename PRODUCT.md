@@ -52,9 +52,16 @@ comparing scenarios, never as guarantees.
   proportionally to how far saturation sits past those thresholds (real
   Kubernetes HPA-style), with newly-added replicas taking the declared
   boot delay before serving traffic; the scaler's sustain window and
-  cooldown timing stay internal tunables, not user parameters. The
-  user-facing parameter set is closed and small; new parameters require a
-  constitution amendment.
+  cooldown timing stay internal tunables, not user parameters. Saturating
+  hosts also carry an `overloadBehavior` switch (`clamp` | `collapse`,
+  defaulting to `collapse` for new hosts): `clamp` plateaus at the host's
+  cap the way every host always has; `collapse` bends goodput back down
+  toward zero past that same cap — the retrograde "congestion collapse"
+  curve real overloaded systems exhibit (connection-pool exhaustion, retry
+  storms, GC/interrupt thrash) — derived entirely from the host's existing
+  capability parameters plus an internal decay tunable, never a second
+  knob. The user-facing parameter set is closed and small; new parameters
+  require a constitution amendment.
 - **One saturation dimension, honestly.** Saturation is a single
   resource-agnostic ratio, not split into CPU/memory/disk like k8s HPA's
   separate metrics. CPU time is already an estimate; memory pressure (GC
