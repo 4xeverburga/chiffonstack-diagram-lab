@@ -30,6 +30,7 @@ const threeNodeTopology: SimTopology = {
         manualBaselineLatencyMs: 10,
         manualSaturationRPS: 500,
         manualMaxRPS: 600,
+        overloadBehavior: 'clamp',
         minReplicas: 1,
         maxReplicas: 1,
         bootDelayMs: 8000,

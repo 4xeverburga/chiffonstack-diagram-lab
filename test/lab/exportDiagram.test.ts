@@ -307,6 +307,7 @@ describe('parseDiagram', () => {
             manualBaselineLatencyMs: 10,
             manualSaturationRPS: 500,
             manualMaxRPS: 600,
+            overloadBehavior: 'collapse',
             minReplicas: 1,
             maxReplicas: 3,
             bootDelayMs: 8000,
@@ -327,6 +328,7 @@ describe('parseDiagram', () => {
             configMode: 'calculated',
             cpuProcessingTimeMs: 16,
             maxWorkerThreads: 8,
+            overloadBehavior: 'clamp',
             minReplicas: 2,
             maxReplicas: 2,
             bootDelayMs: 8000,
@@ -345,6 +347,7 @@ describe('parseDiagram', () => {
       manualBaselineLatencyMs: 10,
       manualSaturationRPS: 500,
       manualMaxRPS: 600,
+      overloadBehavior: 'collapse',
       minReplicas: 1,
       maxReplicas: 3,
       bootDelayMs: 8000,
@@ -357,6 +360,7 @@ describe('parseDiagram', () => {
       configMode: 'calculated',
       cpuProcessingTimeMs: 16,
       maxWorkerThreads: 8,
+      overloadBehavior: 'clamp',
       minReplicas: 2,
       maxReplicas: 2,
       bootDelayMs: 8000,
@@ -395,6 +399,7 @@ describe('parseDiagram', () => {
       manualBaselineLatencyMs: 10,
       manualSaturationRPS: 500,
       manualMaxRPS: 600,
+      overloadBehavior: 'clamp',
       minReplicas: 1,
       maxReplicas: 1,
       bootDelayMs: 8000,
@@ -435,6 +440,7 @@ describe('parseDiagram', () => {
       manualBaselineLatencyMs: 10,
       manualSaturationRPS: 500,
       manualMaxRPS: 600,
+      overloadBehavior: 'clamp',
       minReplicas: 1,
       maxReplicas: 4,
       bootDelayMs: 8000,
@@ -476,11 +482,56 @@ describe('parseDiagram', () => {
       manualBaselineLatencyMs: 10,
       manualSaturationRPS: 500,
       manualMaxRPS: 600,
+      overloadBehavior: 'clamp',
       minReplicas: 1,
       maxReplicas: 4,
       bootDelayMs: 3000,
       highWatermark: 0.8,
       lowWatermark: 0.3,
+    })
+  })
+
+  it('imports a pre-012 host (minReplicas/maxReplicas/bootDelayMs/watermarks present, no overloadBehavior) with the legacy clamp behavior filled in (constitution v3.4.0)', () => {
+    const pre012Json = JSON.stringify({
+      nodes: [
+        {
+          id: 'scaled-api',
+          type: 'labelNode',
+          position: { x: 0, y: 0 },
+          data: {
+            label: 'scaled api',
+            sim: {
+              kind: 'host',
+              profile: 'transactional_api',
+              configMode: 'manual',
+              manualBaselineLatencyMs: 10,
+              manualSaturationRPS: 500,
+              manualMaxRPS: 600,
+              minReplicas: 1,
+              maxReplicas: 4,
+              bootDelayMs: 3000,
+              highWatermark: 0.7,
+              lowWatermark: 0.2,
+            },
+          },
+        },
+      ],
+      edges: [],
+    })
+    const { nodes: parsedNodes } = parseDiagram(pre012Json)
+    expect(parsedNodes[0].data.sim).toEqual({
+      kind: 'host',
+      profile: 'transactional_api',
+      configMode: 'manual',
+      manualBaselineLatencyMs: 10,
+      manualSaturationRPS: 500,
+      manualMaxRPS: 600,
+      overloadBehavior: 'clamp',
+      minReplicas: 1,
+      maxReplicas: 4,
+      bootDelayMs: 3000,
+      highWatermark: 0.7,
+      lowWatermark: 0.2,
     })
   })
 

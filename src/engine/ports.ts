@@ -42,6 +42,10 @@ export type HostNodeSim =
       manualBaselineLatencyMs: number
       manualSaturationRPS: number
       manualMaxRPS: number
+      /** clamp: unchanged pre-012 hard cap/shed behavior; collapse: goodput
+       *  decays retrograde past the knee instead of plateauing (data-model.md,
+       *  research.md D1/D2). The only new field this feature adds (FR-001). */
+      overloadBehavior: 'clamp' | 'collapse'
       minReplicas: number
       maxReplicas: number
       /** Simulated ms a newly-added replica takes before it serves traffic
@@ -65,6 +69,7 @@ export type HostNodeSim =
       configMode: 'calculated'
       cpuProcessingTimeMs: number
       maxWorkerThreads: number
+      overloadBehavior: 'clamp' | 'collapse'
       minReplicas: number
       maxReplicas: number
       bootDelayMs: number
@@ -135,7 +140,7 @@ export interface HostNodeMetrics {
   /** base × (1 + ρ/(1−ρ)), ρ ≤ HOST_RHO_CLAMP (research.md D2). Per-replica
    *  on scaled hosts. */
   latencyMs: number
-  status: 'healthy' | 'saturated' | 'overloaded'
+  status: 'healthy' | 'saturated' | 'overloaded' | 'collapsed'
   /** Present only for saturating profiles (data-model.md 013 delta). */
   replicas?: HostReplicaTelemetry
 }
