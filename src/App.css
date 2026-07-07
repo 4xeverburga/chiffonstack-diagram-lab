@@ -621,7 +621,8 @@
    bounding box. Applied via hostStatusTreatment.ts's idempotent class
    derivation — see App.tsx's renderedNodes useMemo. */
 .react-flow__node.sim-status-saturated,
-.react-flow__node.sim-status-overloaded {
+.react-flow__node.sim-status-overloaded,
+.react-flow__node.sim-status-collapsed {
   border-color: var(--token-primary, #ff4715);
 }
 
@@ -631,6 +632,15 @@
 
 .react-flow__node.sim-status-overloaded {
   animation: sim-status-glow-overloaded 0.7s steps(2, jump-end) infinite;
+}
+
+/* Collapsed (feature 012): visually distinct from both saturated (smooth
+   single breath) and overloaded (fast harsh flicker) via a slower,
+   double-peaked "heartbeat" cadence — conveys labored, struggling
+   throughput rather than a simple binary alert, still border-color +
+   glow only (no box-model/footprint change, constitution V). */
+.react-flow__node.sim-status-collapsed {
+  animation: sim-status-glow-collapsed 2.4s ease-in-out infinite;
 }
 
 @keyframes sim-status-glow-saturated {
@@ -650,6 +660,25 @@
   }
   50% {
     box-shadow: 0 0 6px 2px color-mix(in srgb, var(--token-primary, #ff4715) 55%, transparent);
+  }
+}
+
+@keyframes sim-status-glow-collapsed {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--token-primary, #ff4715) 0%, transparent);
+  }
+  15% {
+    box-shadow: 0 0 14px 3px color-mix(in srgb, var(--token-primary, #ff4715) 65%, transparent);
+  }
+  30% {
+    box-shadow: 0 0 2px 0 color-mix(in srgb, var(--token-primary, #ff4715) 10%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 14px 3px color-mix(in srgb, var(--token-primary, #ff4715) 65%, transparent);
+  }
+  70% {
+    box-shadow: 0 0 2px 0 color-mix(in srgb, var(--token-primary, #ff4715) 10%, transparent);
   }
 }
 
@@ -956,7 +985,8 @@
   }
 
   .react-flow__node.sim-status-saturated,
-  .react-flow__node.sim-status-overloaded {
+  .react-flow__node.sim-status-overloaded,
+  .react-flow__node.sim-status-collapsed {
     animation: none;
   }
 

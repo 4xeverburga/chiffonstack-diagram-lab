@@ -1,7 +1,7 @@
 import type { HostNodeMetrics } from '../engine/ports'
 
 const STATUS_CLASS_PREFIX = 'sim-status-'
-const APPLIED_STATUSES = ['saturated', 'overloaded'] as const
+const APPLIED_STATUSES = ['saturated', 'overloaded', 'collapsed'] as const
 
 // Maps a host's per-window status to the canvas node treatment vocabulary
 // (App.css's .sim-status-saturated/.sim-status-overloaded — border color +
@@ -20,6 +20,6 @@ export function applyHostStatusClass(className: string | undefined, status: Host
     .split(' ')
     .filter((token) => token.length > 0)
     .filter((token) => !APPLIED_STATUSES.some((s) => token === `${STATUS_CLASS_PREFIX}${s}`))
-  if (status === 'saturated' || status === 'overloaded') tokens.push(`${STATUS_CLASS_PREFIX}${status}`)
+  if (status === 'saturated' || status === 'overloaded' || status === 'collapsed') tokens.push(`${STATUS_CLASS_PREFIX}${status}`)
   return tokens.join(' ')
 }
