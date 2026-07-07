@@ -310,6 +310,8 @@ describe('parseDiagram', () => {
             minReplicas: 1,
             maxReplicas: 3,
             bootDelayMs: 8000,
+            highWatermark: 0.8,
+            lowWatermark: 0.3,
           },
         },
       },
@@ -328,6 +330,8 @@ describe('parseDiagram', () => {
             minReplicas: 2,
             maxReplicas: 2,
             bootDelayMs: 8000,
+            highWatermark: 0.8,
+            lowWatermark: 0.3,
           },
         },
       },
@@ -344,6 +348,8 @@ describe('parseDiagram', () => {
       minReplicas: 1,
       maxReplicas: 3,
       bootDelayMs: 8000,
+      highWatermark: 0.8,
+      lowWatermark: 0.3,
     })
     expect(parsedNodes.find((node) => node.id === 'calculated')?.data.sim).toEqual({
       kind: 'host',
@@ -354,6 +360,8 @@ describe('parseDiagram', () => {
       minReplicas: 2,
       maxReplicas: 2,
       bootDelayMs: 8000,
+      highWatermark: 0.8,
+      lowWatermark: 0.3,
     })
   })
 
@@ -390,6 +398,8 @@ describe('parseDiagram', () => {
       minReplicas: 1,
       maxReplicas: 1,
       bootDelayMs: 8000,
+      highWatermark: 0.8,
+      lowWatermark: 0.3,
     })
   })
 
@@ -428,6 +438,49 @@ describe('parseDiagram', () => {
       minReplicas: 1,
       maxReplicas: 4,
       bootDelayMs: 8000,
+      highWatermark: 0.8,
+      lowWatermark: 0.3,
+    })
+  })
+
+  it('imports a pre-3.3.0 host (minReplicas/maxReplicas/bootDelayMs present, no watermarks) with the legacy watermarks filled in (constitution v3.3.0)', () => {
+    const pre330Json = JSON.stringify({
+      nodes: [
+        {
+          id: 'scaled-api',
+          type: 'labelNode',
+          position: { x: 0, y: 0 },
+          data: {
+            label: 'scaled api',
+            sim: {
+              kind: 'host',
+              profile: 'transactional_api',
+              configMode: 'manual',
+              manualBaselineLatencyMs: 10,
+              manualSaturationRPS: 500,
+              manualMaxRPS: 600,
+              minReplicas: 1,
+              maxReplicas: 4,
+              bootDelayMs: 3000,
+            },
+          },
+        },
+      ],
+      edges: [],
+    })
+    const { nodes: parsedNodes } = parseDiagram(pre330Json)
+    expect(parsedNodes[0].data.sim).toEqual({
+      kind: 'host',
+      profile: 'transactional_api',
+      configMode: 'manual',
+      manualBaselineLatencyMs: 10,
+      manualSaturationRPS: 500,
+      manualMaxRPS: 600,
+      minReplicas: 1,
+      maxReplicas: 4,
+      bootDelayMs: 3000,
+      highWatermark: 0.8,
+      lowWatermark: 0.3,
     })
   })
 

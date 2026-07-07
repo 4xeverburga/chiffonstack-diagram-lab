@@ -20,6 +20,8 @@ function manualSim(overrides: Partial<Extract<HostNodeSim, { configMode: 'manual
     minReplicas: 1,
     maxReplicas: 1,
     bootDelayMs: 8000,
+    highWatermark: 0.8,
+    lowWatermark: 0.3,
     ...overrides,
   }
 }
@@ -34,6 +36,8 @@ function calculatedSim(overrides: Partial<Extract<HostNodeSim, { configMode: 'ca
     minReplicas: 1,
     maxReplicas: 1,
     bootDelayMs: 8000,
+    highWatermark: 0.8,
+    lowWatermark: 0.3,
     ...overrides,
   }
 }

@@ -134,17 +134,9 @@ export const KB_PER_MB = 1024
 export const MB_PER_GB = 1024
 
 // Autoscaler tunables (feature 013, data-model.md/research.md D1/D2).
-// Internal-only per constitution v3.1.0 Principle I — never surfaced as a
-// user parameter, unlike minReplicas/maxReplicas.
-
-// Saturation ratio (per replica) above which the scaler starts accumulating
-// toward a scale-up (research.md D1's hysteresis band, high side).
-export const AUTOSCALE_HIGH_WATERMARK = 0.8
-
-// Saturation ratio (per replica) below which the scaler starts accumulating
-// toward a scale-down (research.md D1's hysteresis band, low side). Between
-// the two watermarks the scaler holds (no action, accumulators reset).
-export const AUTOSCALE_LOW_WATERMARK = 0.3
+// Internal-only per constitution v3.3.0 Principle I — never surfaced as a
+// user parameter, unlike minReplicas/maxReplicas/bootDelayMs/highWatermark/
+// lowWatermark.
 
 // How long (simulated ms) saturation must stay past a watermark before the
 // scaler acts — absorbs brief spikes/dips without flapping (spec.md
@@ -174,4 +166,13 @@ export const VISIBLE_REPLICA_CAP = 4
 // still applies to code; this is a named, documented migration value used
 // once at the import call site — see src/lab/exportDiagram.ts).
 export const LEGACY_BOOT_DELAY_MS_FOR_IMPORT = 8000
+
+// Migration-only fallbacks (constitution v3.3.0): `highWatermark`/
+// `lowWatermark` are now user-facing capability parameters, NOT internal
+// tunables — these constants exist solely so importing a pre-3.3.0 diagram
+// (which predates the fields) fills them in with the exact values that
+// produced its previous behavior (src/lab/exportDiagram.ts), same pattern
+// as LEGACY_BOOT_DELAY_MS_FOR_IMPORT above.
+export const LEGACY_HIGH_WATERMARK_FOR_IMPORT = 0.8
+export const LEGACY_LOW_WATERMARK_FOR_IMPORT = 0.3
 

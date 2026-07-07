@@ -7,12 +7,13 @@ import {
   reclampReplicaRuntime,
   type ReplicaRuntime,
 } from '../../src/engine/autoscaler'
-import {
-  AUTOSCALE_COOLDOWN_MS,
-  AUTOSCALE_HIGH_WATERMARK,
-  AUTOSCALE_LOW_WATERMARK,
-  AUTOSCALE_SUSTAIN_MS,
-} from '../../src/engine/config'
+import { AUTOSCALE_COOLDOWN_MS, AUTOSCALE_SUSTAIN_MS } from '../../src/engine/config'
+
+// Watermarks are now a per-host user parameter (constitution v3.3.0), not
+// an internal config constant — these local test values match the old
+// internal defaults so the fixtures below read the same as before.
+const AUTOSCALE_HIGH_WATERMARK = 0.8
+const AUTOSCALE_LOW_WATERMARK = 0.3
 
 const WINDOW_MS = 1000
 const BOOT_DELAY_MS = 8000
@@ -38,6 +39,8 @@ function runWindows(
       minReplicas,
       maxReplicas,
       bootDelayMs: BOOT_DELAY_MS,
+      highWatermark: AUTOSCALE_HIGH_WATERMARK,
+      lowWatermark: AUTOSCALE_LOW_WATERMARK,
     })
     current = decision.runtime
     runtimes.push(current)
@@ -98,6 +101,8 @@ describe('evaluateScaling — scale-up half (US1)', () => {
       minReplicas: 1,
       maxReplicas: 4,
       bootDelayMs: 2000,
+    highWatermark: AUTOSCALE_HIGH_WATERMARK,
+    lowWatermark: AUTOSCALE_LOW_WATERMARK,
     })
     expect(fireAt.runtime.booting[0].readyAtSimTimeMs).toBe(AUTOSCALE_SUSTAIN_MS + 2000)
 
@@ -109,6 +114,8 @@ describe('evaluateScaling — scale-up half (US1)', () => {
       minReplicas: 1,
       maxReplicas: 4,
       bootDelayMs: 60_000,
+    highWatermark: AUTOSCALE_HIGH_WATERMARK,
+    lowWatermark: AUTOSCALE_LOW_WATERMARK,
     })
     expect(slowBoot.runtime.booting[0].readyAtSimTimeMs).toBe(AUTOSCALE_SUSTAIN_MS + 60_000)
   })
@@ -126,6 +133,8 @@ describe('evaluateScaling — scale-up half (US1)', () => {
       minReplicas: 1,
       maxReplicas: 10,
       bootDelayMs: BOOT_DELAY_MS,
+    highWatermark: AUTOSCALE_HIGH_WATERMARK,
+    lowWatermark: AUTOSCALE_LOW_WATERMARK,
     })
     expect(decision.event).toEqual({ direction: 'up', newCount: 4, simTimeMs: AUTOSCALE_SUSTAIN_MS })
     // One boot entry per newly-added replica, all ready at the same time.
@@ -142,6 +151,8 @@ describe('evaluateScaling — scale-up half (US1)', () => {
       minReplicas: 1,
       maxReplicas: 4,
       bootDelayMs: BOOT_DELAY_MS,
+    highWatermark: AUTOSCALE_HIGH_WATERMARK,
+    lowWatermark: AUTOSCALE_LOW_WATERMARK,
     })
     expect(decision.event?.newCount).toBe(4)
     expect(decision.runtime.nominalCount).toBe(4)
@@ -156,8 +167,73 @@ describe('evaluateScaling — scale-up half (US1)', () => {
       minReplicas: 1,
       maxReplicas: 10,
       bootDelayMs: BOOT_DELAY_MS,
+    highWatermark: AUTOSCALE_HIGH_WATERMARK,
+    lowWatermark: AUTOSCALE_LOW_WATERMARK,
     })
     expect(decision.event?.newCount).toBe(4)
+  })
+
+  it('a custom highWatermark changes exactly when the scaler triggers (it is a real per-host parameter, not a fixed constant)', () => {
+    // At 50% saturation: never triggers against the default 0.8 watermark,
+    // but DOES trigger against a custom, much lower 0.4 watermark.
+    const saturation = 0.5
+    const withDefaultWatermark = evaluateScaling({
+      runtime: { ...createReplicaRuntime(1), timeAboveHighMs: AUTOSCALE_SUSTAIN_MS },
+      perReplicaSaturation: saturation,
+      simTimeMs: AUTOSCALE_SUSTAIN_MS,
+      windowSizeMs: WINDOW_MS,
+      minReplicas: 1,
+      maxReplicas: 4,
+      bootDelayMs: BOOT_DELAY_MS,
+      highWatermark: 0.8,
+      lowWatermark: 0.3,
+    })
+    expect(withDefaultWatermark.event).toBeUndefined()
+
+    const withLowerWatermark = evaluateScaling({
+      runtime: { ...createReplicaRuntime(1), timeAboveHighMs: AUTOSCALE_SUSTAIN_MS },
+      perReplicaSaturation: saturation,
+      simTimeMs: AUTOSCALE_SUSTAIN_MS,
+      windowSizeMs: WINDOW_MS,
+      minReplicas: 1,
+      maxReplicas: 4,
+      bootDelayMs: BOOT_DELAY_MS,
+      highWatermark: 0.4,
+      lowWatermark: 0.1,
+    })
+    expect(withLowerWatermark.event?.direction).toBe('up')
+  })
+
+  it('a custom lowWatermark changes exactly when the scaler scales back in', () => {
+    // At 20% saturation: sits in the default [0.3, 0.8] band (no action),
+    // but triggers a scale-down against a custom, much higher 0.25 low
+    // watermark being cleared... actually below it, so it should fire.
+    const saturation = 0.2
+    const withDefaultWatermark = evaluateScaling({
+      runtime: { ...createReplicaRuntime(2), timeBelowLowMs: AUTOSCALE_SUSTAIN_MS },
+      perReplicaSaturation: saturation,
+      simTimeMs: AUTOSCALE_SUSTAIN_MS,
+      windowSizeMs: WINDOW_MS,
+      minReplicas: 1,
+      maxReplicas: 4,
+      bootDelayMs: BOOT_DELAY_MS,
+      highWatermark: 0.8,
+      lowWatermark: 0.1,
+    })
+    expect(withDefaultWatermark.event).toBeUndefined()
+
+    const withHigherLowWatermark = evaluateScaling({
+      runtime: { ...createReplicaRuntime(2), timeBelowLowMs: AUTOSCALE_SUSTAIN_MS },
+      perReplicaSaturation: saturation,
+      simTimeMs: AUTOSCALE_SUSTAIN_MS,
+      windowSizeMs: WINDOW_MS,
+      minReplicas: 1,
+      maxReplicas: 4,
+      bootDelayMs: BOOT_DELAY_MS,
+      highWatermark: 0.8,
+      lowWatermark: 0.25,
+    })
+    expect(withHigherLowWatermark.event?.direction).toBe('down')
   })
 
   it('respects cooldown: a second sustained high period right after the first does not fire again immediately', () => {
@@ -258,6 +334,8 @@ describe('evaluateScaling — scale-down half (US2)', () => {
       minReplicas: 1,
       maxReplicas: 10,
       bootDelayMs: BOOT_DELAY_MS,
+    highWatermark: AUTOSCALE_HIGH_WATERMARK,
+    lowWatermark: AUTOSCALE_LOW_WATERMARK,
     })
     expect(decision.event?.direction).toBe('down')
     expect(decision.event!.newCount).toBeLessThan(6)

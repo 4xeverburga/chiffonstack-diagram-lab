@@ -80,13 +80,14 @@ function integerInput(label: string, value: number, disabled: boolean, min: numb
   )
 }
 
-// Horizontal-scaling bounds + boot delay (feature 013, FR-001; boot delay
-// promoted from an internal tunable to a user-facing capability parameter
-// in constitution v3.2.0) — the three new user-facing parameters closed
-// set. maxReplicas auto-clamps >= minReplicas on every edit, mirroring the
-// manualMaxRPS >= manualSaturationRPS pattern above, instead of surfacing
-// a separate validation-error message.
-function ReplicaBoundsFields({
+// Horizontal-scaling bounds + boot delay + watermarks (feature 013, FR-001;
+// boot delay and watermarks promoted from internal tunables to user-facing
+// capability parameters in constitution v3.2.0/v3.3.0) — the five new
+// user-facing parameters closed set. maxReplicas auto-clamps >= minReplicas,
+// and highWatermark auto-clamps > lowWatermark (and vice versa) on every
+// edit, mirroring the manualMaxRPS >= manualSaturationRPS pattern above,
+// instead of surfacing a separate validation-error message.
+function AutoscalingFields({
   sim,
   disabled,
   onChange,
@@ -104,6 +105,12 @@ function ReplicaBoundsFields({
         onChange({ ...sim, maxReplicas: Math.max(value, sim.minReplicas) }),
       )}
       {integerInput('Boot delay (ms)', sim.bootDelayMs, disabled, 0, (value) => onChange({ ...sim, bootDelayMs: value }))}
+      {numberInput('High watermark', sim.highWatermark, disabled, 0, (value) =>
+        onChange({ ...sim, highWatermark: value, lowWatermark: Math.min(sim.lowWatermark, value - 0.01) }),
+      )}
+      {numberInput('Low watermark', sim.lowWatermark, disabled, 0, (value) =>
+        onChange({ ...sim, lowWatermark: Math.min(value, sim.highWatermark - 0.01) }),
+      )}
     </>
   )
 }
@@ -141,6 +148,8 @@ export function HostConfigFields({ sim, disabled, onChange }: HostConfigFieldsPr
         minReplicas: sim.minReplicas,
         maxReplicas: sim.maxReplicas,
         bootDelayMs: sim.bootDelayMs,
+        highWatermark: sim.highWatermark,
+        lowWatermark: sim.lowWatermark,
       })
     } else {
       onChange({
@@ -152,6 +161,8 @@ export function HostConfigFields({ sim, disabled, onChange }: HostConfigFieldsPr
         minReplicas: sim.minReplicas,
         maxReplicas: sim.maxReplicas,
         bootDelayMs: sim.bootDelayMs,
+        highWatermark: sim.highWatermark,
+        lowWatermark: sim.lowWatermark,
       })
     }
   }
@@ -179,7 +190,7 @@ export function HostConfigFields({ sim, disabled, onChange }: HostConfigFieldsPr
       ) : (
         <CalculatedComputeFields sim={sim} disabled={disabled} onChange={onChange} />
       )}
-      <ReplicaBoundsFields sim={sim} disabled={disabled} onChange={onChange} />
+      <AutoscalingFields sim={sim} disabled={disabled} onChange={onChange} />
     </>
   )
 }

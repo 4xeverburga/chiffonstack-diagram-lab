@@ -3,7 +3,7 @@ import { HEAT_VARIANTS, type HeatVariant } from './heatVariants'
 import { LEGACY_SOURCE_SIDE, LEGACY_TARGET_SIDE, resolveHandleSide } from './handleSides'
 import { resolveDirection, resolveThickness } from './edgeStyle'
 import { resolveTextSize } from './textSizes'
-import { LEGACY_BOOT_DELAY_MS_FOR_IMPORT } from '../engine/config'
+import { LEGACY_BOOT_DELAY_MS_FOR_IMPORT, LEGACY_HIGH_WATERMARK_FOR_IMPORT, LEGACY_LOW_WATERMARK_FOR_IMPORT } from '../engine/config'
 import type { EdgeSimConfig, NodeSim } from '../engine/ports'
 
 // Tracks whether the current parseDiagram() call dropped any retired-role
@@ -54,6 +54,18 @@ function plainNodeSim(value: unknown): NodeSim | undefined {
   // reproducing identical behavior rather than guessing (CLAUDE.md).
   const bootDelayMs =
     isFiniteNumber(value.bootDelayMs) && value.bootDelayMs >= 0 ? value.bootDelayMs : LEGACY_BOOT_DELAY_MS_FOR_IMPORT
+  // Watermarks (constitution v3.3.0): user-facing capability parameters,
+  // not internal tunables. JSON written before this promotion has no
+  // highWatermark/lowWatermark at all — that absence fills in the exact
+  // values the engine used internally back then, reproducing identical
+  // behavior rather than guessing (CLAUDE.md).
+  const isValidWatermark = (n: unknown): n is number => isFiniteNumber(n) && n >= 0
+  const hasWatermarkFields = 'highWatermark' in value || 'lowWatermark' in value
+  const highWatermark = hasWatermarkFields && isValidWatermark(value.highWatermark) ? value.highWatermark : LEGACY_HIGH_WATERMARK_FOR_IMPORT
+  const lowWatermark =
+    hasWatermarkFields && isValidWatermark(value.lowWatermark) && value.lowWatermark < highWatermark
+      ? value.lowWatermark
+      : LEGACY_LOW_WATERMARK_FOR_IMPORT
   if (
     value.configMode === 'manual' &&
     isFiniteNumber(value.manualBaselineLatencyMs) &&
@@ -73,6 +85,8 @@ function plainNodeSim(value: unknown): NodeSim | undefined {
       minReplicas,
       maxReplicas,
       bootDelayMs,
+      highWatermark,
+      lowWatermark,
     }
   }
   if (
@@ -91,6 +105,8 @@ function plainNodeSim(value: unknown): NodeSim | undefined {
       minReplicas,
       maxReplicas,
       bootDelayMs,
+      highWatermark,
+      lowWatermark,
     }
   }
   return undefined

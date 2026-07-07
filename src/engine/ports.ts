@@ -47,9 +47,17 @@ export type HostNodeSim =
       /** Simulated ms a newly-added replica takes before it serves traffic
        *  (data-model.md 013 delta) — a real, user-known infrastructure
        *  characteristic (container cold-start vs. VM boot vary by orders
-       *  of magnitude), unlike the scaler's internal watermark/sustain/
-       *  cooldown policy constants. */
+       *  of magnitude), unlike the scaler's internal sustain/cooldown
+       *  policy constants. */
       bootDelayMs: number
+      /** Per-replica saturation ratio above which the scaler starts
+       *  accumulating toward a scale-up (constitution v3.3.0 — promoted
+       *  from an internal tunable to match real Kubernetes HPA, which
+       *  also sets its target utilization per resource, not globally). */
+      highWatermark: number
+      /** Per-replica saturation ratio below which the scaler starts
+       *  accumulating toward a scale-down; must be < highWatermark. */
+      lowWatermark: number
     }
   | {
       kind: 'host'
@@ -60,6 +68,8 @@ export type HostNodeSim =
       minReplicas: number
       maxReplicas: number
       bootDelayMs: number
+      highWatermark: number
+      lowWatermark: number
     }
 
 /** A zero-configuration buffer node (data-model.md, FR-010). */

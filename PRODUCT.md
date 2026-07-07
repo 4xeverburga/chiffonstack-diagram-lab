@@ -46,13 +46,15 @@ comparing scenarios, never as guarantees.
   manual (known capability) vs calculated (CPU time × worker threads)
   configuration. Queues are deliberately generic zero-config buffers —
   throughput and backlog telemetry only. Saturating hosts also carry
-  `minReplicas`/`maxReplicas` replica bounds and a `bootDelayMs` capability
-  parameter for horizontal autoscaling — an internal scaler adds/removes
-  replicas under sustained saturation, with newly-added replicas taking
-  the declared boot delay before serving traffic; the scaler's thresholds/
-  timing (watermarks, sustain window, cooldown) stay internal tunables, not
-  user parameters. The user-facing parameter set is closed and small; new
-  parameters require a constitution amendment.
+  `minReplicas`/`maxReplicas` replica bounds, a `bootDelayMs` capability
+  parameter, and `highWatermark`/`lowWatermark` saturation thresholds for
+  horizontal autoscaling — an internal scaler adds/removes replicas
+  proportionally to how far saturation sits past those thresholds (real
+  Kubernetes HPA-style), with newly-added replicas taking the declared
+  boot delay before serving traffic; the scaler's sustain window and
+  cooldown timing stay internal tunables, not user parameters. The
+  user-facing parameter set is closed and small; new parameters require a
+  constitution amendment.
 - **One saturation dimension, honestly.** Saturation is a single
   resource-agnostic ratio, not split into CPU/memory/disk like k8s HPA's
   separate metrics. CPU time is already an estimate; memory pressure (GC

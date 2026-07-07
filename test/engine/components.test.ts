@@ -33,6 +33,8 @@ const threeNodeTopology: SimTopology = {
         minReplicas: 1,
         maxReplicas: 1,
         bootDelayMs: 8000,
+        highWatermark: 0.8,
+        lowWatermark: 0.3,
       },
     },
     { id: 'db', sim: { kind: 'host', profile: 'external_api', manualBaselineLatencyMs: 5 } },

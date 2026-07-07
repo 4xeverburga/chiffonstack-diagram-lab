@@ -90,6 +90,8 @@ const MANUAL_API_SIM: NodeSim = {
   minReplicas: 1,
   maxReplicas: 1,
   bootDelayMs: 8000,
+  highWatermark: 0.8,
+  lowWatermark: 0.3,
 }
 const QUEUE_SIM: NodeSim = { kind: 'queue' }
 

@@ -5,7 +5,7 @@
 // watermark crossing, cooldown, boot-queue draining, bounds re-clamp) is
 // directly unit-testable (constitution VI) and deterministic (FR-008).
 
-import { AUTOSCALE_COOLDOWN_MS, AUTOSCALE_HIGH_WATERMARK, AUTOSCALE_LOW_WATERMARK, AUTOSCALE_SUSTAIN_MS, SCALING_EVENT_HISTORY_LIMIT } from './config'
+import { AUTOSCALE_COOLDOWN_MS, AUTOSCALE_SUSTAIN_MS, SCALING_EVENT_HISTORY_LIMIT } from './config'
 import type { ScalingEvent } from './ports'
 
 /** Per-host, cross-window scaler state (data-model.md). */
@@ -78,6 +78,14 @@ export interface ScalingDecisionInput {
    *  internal tunable — constitution v3.2.0): simulated ms a newly-added
    *  replica takes before it serves traffic. */
   bootDelayMs: number
+  /** Per-replica saturation ratio above which the scaler accumulates
+   *  toward a scale-up (feature 013, promoted from an internal tunable in
+   *  constitution v3.3.0 — real Kubernetes HPA also sets this per
+   *  resource, not globally). */
+  highWatermark: number
+  /** Per-replica saturation ratio below which the scaler accumulates
+   *  toward a scale-down; must be < highWatermark. */
+  lowWatermark: number
 }
 
 export interface ScalingDecisionOutput {
@@ -110,12 +118,12 @@ export interface ScalingDecisionOutput {
  *    capacity is only visible starting next window — spec US2 scenario 1).
  *  - otherwise → hold; entering the band resets both accumulators. */
 export function evaluateScaling(input: ScalingDecisionInput): ScalingDecisionOutput {
-  const { perReplicaSaturation, simTimeMs, windowSizeMs, minReplicas, maxReplicas, bootDelayMs } = input
+  const { perReplicaSaturation, simTimeMs, windowSizeMs, minReplicas, maxReplicas, bootDelayMs, highWatermark, lowWatermark } = input
   let runtime = input.runtime
 
-  if (perReplicaSaturation >= AUTOSCALE_HIGH_WATERMARK) {
+  if (perReplicaSaturation >= highWatermark) {
     runtime = { ...runtime, timeAboveHighMs: runtime.timeAboveHighMs + windowSizeMs, timeBelowLowMs: 0 }
-  } else if (perReplicaSaturation <= AUTOSCALE_LOW_WATERMARK) {
+  } else if (perReplicaSaturation <= lowWatermark) {
     runtime = { ...runtime, timeBelowLowMs: runtime.timeBelowLowMs + windowSizeMs, timeAboveHighMs: 0 }
   } else {
     runtime = { ...runtime, timeAboveHighMs: 0, timeBelowLowMs: 0 }
@@ -125,7 +133,7 @@ export function evaluateScaling(input: ScalingDecisionInput): ScalingDecisionOut
     // Proportional desired count (kubernetes.io HPA formula), floored at
     // count+1 so crossing the watermark always adds at least one replica
     // even when the ratio itself rounds down to the current count.
-    const rawDesired = Math.ceil(runtime.nominalCount * (perReplicaSaturation / AUTOSCALE_HIGH_WATERMARK))
+    const rawDesired = Math.ceil(runtime.nominalCount * (perReplicaSaturation / highWatermark))
     const newCount = Math.min(maxReplicas, Math.max(runtime.nominalCount + 1, rawDesired))
     const addedCount = newCount - runtime.nominalCount
     const event: ScalingEvent = { direction: 'up', newCount, simTimeMs }
@@ -148,7 +156,7 @@ export function evaluateScaling(input: ScalingDecisionInput): ScalingDecisionOut
   if (runtime.timeBelowLowMs >= AUTOSCALE_SUSTAIN_MS && runtime.nominalCount > minReplicas && cooldownElapsed(runtime, simTimeMs)) {
     // Symmetric proportional formula on the low side, floored at count-1
     // so crossing the watermark always removes at least one replica.
-    const rawDesired = Math.ceil(runtime.nominalCount * (perReplicaSaturation / AUTOSCALE_LOW_WATERMARK))
+    const rawDesired = Math.ceil(runtime.nominalCount * (perReplicaSaturation / lowWatermark))
     const newCount = Math.max(minReplicas, Math.min(runtime.nominalCount - 1, rawDesired))
     const removedCount = runtime.nominalCount - newCount
     const event: ScalingEvent = { direction: 'down', newCount, simTimeMs }

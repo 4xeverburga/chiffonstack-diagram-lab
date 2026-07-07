@@ -9,7 +9,7 @@
 // beyond what's threaded through as arguments — so a full window can be
 // exercised directly in tests without the DES event loop.
 
-import { AUTOSCALE_HIGH_WATERMARK, AUTOSCALE_LOW_WATERMARK, EDGE_CONGESTION_THRESHOLD, KB_PER_MB } from './config'
+import { EDGE_CONGESTION_THRESHOLD, KB_PER_MB } from './config'
 import { edgeTrafficShare, type TopologyGraph } from './components'
 import { calculatedCapacityRPS, computeClientPoolMetrics, computeExternalApiMetrics, computeHostMetrics } from './hostModel'
 import { computeQueueMetrics } from './queueModel'
@@ -225,6 +225,8 @@ export function propagateWindow(input: FlowPropagationInput): FlowPropagationOut
           minReplicas: sim.minReplicas,
           maxReplicas: sim.maxReplicas,
           bootDelayMs: sim.bootDelayMs,
+          highWatermark: sim.highWatermark,
+          lowWatermark: sim.lowWatermark,
         })
       : { runtime: drained, event: undefined }
     nextReplicaRuntimeByNode.set(nodeId, decision.runtime)
@@ -253,8 +255,8 @@ export function propagateWindow(input: FlowPropagationInput): FlowPropagationOut
       buildReplicaDivisionDescriptor({ incomingRPS, effectiveCount: effective, perReplicaRPS: perReplicaIncomingRPS }),
       buildScalingPolicyDescriptor({
         perReplicaSaturation: metrics.saturationRatio,
-        highWatermark: AUTOSCALE_HIGH_WATERMARK,
-        lowWatermark: AUTOSCALE_LOW_WATERMARK,
+        highWatermark: sim.highWatermark,
+        lowWatermark: sim.lowWatermark,
         nominalCount: decision.runtime.nominalCount,
         minReplicas: sim.minReplicas,
         maxReplicas: sim.maxReplicas,

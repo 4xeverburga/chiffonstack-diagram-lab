@@ -12,13 +12,16 @@ Delta on 011's shapes ([011 data-model](../011-host-queue-model/data-model.md)).
   minReplicas: number   // integer ≥ 1
   maxReplicas: number   // integer ≥ minReplicas
   bootDelayMs: number    // ≥ 0 — simulated ms a new replica takes before serving traffic
+  highWatermark: number  // ≥ 0 — per-replica saturation ratio that triggers scale-up accumulation
+  lowWatermark: number   // ≥ 0, < highWatermark — triggers scale-down accumulation
 }
 // client_pool and external_api variants are UNCHANGED (no replica fields).
 ```
 
-Validation: integers ≥ 1 for min/max, `minReplicas ≤ maxReplicas` (enforced in Inspector fields and guarded in the engine); `bootDelayMs ≥ 0`. Import of pre-013 JSON writes `minReplicas: 1, maxReplicas: 1, bootDelayMs: LEGACY_BOOT_DELAY_MS_FOR_IMPORT` explicitly (research D5); import of pre-3.2.0 JSON (has min/max, lacks `bootDelayMs`) fills in just the missing field the same way.
+Validation: integers ≥ 1 for min/max, `minReplicas ≤ maxReplicas` (enforced in Inspector fields and guarded in the engine); `bootDelayMs ≥ 0`; `lowWatermark < highWatermark` (both ≥ 0). Import of pre-013 JSON writes `minReplicas: 1, maxReplicas: 1, bootDelayMs: LEGACY_BOOT_DELAY_MS_FOR_IMPORT, highWatermark: LEGACY_HIGH_WATERMARK_FOR_IMPORT, lowWatermark: LEGACY_LOW_WATERMARK_FOR_IMPORT` explicitly (research D5); import of pre-3.2.0/pre-3.3.0 JSON (missing only the newer fields) fills in just the missing fields the same way.
 
-**Closed parameter set after this feature (constitution v3.2.0)**: 011's FR-020 list **plus** `minReplicas`, `maxReplicas`, `bootDelayMs`. Watermarks, sustain window, cooldown, visible-replica cap, and event-history limit are internal tunables in `src/engine/config.ts` — boot delay is NOT among them (promoted to a user-facing capability parameter, since it varies by real infrastructure rather than being scaler algorithm policy).
+**Closed parameter set after this feature (constitution v3.3.0)**: 011's FR-020 list **plus** `minReplicas`, `maxReplicas`, `bootDelayMs`, `highWatermark`, `lowWatermark`. Sustain window, cooldown, visible-replica cap, and event-history limit are internal tunables in `src/engine/config.ts` — boot delay and the watermarks are NOT among them (promoted to user-facing capability parameters: boot delay varies by real infrastructure, and real Kubernetes HPA likewise sets its target utilization per resource rather than globally).
+
 
 ## Engine runtime state (per scaled host, cross-window)
 
