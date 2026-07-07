@@ -174,8 +174,6 @@ so numbers align and read as measurements rather than prose.
 
 ### Hierarchy
 - **Display** (weight 500, Quicksand): the app title bar only
-  (`Diagram Lab`/product name). Never used inside the canvas, Sidebar, or
-  Inspector.
 - **Label** (JetBrains Mono, 11–12px, `letter-spacing: 0.04em` on
   badges/uppercase labels): field labels, chip text, button text, status
   badges, formula names/expressions, source links.
