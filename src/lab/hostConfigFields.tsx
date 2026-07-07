@@ -115,6 +115,41 @@ function AutoscalingFields({
   )
 }
 
+const OVERLOAD_BEHAVIORS = ['clamp', 'collapse'] as const
+
+// Overload behavior (feature 012, FR-001/FR-006): the ONLY new field this
+// feature adds, rendered once for both config modes (client_pool/
+// external_api never reach this — HostConfigFields returns earlier for
+// those profiles, so FR-006 holds with zero extra conditionals here).
+function OverloadBehaviorField({
+  sim,
+  disabled,
+  onChange,
+}: {
+  sim: ComputeProfile
+  disabled: boolean
+  onChange: (next: HostNodeSim) => void
+}) {
+  return (
+    <div className="lab-field">
+      <span>Overload behavior</span>
+      <div className="lab-button-row">
+        {OVERLOAD_BEHAVIORS.map((behavior) => (
+          <button
+            key={behavior}
+            type="button"
+            disabled={disabled}
+            className={`chip ${sim.overloadBehavior === behavior ? 'chip-active' : ''}`}
+            onClick={() => onChange({ ...sim, overloadBehavior: behavior })}
+          >
+            {behavior}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // Inspector config UI for host nodes (US2, FR-020): the profile/mode
 // selector lives in Inspector.tsx (same chip-row pattern as every other
 // closed choice in this app); this file renders exactly the FR-020 fields
@@ -145,6 +180,7 @@ export function HostConfigFields({ sim, disabled, onChange }: HostConfigFieldsPr
         manualBaselineLatencyMs: 10,
         manualSaturationRPS: 500,
         manualMaxRPS: 550,
+        overloadBehavior: sim.overloadBehavior,
         minReplicas: sim.minReplicas,
         maxReplicas: sim.maxReplicas,
         bootDelayMs: sim.bootDelayMs,
@@ -158,6 +194,7 @@ export function HostConfigFields({ sim, disabled, onChange }: HostConfigFieldsPr
         configMode: 'calculated',
         cpuProcessingTimeMs: 16,
         maxWorkerThreads: 8,
+        overloadBehavior: sim.overloadBehavior,
         minReplicas: sim.minReplicas,
         maxReplicas: sim.maxReplicas,
         bootDelayMs: sim.bootDelayMs,
@@ -190,6 +227,7 @@ export function HostConfigFields({ sim, disabled, onChange }: HostConfigFieldsPr
       ) : (
         <CalculatedComputeFields sim={sim} disabled={disabled} onChange={onChange} />
       )}
+      <OverloadBehaviorField sim={sim} disabled={disabled} onChange={onChange} />
       <AutoscalingFields sim={sim} disabled={disabled} onChange={onChange} />
     </>
   )
