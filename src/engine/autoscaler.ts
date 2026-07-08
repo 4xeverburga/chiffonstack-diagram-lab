@@ -47,6 +47,36 @@ export function drainBootQueue(runtime: ReplicaRuntime, simTimeMs: number): Repl
   return { ...runtime, booting: stillBooting }
 }
 
+/** Restores `nominalCount` up to `minReplicas` (012-overload-collapse
+ *  refinement, research.md D9) — called once per window, alongside
+ *  `drainBootQueue`, BEFORE that window's host math/eviction runs. Only
+ *  reachable via `evictCollapsedReplicas` below (every other path already
+ *  keeps `nominalCount` within bounds), so this is a no-op for every host
+ *  that isn't mid-collapse. Deliberately a separate, later window's step
+ *  rather than folded into the same `evaluateScaling` call an eviction
+ *  happened in: that lets a fully-crashed window's telemetry genuinely
+ *  read `nominalCount = 0` for at least one window (the spec's "a scaling
+ *  group with 0 nodes for some momentos") before this restores the floor
+ *  on the next one. Queues fresh booting entries (real `bootDelayMs`
+ *  latency) rather than serving immediately — replacing a crashed
+ *  instance still takes as long as booting any other one — and bypasses
+ *  cooldown/sustain entirely: it's an unconditional floor guarantee (real
+ *  orchestrators replace a crashed instance immediately, they don't wait
+ *  out an HPA cooldown), not a load-gated policy decision. */
+export function restoreMinReplicaFloor(runtime: ReplicaRuntime, minReplicas: number, bootDelayMs: number, simTimeMs: number): ReplicaRuntime {
+  if (runtime.nominalCount >= minReplicas) return runtime
+  const deficit = minReplicas - runtime.nominalCount
+  const readyAtSimTimeMs = simTimeMs + bootDelayMs
+  const newBootingEntries = Array.from({ length: deficit }, () => ({ readyAtSimTimeMs }))
+  const event: ScalingEvent = { direction: 'up', newCount: minReplicas, simTimeMs }
+  return {
+    ...runtime,
+    nominalCount: minReplicas,
+    booting: [...runtime.booting, ...newBootingEntries],
+    events: appendEvent(runtime.events, event),
+  }
+}
+
 /** effectiveReplicas = nominalCount − booting.length (data-model.md) — the
  *  capacity divisor host math actually uses. Never below 1 in practice:
  *  the first replica of any host is created already serving and is never
@@ -116,7 +146,11 @@ export interface ScalingDecisionOutput {
  *    nominalCount drops immediately, but the capacity DIVISOR this window
  *    was already fixed before this decision ran, so the drop in served
  *    capacity is only visible starting next window — spec US2 scenario 1).
- *  - otherwise → hold; entering the band resets both accumulators. */
+ *  - otherwise → hold; entering the band resets both accumulators.
+ *  - See `restoreMinReplicaFloor` below for what brings `nominalCount` back
+ *    up to `minReplicas` after `evictCollapsedReplicas` has crashed it
+ *    below that floor (012-overload-collapse refinement) — deliberately
+ *    NOT handled inside this function; see that function's doc for why. */
 export function evaluateScaling(input: ScalingDecisionInput): ScalingDecisionOutput {
   const { perReplicaSaturation, simTimeMs, windowSizeMs, minReplicas, maxReplicas, bootDelayMs, highWatermark, lowWatermark } = input
   let runtime = input.runtime
@@ -180,6 +214,31 @@ export function evaluateScaling(input: ScalingDecisionInput): ScalingDecisionOut
   }
 
   return { runtime, event: undefined }
+}
+
+/** Collapse-mode replica eviction (012-overload-collapse refinement,
+ *  research.md D9): an elastic host (scaler enabled, `minReplicas !==
+ *  maxReplicas`) with `overloadBehavior === 'collapse'` doesn't apply the
+ *  smooth retrograde-decay curve across the whole group — that would
+ *  require modeling a single degraded replica gracefully recovering
+ *  in-place, which this engine doesn't (and shouldn't) model. Instead,
+ *  overloaded replicas "crash": whenever the group's per-replica
+ *  saturation exceeds 1 (offered load exceeds serving capacity),
+ *  `Math.floor(currentEffectiveReplicas / perReplicaSaturation)` replicas
+ *  could theoretically keep up — the rest are evicted immediately (at
+ *  least 1 per window, no cooldown/sustain gate: a crash is a reactive
+ *  failure, not a throttled policy decision). `nominalCount` is allowed to
+ *  fall below `minReplicas`, all the way to 0 — recovery is entirely the
+ *  responsibility of the normal scale-up watermark path plus the
+ *  min-replicas floor restore below (spec: "a scaling group with 0 nodes
+ *  for some momentos while the other replicas boot up"). A no-op for
+ *  `clamp` hosts and non-elastic hosts (call site gates this). */
+export function evictCollapsedReplicas(runtime: ReplicaRuntime, perReplicaSaturation: number, currentEffectiveReplicas: number): ReplicaRuntime {
+  if (perReplicaSaturation <= 1 || currentEffectiveReplicas <= 0) return runtime
+  const survivors = Math.floor(currentEffectiveReplicas / perReplicaSaturation)
+  const evictCount = Math.min(currentEffectiveReplicas, Math.max(1, currentEffectiveReplicas - survivors))
+  if (evictCount <= 0) return runtime
+  return { ...runtime, nominalCount: runtime.nominalCount - evictCount }
 }
 
 /** Mid-run bounds edit (research.md D7, spec edge case): re-clamp

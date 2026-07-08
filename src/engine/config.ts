@@ -200,3 +200,15 @@ export const HOST_COLLAPSE_STATUS_RATIO = 0.5
 // FOR_IMPORT above (src/lab/exportDiagram.ts).
 export const LEGACY_OVERLOAD_BEHAVIOR_FOR_IMPORT = 'clamp' as const
 
+// 012-overload-collapse refinement (research.md D9): the displayed/
+// telemetry saturationRatio for an elastic collapse host with 0 currently-
+// serving replicas ("virtually dead"). A true ratio is meaningless with 0
+// capacity (would need HOST_ZERO_CAPACITY_EPSILON-style division, which
+// produces an absurd, unreadable percentage like "14000000000%" for any
+// realistic incomingRPS) — this fixed sentinel is simply "unambiguously,
+// maximally overloaded": comfortably above any realistic highWatermark
+// (so the scaler's own watermark logic still treats it as saturated) while
+// staying a sane, finite number to render. The host's `status` field
+// ('collapsed') is the actual authoritative signal here, not this ratio.
+export const HOST_COLLAPSE_DEAD_SATURATION_RATIO = 10
+
