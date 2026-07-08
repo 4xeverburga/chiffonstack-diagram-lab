@@ -653,3 +653,131 @@ describe('propagateWindow — overload collapse propagation regression (feature 
   })
 })
 
+// 012-overload-collapse refinement (research.md D9): an elastic scaling
+// group (minReplicas !== maxReplicas) with overloadBehavior === 'collapse'
+// evicts overloaded replicas instead of applying the retrograde curve —
+// this can transiently drive the group to 0 serving replicas, and the
+// min-replicas floor restore (autoscaler.ts) must bring it back.
+describe('propagateWindow — elastic scaling group collapse eviction (012-overload-collapse refinement)', () => {
+  function elasticApi(overloadBehavior: 'clamp' | 'collapse'): SimTopology['nodes'][number] {
+    return {
+      id: 'api',
+      sim: {
+        kind: 'host',
+        profile: 'transactional_api',
+        configMode: 'manual',
+        manualBaselineLatencyMs: 10,
+        manualSaturationRPS: 500,
+        manualMaxRPS: 550,
+        overloadBehavior,
+        minReplicas: 2,
+        maxReplicas: 4,
+        bootDelayMs: 8000,
+        highWatermark: 0.8,
+        lowWatermark: 0.3,
+      },
+    }
+  }
+
+  function runScenario(apiNode: SimTopology['nodes'][number], poolRPS: number, windowCount: number) {
+    const topology: SimTopology = {
+      nodes: [{ id: 'pool', sim: { kind: 'host', profile: 'client_pool', requestRatePerSec: poolRPS } }, apiNode],
+      edges: [{ id: 'pool-api', source: 'pool', target: 'api', config: edgeConfig() }],
+    }
+    const graph = buildTopologyGraph(topology)
+    let replicaRuntimeByNode = new Map()
+    let queueBacklogGB = new Map<string, number>()
+    const history: { nominalCount: number | undefined; effectiveCount: number | undefined; status: string | undefined }[] = []
+    for (let i = 0; i < windowCount; i += 1) {
+      const result = propagateWindow({
+        graph,
+        windowSizeMs: 1000,
+        clientPoolMeasuredRPS: new Map([['pool', poolRPS]]),
+        queueBacklogGB,
+        replicaRuntimeByNode,
+        simTimeMs: (i + 1) * 1000,
+      })
+      replicaRuntimeByNode = result.nextReplicaRuntimeByNode
+      queueBacklogGB = result.nextQueueBacklogGB
+      const apiMetrics = result.nodeMetricsById.get('api')?.host
+      history.push({ nominalCount: apiMetrics?.replicas?.nominalCount, effectiveCount: apiMetrics?.replicas?.effectiveCount, status: apiMetrics?.status })
+    }
+    return history
+  }
+
+  it('an extreme overload cascades replica eviction down toward — and can reach — 0 serving replicas', () => {
+    // 2 replicas x 550 knee = 1100 cap; 20,000 req/s is ~18x that.
+    const history = runScenario(elasticApi('collapse'), 20_000, 20)
+    // nominalCount reaches exactly 0 for at least one window (the eviction
+    // window itself — restoreMinReplicaFloor only re-inflates it starting
+    // the FOLLOWING window, per its doc). Note replicas.effectiveCount in
+    // telemetry previews the NEXT window's divisor (same pre-existing
+    // convention as ordinary scale-down), so status is checked separately
+    // below rather than cross-referenced against it.
+    const zeroNominalIndex = history.findIndex((entry) => entry.nominalCount === 0)
+    expect(zeroNominalIndex).toBeGreaterThanOrEqual(0)
+    // The host reports itself dead once its OWN window's effective replica
+    // count (the divisor metrics were actually computed from) hit 0.
+    const collapsedIndex = history.findIndex((entry) => entry.status === 'collapsed')
+    expect(collapsedIndex).toBeGreaterThanOrEqual(0)
+    // Nominal count only ever decreases (or holds) on the way down to 0 —
+    // no oscillation back up before the group has actually crashed out.
+    for (let i = 1; i <= zeroNominalIndex; i += 1) {
+      expect(history[i].nominalCount).toBeLessThanOrEqual(history[i - 1].nominalCount ?? Infinity)
+    }
+  })
+
+  it('recovers back to minReplicas via the boot queue after crashing to 0 (floor restore)', () => {
+    const history = runScenario(elasticApi('collapse'), 20_000, 60)
+    const zeroIndex = history.findIndex((entry) => entry.nominalCount === 0)
+    expect(zeroIndex).toBeGreaterThanOrEqual(0)
+    const restoredIndex = history.findIndex((entry, index) => index > zeroIndex && (entry.nominalCount ?? 0) >= 2)
+    expect(restoredIndex).toBeGreaterThan(zeroIndex)
+  })
+
+  it('below the knee, an elastic collapse-mode group never evicts (parity with clamp)', () => {
+    const collapseHistory = runScenario(elasticApi('collapse'), 400, 20)
+    const clampHistory = runScenario(elasticApi('clamp'), 400, 20)
+    expect(collapseHistory.every((entry) => entry.nominalCount === 2)).toBe(true)
+    expect(clampHistory.every((entry) => entry.nominalCount === 2)).toBe(true)
+  })
+
+  it('a clamp-mode elastic group never evicts, regardless of overload (SC-003 regression: relies on the normal scale-up path only)', () => {
+    const history = runScenario(elasticApi('clamp'), 20_000, 20)
+    expect(history.every((entry) => (entry.nominalCount ?? 0) >= 2)).toBe(true)
+  })
+
+  it('a fixed (non-elastic) multi-replica collapse host never evicts either, keeping the smooth retrograde curve', () => {
+    const fixedApi: SimTopology['nodes'][number] = {
+      id: 'api',
+      sim: {
+        kind: 'host',
+        profile: 'transactional_api',
+        configMode: 'manual',
+        manualBaselineLatencyMs: 10,
+        manualSaturationRPS: 500,
+        manualMaxRPS: 550,
+        overloadBehavior: 'collapse',
+        minReplicas: 2,
+        maxReplicas: 2,
+        bootDelayMs: 8000,
+        highWatermark: 0.8,
+        lowWatermark: 0.3,
+      },
+    }
+    const history = runScenario(fixedApi, 20_000, 20)
+    expect(history.every((entry) => entry.nominalCount === 2)).toBe(true)
+  })
+
+  it('shows the replica-eviction formula descriptor for an elastic collapse host, not the retrograde-curve one', () => {
+    const topology: SimTopology = {
+      nodes: [{ id: 'pool', sim: { kind: 'host', profile: 'client_pool', requestRatePerSec: 20_000 } }, elasticApi('collapse')],
+      edges: [{ id: 'pool-api', source: 'pool', target: 'api', config: edgeConfig() }],
+    }
+    const result = run(topology, new Map([['pool', 20_000]]))
+    const descriptors = result.nodeMetricsById.get('api')?.formulaDescriptors ?? []
+    expect(descriptors.some((d) => d.id === 'host.replica-eviction')).toBe(true)
+    expect(descriptors.some((d) => d.id === 'host.overload-collapse')).toBe(false)
+  })
+})
+

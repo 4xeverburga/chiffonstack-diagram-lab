@@ -30,7 +30,7 @@ const SOURCE_DENNING_BUZEN: FormulaSource = {
 }
 
 const SOURCE_PRODUCT_DATA_MODEL: FormulaSource = {
-  title: 'Diagram Lab data model (011-host-queue-model)',
+  title: 'SUGAR data model (011-host-queue-model)',
   url: '/specs/011-host-queue-model/data-model.md',
   note: 'Definitional conversion/integration used by this product, not an external citation.',
 }
@@ -142,6 +142,31 @@ export function buildHostCollapseDescriptor(input: {
     },
     sources: [SOURCE_MOGUL_RAMAKRISHNAN, SOURCE_GUNTHER_USL],
     isBinding: input.incomingRPS > input.kneeRPS,
+  }
+}
+
+// Feature 012-overload-collapse refinement (research.md D9): an elastic
+// scaling group (minReplicas !== maxReplicas) doesn't apply the retrograde
+// curve above — its overloaded replicas crash and are evicted instead,
+// which can transiently take the group to 0 serving replicas while the
+// scaler boots replacements. Shown only for elastic collapse-mode hosts,
+// in place of buildHostCollapseDescriptor (flowPropagation.ts).
+export function buildHostReplicaEvictionDescriptor(input: {
+  perReplicaSaturation: number
+  effectiveReplicas: number
+  evictedReplicas: number
+}): FormulaDescriptor {
+  return {
+    id: 'host.replica-eviction',
+    name: 'Overloaded replica eviction',
+    expression: 'survivors = floor(effectiveReplicas / perReplicaSaturation); evictedReplicas = max(1, effectiveReplicas - survivors) when perReplicaSaturation > 1',
+    inputs: {
+      perReplicaSaturation: input.perReplicaSaturation,
+      effectiveReplicas: input.effectiveReplicas,
+      evictedReplicas: input.evictedReplicas,
+    },
+    sources: [SOURCE_MOGUL_RAMAKRISHNAN, SOURCE_GUNTHER_USL],
+    isBinding: input.perReplicaSaturation > 1,
   }
 }
 

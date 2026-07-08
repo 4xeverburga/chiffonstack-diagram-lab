@@ -13,7 +13,7 @@ import { EDGE_CONGESTION_THRESHOLD, KB_PER_MB } from './config'
 import { edgeTrafficShare, type TopologyGraph } from './components'
 import { calculatedCapacityRPS, computeClientPoolMetrics, computeExternalApiMetrics, computeHostMetrics, hostKneeRPS } from './hostModel'
 import { computeQueueMetrics } from './queueModel'
-import { createReplicaRuntime, drainBootQueue, effectiveReplicas, evaluateScaling, type ReplicaRuntime } from './autoscaler'
+import { createReplicaRuntime, drainBootQueue, effectiveReplicas, evaluateScaling, evictCollapsedReplicas, restoreMinReplicaFloor, type ReplicaRuntime } from './autoscaler'
 import {
   buildEdgeCongestionDescriptor,
   buildEdgeConnectionsDescriptor,
@@ -21,6 +21,7 @@ import {
   buildHostCapacityDescriptor,
   buildHostCollapseDescriptor,
   buildHostLatencyDescriptor,
+  buildHostReplicaEvictionDescriptor,
   buildHostSaturationDescriptor,
   buildHostShedDescriptor,
   buildQueueBacklogDescriptor,
@@ -101,7 +102,14 @@ export function propagateWindow(input: FlowPropagationInput): FlowPropagationOut
   for (const [nodeId, sim] of graph.simByNode) {
     if (sim.kind !== 'host' || !isSaturatingProfile(sim)) continue
     const runtimeIn = input.replicaRuntimeByNode.get(nodeId) ?? createReplicaRuntime(sim.minReplicas)
-    const drained = drainBootQueue(runtimeIn, input.simTimeMs)
+    const drainedRaw = drainBootQueue(runtimeIn, input.simTimeMs)
+    // Restores nominalCount up to minReplicas (012-overload-collapse
+    // refinement, research.md D9) — a no-op unless a PREVIOUS window's
+    // collapse eviction (below) crashed nominalCount below the floor; see
+    // restoreMinReplicaFloor's doc for why this runs here, one window
+    // after the eviction that caused it, rather than in the same
+    // evaluateScaling call.
+    const drained = restoreMinReplicaFloor(drainedRaw, sim.minReplicas, sim.bootDelayMs, input.simTimeMs)
     drainedRuntimeByNode.set(nodeId, drained)
     effectiveByNode.set(nodeId, effectiveReplicas(drained))
   }
@@ -207,19 +215,40 @@ export function propagateWindow(input: FlowPropagationInput): FlowPropagationOut
 
     const drained = drainedRuntimeByNode.get(nodeId)!
     const effective = effectiveByNode.get(nodeId)!
-    const metrics = computeHostMetrics({ sim, incomingRPS, effectiveReplicas: effective, inboundWeightedComputeMultiplier, outboundWeightedIoLatencyMs })
-    for (const edgeId of outgoingEdgeIds) edgeOutputRPS.set(edgeId, metrics.forwardedRPS * shareOfEdge(edgeId))
-
-    // Scaler evaluation (feature 013, T016 US3 short-circuit): when
-    // minReplicas === maxReplicas the scaler never runs at all (no
-    // accumulators, no cooldown checks, no events) — `drained` (whose
+    // Scaler enablement (feature 013, T016 US3 short-circuit) doubles, as
+    // of the 012-overload-collapse refinement (research.md D9), as the
+    // "is this an elastic scaling group" flag: when minReplicas ===
+    // maxReplicas the scaler never runs at all (no accumulators, no
+    // cooldown checks, no events, no eviction) — `drained` (whose
     // nominalCount is pinned at min = max, booting always empty) simply
     // carries forward unchanged, which is also what makes min=max=1
-    // bit-identical to pre-013 behavior (SC-003).
+    // bit-identical to pre-013 behavior (SC-003), and what keeps a fixed
+    // (non-elastic) multi-replica host on the original smooth retrograde
+    // curve rather than the eviction mechanic below.
     const scalerEnabled = sim.minReplicas !== sim.maxReplicas
+    const metrics = computeHostMetrics({
+      sim,
+      incomingRPS,
+      effectiveReplicas: effective,
+      isElasticGroup: scalerEnabled,
+      inboundWeightedComputeMultiplier,
+      outboundWeightedIoLatencyMs,
+    })
+    for (const edgeId of outgoingEdgeIds) edgeOutputRPS.set(edgeId, metrics.forwardedRPS * shareOfEdge(edgeId))
+
+    // Collapse-mode replica eviction (012-overload-collapse refinement,
+    // research.md D9): evaluated BEFORE the scale-up/down policy below, on
+    // the same per-replica saturation this window's (already-fixed)
+    // forwardedRPS was computed from — an overloaded replica "crashes"
+    // immediately, independent of the sustain/cooldown-gated policy
+    // decision that follows. No-ops for `clamp` hosts and non-elastic
+    // hosts (evictCollapsedReplicas' own guard plus the check here).
+    const postEviction =
+      sim.overloadBehavior === 'collapse' && scalerEnabled ? evictCollapsedReplicas(drained, metrics.saturationRatio, effective) : drained
+
     const decision = scalerEnabled
       ? evaluateScaling({
-          runtime: drained,
+          runtime: postEviction,
           perReplicaSaturation: metrics.saturationRatio,
           simTimeMs: input.simTimeMs,
           windowSizeMs,
@@ -229,7 +258,7 @@ export function propagateWindow(input: FlowPropagationInput): FlowPropagationOut
           highWatermark: sim.highWatermark,
           lowWatermark: sim.lowWatermark,
         })
-      : { runtime: drained, event: undefined }
+      : { runtime: postEviction, event: undefined }
     nextReplicaRuntimeByNode.set(nodeId, decision.runtime)
 
     const replicas: HostReplicaTelemetry = {
@@ -271,13 +300,24 @@ export function propagateWindow(input: FlowPropagationInput): FlowPropagationOut
     // Feature 012 (US4): the collapse formula only appears for
     // overloadBehavior === 'collapse' hosts (research.md D7) — a
     // clamp-mode host's descriptor set is unchanged (SC-003 regression
-    // extends to the formula panel).
-    if (sim.overloadBehavior === 'collapse') {
+    // extends to the formula panel). Non-elastic hosts show the retrograde
+    // curve descriptor (unchanged); elastic hosts show the replica
+    // eviction descriptor instead (research.md D9), since they never use
+    // the retrograde curve.
+    if (sim.overloadBehavior === 'collapse' && !scalerEnabled) {
       const kneeRPS = hostKneeRPS(sim, inboundWeightedComputeMultiplier)
       const perReplicaForwardedRPS = metrics.forwardedRPS / Math.max(1, effective)
       const overloadRatio = kneeRPS > 0 ? perReplicaIncomingRPS / kneeRPS : 0
       descriptors.push(
         buildHostCollapseDescriptor({ incomingRPS: perReplicaIncomingRPS, kneeRPS, overloadRatio, forwardedRPS: perReplicaForwardedRPS }),
+      )
+    } else if (sim.overloadBehavior === 'collapse' && scalerEnabled) {
+      descriptors.push(
+        buildHostReplicaEvictionDescriptor({
+          perReplicaSaturation: metrics.saturationRatio,
+          effectiveReplicas: effective,
+          evictedReplicas: Math.max(0, drained.nominalCount - postEviction.nominalCount),
+        }),
       )
     }
     validateFormulaDescriptorsHaveSources(descriptors)
