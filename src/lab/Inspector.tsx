@@ -1,4 +1,4 @@
-import { useState, type ChangeEvent } from 'react'
+import { useRef, useState, type ChangeEvent } from 'react'
 import type { Edge, Node } from '@xyflow/react'
 import { classNameForKind, type NodeKind } from './nodeKinds'
 import { HEAT_VARIANTS, type HeatVariant } from './heatVariants'
@@ -10,6 +10,7 @@ import type { RunStatus } from '../sim/workerProtocol'
 import { HostCapabilityFields, HostScalingFields } from './hostConfigFields'
 import { EdgeConfigFields } from './edgeConfigFields'
 import { FormulaPanel } from './FormulaPanel'
+import { InspectorSection } from './InspectorSection'
 
 const NODE_KINDS: NodeKind[] = ['default', 'active', 'dim']
 
@@ -69,9 +70,9 @@ function hostSpecLine(sim: HostNodeSim): string {
   if (sim.profile === 'external_api') return `${sim.manualBaselineLatencyMs}ms latency`
   const capability =
     sim.configMode === 'manual'
-      ? `manual \u00b7 ${sim.manualSaturationRPS} sat / ${sim.manualMaxRPS} max / ${sim.manualBaselineLatencyMs}ms`
-      : `calculated \u00b7 ${sim.cpuProcessingTimeMs}ms cpu / ${sim.maxWorkerThreads} threads`
-  return `${capability} \u00b7 replicas ${sim.minReplicas}\u2013${sim.maxReplicas} \u00b7 ${sim.overloadBehavior}`
+      ? `manual · ${sim.manualSaturationRPS} sat / ${sim.manualMaxRPS} max / ${sim.manualBaselineLatencyMs}ms`
+      : `calculated · ${sim.cpuProcessingTimeMs}ms cpu / ${sim.maxWorkerThreads} threads`
+  return `${capability} · replicas ${sim.minReplicas}–${sim.maxReplicas} · ${sim.overloadBehavior}`
 }
 
 type HostAndQueueFieldsProps = {
@@ -84,9 +85,10 @@ type HostAndQueueFieldsProps = {
 // Extracted so Inspector renders this with `key={node.id}`, remounting (and
 // so resetting its hooks) whenever the selected node changes.
 //
-// Section order (plan: "Inspector denso y estado-consciente" Fase 1):
-// ROLE & CAPABILITY -> SCALING -> TELEMETRY -> FORMULAS. APPEARANCE (Style/
-// Size/Image) lives in the parent Inspector component, below this block.
+// Every section is an accordion (InspectorSection) with runStatus-aware
+// defaults: idle opens ROLE & CAPABILITY (the editing task), running/paused
+// opens TELEMETRY and FORMULAS (the reading task) and promotes them above
+// ROLE & CAPABILITY. No animated reorder — a plain render-order swap.
 function HostAndQueueFields({ node, metrics, runStatus, onSetNodeSim }: HostAndQueueFieldsProps) {
   const sim = (node.data as { sim?: NodeSim } | undefined)?.sim
   // Editing roles/config is only allowed in edit mode (idle) — see the
@@ -103,19 +105,16 @@ function HostAndQueueFields({ node, metrics, runStatus, onSetNodeSim }: HostAndQ
     onSetNodeSim(node.id, defaultSimForChoice(choice))
   }
 
-  // Fase 3: idle keeps the full editable form; running/paused collapses
-  // the (now-disabled) capability+scaling fields into one spec-line and
-  // promotes TELEMETRY+FORMULAS above ROLE & CAPABILITY (plan.md Fase 3).
-  // No animated reorder — a plain render-order swap on runStatus.
   const roleAndCapability = (
-    <>
-      <div className="lab-section-header lab-panel-title-spaced">
-        <h3 className="lab-panel-title">Role &amp; capability</h3>
-        {/* Reserved for the config-presets picker (next feature) — kept as
-            a real flex slot now so that feature is a content change, not a
-            layout change. */}
-        <div className="lab-section-header-actions" />
-      </div>
+    <InspectorSection
+      id="node-role-capability"
+      title="Role & capability"
+      defaultOpen={canEdit}
+      // Reserved for the config-presets picker (next feature) — the summary
+      // row keeps a right-hand slot so that feature is a content change,
+      // not a layout change.
+      summaryExtra={null}
+    >
       <div className="lab-field">
         <span>Simulation role</span>
         <div className="lab-button-row lab-role-grid">
@@ -133,27 +132,25 @@ function HostAndQueueFields({ node, metrics, runStatus, onSetNodeSim }: HostAndQ
         </div>
       </div>
       {!canEdit ? <p className="sim-placeholder-note">Reset the simulation to edit roles or config.</p> : null}
-      {canEdit ? (
-        <>
-          {sim && sim.kind === 'host' ? (
-            <HostCapabilityFields sim={sim} disabled={!canEdit} onChange={(next) => onSetNodeSim(node.id, next)} />
-          ) : null}
-          {hasScaling && sim?.kind === 'host' ? (
-            <>
-              <h3 className="lab-panel-title lab-panel-title-spaced">Scaling</h3>
-              <HostScalingFields sim={sim} disabled={!canEdit} onChange={(next) => onSetNodeSim(node.id, next)} />
-            </>
-          ) : null}
-        </>
-      ) : sim && sim.kind === 'host' ? (
-        <p className="lab-spec-line">{hostSpecLine(sim)}</p>
+      {canEdit && sim && sim.kind === 'host' ? (
+        <HostCapabilityFields sim={sim} disabled={!canEdit} onChange={(next) => onSetNodeSim(node.id, next)} />
       ) : null}
-    </>
+      {!canEdit && sim && sim.kind === 'host' ? <p className="lab-spec-line">{hostSpecLine(sim)}</p> : null}
+    </InspectorSection>
   )
 
+  // Own accordion section (not a subsection of ROLE & CAPABILITY): scaling
+  // is second-step tuning, so it defaults collapsed to keep the idle panel
+  // shallow. While running it folds into the spec line above instead.
+  const scaling =
+    canEdit && hasScaling && sim?.kind === 'host' ? (
+      <InspectorSection id="node-scaling" title="Scaling" defaultOpen={false} summaryExtra={null}>
+        <HostScalingFields sim={sim} disabled={!canEdit} onChange={(next) => onSetNodeSim(node.id, next)} />
+      </InspectorSection>
+    ) : null
+
   const telemetry = sim ? (
-    <>
-      <h3 className="lab-panel-title lab-panel-title-spaced">Telemetry</h3>
+    <InspectorSection id="node-telemetry" title="Telemetry" defaultOpen={!canEdit} summaryExtra={null}>
       {canEdit ? (
         <p className="sim-placeholder-note">Start the simulation to read telemetry.</p>
       ) : (
@@ -162,29 +159,29 @@ function HostAndQueueFields({ node, metrics, runStatus, onSetNodeSim }: HostAndQ
             <div className="sim-host-metrics">
               <div className="sim-host-meter">
                 <span>Status</span>
-                <span className="sim-host-meter-value">{metrics?.host?.status ?? '\u2014'}</span>
+                <span className="sim-host-meter-value">{metrics?.host?.status ?? '—'}</span>
               </div>
               <div className="sim-host-meter">
                 <span>Incoming</span>
-                <span className="sim-host-meter-value">{metrics?.host ? `${metrics.host.incomingRPS.toFixed(1)} req/s` : '\u2014'}</span>
+                <span className="sim-host-meter-value">{metrics?.host ? `${metrics.host.incomingRPS.toFixed(1)} req/s` : '—'}</span>
               </div>
               <div className="sim-host-meter">
                 <span>Forwarded</span>
-                <span className="sim-host-meter-value">{metrics?.host ? `${metrics.host.forwardedRPS.toFixed(1)} req/s` : '\u2014'}</span>
+                <span className="sim-host-meter-value">{metrics?.host ? `${metrics.host.forwardedRPS.toFixed(1)} req/s` : '—'}</span>
               </div>
               <div className="sim-host-meter">
                 <span>Shed</span>
-                <span className="sim-host-meter-value">{metrics?.host ? `${metrics.host.shedRPS.toFixed(1)} req/s` : '\u2014'}</span>
+                <span className="sim-host-meter-value">{metrics?.host ? `${metrics.host.shedRPS.toFixed(1)} req/s` : '—'}</span>
               </div>
               <div className="sim-host-meter">
                 <span>Saturation</span>
                 <span className="sim-host-meter-value">
-                  {metrics?.host ? `${(metrics.host.saturationRatio * 100).toFixed(0)}%` : '\u2014'}
+                  {metrics?.host ? `${(metrics.host.saturationRatio * 100).toFixed(0)}%` : '—'}
                 </span>
               </div>
               <div className="sim-host-meter">
                 <span>Latency</span>
-                <span className="sim-host-meter-value">{metrics?.host ? `${metrics.host.latencyMs.toFixed(1)} ms` : '\u2014'}</span>
+                <span className="sim-host-meter-value">{metrics?.host ? `${metrics.host.latencyMs.toFixed(1)} ms` : '—'}</span>
               </div>
             </div>
           ) : null}
@@ -213,7 +210,7 @@ function HostAndQueueFields({ node, metrics, runStatus, onSetNodeSim }: HostAndQ
                 <ul className="sim-scaling-events">
                   {metrics.host.replicas.events.map((event, index) => (
                     <li key={`${event.simTimeMs}-${index}`}>
-                      {event.direction === 'up' ? '\u2191' : '\u2193'} scaled {event.direction === 'up' ? 'up' : 'down'} to{' '}
+                      {event.direction === 'up' ? '↑' : '↓'} scaled {event.direction === 'up' ? 'up' : 'down'} to{' '}
                       {event.newCount} at t={(event.simTimeMs / 1000).toFixed(1)}s
                     </li>
                   ))}
@@ -225,28 +222,31 @@ function HostAndQueueFields({ node, metrics, runStatus, onSetNodeSim }: HostAndQ
             <div className="sim-host-metrics">
               <div className="sim-host-meter">
                 <span>Inflow</span>
-                <span className="sim-host-meter-value">{metrics?.queue ? `${metrics.queue.inflowMBps.toFixed(2)} MB/s` : '\u2014'}</span>
+                <span className="sim-host-meter-value">{metrics?.queue ? `${metrics.queue.inflowMBps.toFixed(2)} MB/s` : '—'}</span>
               </div>
               <div className="sim-host-meter">
                 <span>Outflow</span>
-                <span className="sim-host-meter-value">{metrics?.queue ? `${metrics.queue.outflowMBps.toFixed(2)} MB/s` : '\u2014'}</span>
+                <span className="sim-host-meter-value">{metrics?.queue ? `${metrics.queue.outflowMBps.toFixed(2)} MB/s` : '—'}</span>
               </div>
               <div className="sim-host-meter">
                 <span>Backlog</span>
-                <span className="sim-host-meter-value">{metrics?.queue ? `${metrics.queue.backlogGB.toFixed(3)} GB` : '\u2014'}</span>
+                <span className="sim-host-meter-value">{metrics?.queue ? `${metrics.queue.backlogGB.toFixed(3)} GB` : '—'}</span>
               </div>
             </div>
           ) : null}
         </>
       )}
-    </>
+    </InspectorSection>
   ) : null
 
-  const formulas = <FormulaPanel formulaDescriptors={metrics?.formulaDescriptors} sim={sim} />
+  const formulas = (
+    <FormulaPanel sectionId="node-formulas" defaultOpen={!canEdit} formulaDescriptors={metrics?.formulaDescriptors} sim={sim} />
+  )
 
   return canEdit ? (
     <>
       {roleAndCapability}
+      {scaling}
       {telemetry}
       {formulas}
     </>
@@ -296,9 +296,12 @@ export function Inspector({
   onReverseEdgeDirection,
   onDeleteEdge,
 }: InspectorProps) {
-  // Must stay unconditional (Rules of Hooks) even though it's only read in
-  // the node branch below; resets naturally on remount via the node's `key`.
+  // Must stay unconditional (Rules of Hooks) even though they're only read
+  // in the node branch below; reset naturally on remount via the node's
+  // `key`. The ref backs the hidden file input behind the styled "Upload
+  // image" button (same pattern as App.tsx's JSON import).
   const [sizeWarningBytes, setSizeWarningBytes] = useState<number | undefined>(undefined)
+  const imageInputRef = useRef<HTMLInputElement>(null)
 
   if (selectedNode) {
     const label = typeof selectedNode.data.label === 'string' ? selectedNode.data.label : ''
@@ -327,62 +330,74 @@ export function Inspector({
           <input value={label} onChange={(event) => onRenameNode(selectedNode.id, event.target.value)} />
         </label>
         <HostAndQueueFields node={selectedNode} metrics={selectedNodeMetrics} runStatus={runStatus} onSetNodeSim={onSetNodeSim} />
-        <h3 className="lab-panel-title lab-panel-title-spaced">Appearance</h3>
-        <div className="lab-field">
-          <span>Style</span>
-          <div className="lab-button-row">
-            {NODE_KINDS.map((kind) => (
-              <button
-                key={kind}
-                type="button"
-                className={`chip ${selectedNode.className === classNameForKind(kind) ? 'chip-active' : ''}`}
-                onClick={() => onSetNodeKind(selectedNode.id, kind)}
-              >
-                {kind}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="lab-field">
-          <span>Size</span>
-          <div className="lab-button-row">
-            {TEXT_SIZES.map((size) => (
-              <button
-                key={size}
-                type="button"
-                className={`chip ${labelSize === size ? 'chip-active' : ''}`}
-                onClick={() => onSetNodeLabelSize(selectedNode.id, size)}
-              >
-                {size}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="lab-field">
-          <span>Image</span>
-          {image ? (
-            <div className="lab-node-image-preview">
-              <img src={image} alt="" />
-              <button
-                type="button"
-                className="lab-danger"
-                onClick={() => onSetNodeImage(selectedNode.id, undefined, undefined, undefined)}
-              >
-                Remove image
-              </button>
+        <InspectorSection id="node-appearance" title="Appearance" defaultOpen={false} summaryExtra={null}>
+          <div className="lab-field">
+            <span>Style</span>
+            <div className="lab-button-row">
+              {NODE_KINDS.map((kind) => (
+                <button
+                  key={kind}
+                  type="button"
+                  className={`chip ${selectedNode.className === classNameForKind(kind) ? 'chip-active' : ''}`}
+                  onClick={() => onSetNodeKind(selectedNode.id, kind)}
+                >
+                  {kind}
+                </button>
+              ))}
             </div>
-          ) : (
-            <input type="file" accept={IMAGE_UPLOAD_ACCEPT} onChange={handleImageChange} />
-          )}
-          {sizeWarningBytes !== undefined ? (
-            <div className="lab-warning">
-              <span>Large image ({Math.round(sizeWarningBytes / 1000)} KB): this is embedded in the diagram JSON and every export — consider compressing.</span>
-              <button type="button" className="lab-warning-dismiss" onClick={() => setSizeWarningBytes(undefined)}>
-                Dismiss
-              </button>
+          </div>
+          <div className="lab-field">
+            <span>Size</span>
+            <div className="lab-button-row">
+              {TEXT_SIZES.map((size) => (
+                <button
+                  key={size}
+                  type="button"
+                  className={`chip ${labelSize === size ? 'chip-active' : ''}`}
+                  onClick={() => onSetNodeLabelSize(selectedNode.id, size)}
+                >
+                  {size}
+                </button>
+              ))}
             </div>
-          ) : null}
-        </div>
+          </div>
+          <div className="lab-field">
+            <span>Image</span>
+            {image ? (
+              <div className="lab-node-image-preview">
+                <img src={image} alt="" />
+                <button
+                  type="button"
+                  className="lab-danger"
+                  onClick={() => onSetNodeImage(selectedNode.id, undefined, undefined, undefined)}
+                >
+                  Remove image
+                </button>
+              </div>
+            ) : (
+              <>
+                <input
+                  ref={imageInputRef}
+                  type="file"
+                  accept={IMAGE_UPLOAD_ACCEPT}
+                  className="lab-upload-input"
+                  onChange={handleImageChange}
+                />
+                <button type="button" className="lab-image-upload" onClick={() => imageInputRef.current?.click()}>
+                  Upload image…
+                </button>
+              </>
+            )}
+            {sizeWarningBytes !== undefined ? (
+              <div className="lab-warning">
+                <span>Large image ({Math.round(sizeWarningBytes / 1000)} KB): this is embedded in the diagram JSON and every export — consider compressing.</span>
+                <button type="button" className="lab-warning-dismiss" onClick={() => setSizeWarningBytes(undefined)}>
+                  Dismiss
+                </button>
+              </div>
+            ) : null}
+          </div>
+        </InspectorSection>
       </aside>
     )
   }
@@ -396,54 +411,53 @@ export function Inspector({
     return (
       <aside key={`edge-${selectedEdge.id}`} className="lab-inspector lab-inspector-flash">
         <h2 className="lab-panel-title">Edge</h2>
-        <h3 className="lab-panel-title">Style</h3>
-        <div className="lab-field">
-          <span>Line</span>
-          <div className="lab-button-row">
-            {HEAT_VARIANTS.map((v) => (
-              <button
-                key={v}
-                type="button"
-                className={`chip ${variant === v ? 'chip-active' : ''}`}
-                onClick={() => onSetEdgeVariant(selectedEdge.id, v)}
-              >
-                {v}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="lab-field">
-          <span>Thickness</span>
-          <div className="lab-button-row">
-            {EDGE_THICKNESSES.map((step) => (
-              <button
-                key={step}
-                type="button"
-                className={`chip ${thickness === step ? 'chip-active' : ''}`}
-                onClick={() => onSetEdgeThickness(selectedEdge.id, step)}
-              >
-                {step}
-              </button>
-            ))}
-          </div>
-        </div>
-        {variant === 'heat-flow' ? (
+        <InspectorSection id="edge-style" title="Style" defaultOpen={canEditSimConfig} summaryExtra={null}>
           <div className="lab-field">
-            <span>Flow direction</span>
+            <span>Line</span>
             <div className="lab-button-row">
-              <button
-                type="button"
-                className={`chip ${direction === 'reverse' ? 'chip-active' : ''}`}
-                onClick={() => onReverseEdgeDirection(selectedEdge.id)}
-              >
-                {direction === 'reverse' ? 'reversed' : 'reverse'}
-              </button>
+              {HEAT_VARIANTS.map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  className={`chip ${variant === v ? 'chip-active' : ''}`}
+                  onClick={() => onSetEdgeVariant(selectedEdge.id, v)}
+                >
+                  {v}
+                </button>
+              ))}
             </div>
           </div>
-        ) : null}
-        <h3 className="lab-panel-title lab-panel-title-spaced">Traffic</h3>
-        <div className="lab-field">
-          <span>Traffic config</span>
+          <div className="lab-field">
+            <span>Thickness</span>
+            <div className="lab-button-row">
+              {EDGE_THICKNESSES.map((step) => (
+                <button
+                  key={step}
+                  type="button"
+                  className={`chip ${thickness === step ? 'chip-active' : ''}`}
+                  onClick={() => onSetEdgeThickness(selectedEdge.id, step)}
+                >
+                  {step}
+                </button>
+              ))}
+            </div>
+          </div>
+          {variant === 'heat-flow' ? (
+            <div className="lab-field">
+              <span>Flow direction</span>
+              <div className="lab-button-row">
+                <button
+                  type="button"
+                  className={`chip ${direction === 'reverse' ? 'chip-active' : ''}`}
+                  onClick={() => onReverseEdgeDirection(selectedEdge.id)}
+                >
+                  {direction === 'reverse' ? 'reversed' : 'reverse'}
+                </button>
+              </div>
+            </div>
+          ) : null}
+        </InspectorSection>
+        <InspectorSection id="edge-traffic" title="Traffic" defaultOpen={canEditSimConfig} summaryExtra={null}>
           {simConfig ? (
             <EdgeConfigFields
               config={simConfig}
@@ -467,42 +481,50 @@ export function Inspector({
               Enable traffic config
             </button>
           )}
-        </div>
+        </InspectorSection>
         {simConfig ? (
-          <>
-            <h3 className="lab-panel-title lab-panel-title-spaced">Telemetry</h3>
+          <InspectorSection id="edge-telemetry" title="Telemetry" defaultOpen={!canEditSimConfig} summaryExtra={null}>
             <div className="sim-host-metrics">
               <div className="sim-host-meter">
                 <span>RPS</span>
                 <span className="sim-host-meter-value">
-                  {selectedEdgeMetrics?.sim ? selectedEdgeMetrics.sim.currentRPS.toFixed(1) : '\u2014'}
+                  {selectedEdgeMetrics?.sim ? selectedEdgeMetrics.sim.currentRPS.toFixed(1) : '—'}
                 </span>
               </div>
               <div className="sim-host-meter">
                 <span>MB/s</span>
                 <span className="sim-host-meter-value">
-                  {selectedEdgeMetrics?.sim ? selectedEdgeMetrics.sim.currentMBps.toFixed(2) : '\u2014'}
+                  {selectedEdgeMetrics?.sim ? selectedEdgeMetrics.sim.currentMBps.toFixed(2) : '—'}
                 </span>
               </div>
               <div className="sim-host-meter">
                 <span>Connections</span>
                 <span className="sim-host-meter-value">
-                  {selectedEdgeMetrics?.sim ? selectedEdgeMetrics.sim.activeConnections.toFixed(1) : '\u2014'}
+                  {selectedEdgeMetrics?.sim ? selectedEdgeMetrics.sim.activeConnections.toFixed(1) : '—'}
                 </span>
               </div>
               <div className="sim-host-meter">
                 <span>Congested</span>
                 <span className="sim-host-meter-value">
-                  {selectedEdgeMetrics?.sim ? (selectedEdgeMetrics.sim.isCongested ? 'yes' : 'no') : '\u2014'}
+                  {selectedEdgeMetrics?.sim ? (selectedEdgeMetrics.sim.isCongested ? 'yes' : 'no') : '—'}
                 </span>
               </div>
             </div>
-          </>
+          </InspectorSection>
         ) : null}
-        {simConfig ? <FormulaPanel formulaDescriptors={selectedEdgeMetrics?.formulaDescriptors} sim={undefined} /> : null}
-        <button type="button" className="lab-danger" onClick={() => onDeleteEdge(selectedEdge.id)}>
-          Delete edge
-        </button>
+        {simConfig ? (
+          <FormulaPanel
+            sectionId="edge-formulas"
+            defaultOpen={!canEditSimConfig}
+            formulaDescriptors={selectedEdgeMetrics?.formulaDescriptors}
+            sim={undefined}
+          />
+        ) : null}
+        <div className="lab-inspector-footer">
+          <button type="button" className="lab-danger" onClick={() => onDeleteEdge(selectedEdge.id)}>
+            Delete edge
+          </button>
+        </div>
       </aside>
     )
   }
@@ -514,4 +536,3 @@ export function Inspector({
     </aside>
   )
 }
-

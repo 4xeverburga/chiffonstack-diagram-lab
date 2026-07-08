@@ -1,5 +1,7 @@
 import type { FormulaDescriptor, NodeSim } from '../engine/ports'
 import { FORMULA_PANEL_DISCLAIMER, describeFormulaPanelState } from './formulaPanelState'
+import { InspectorSection } from './InspectorSection'
+import type { InspectorSectionId } from './inspectorSectionState'
 
 // Formula & sources panel (US4, FR-008/FR-009): renders every active
 // FormulaDescriptor for the selected node — name, expression, current
@@ -7,18 +9,21 @@ import { FORMULA_PANEL_DISCLAIMER, describeFormulaPanelState } from './formulaPa
 // directional-accuracy disclaimer (constitution Principle II wording
 // rule). Empty-state copy logic lives in formulaPanelState.ts so this file
 // only exports the component (oxlint fast-refresh rule) and that logic is
-// unit testable without rendering JSX.
+// unit testable without rendering JSX. Rendered as one Inspector accordion
+// section; the caller owns the section id (node vs edge) and its
+// runStatus-aware default.
 type FormulaPanelProps = {
+  sectionId: InspectorSectionId
+  defaultOpen: boolean
   formulaDescriptors: FormulaDescriptor[] | undefined
   sim: NodeSim | undefined
 }
 
-export function FormulaPanel({ formulaDescriptors, sim }: FormulaPanelProps) {
+export function FormulaPanel({ sectionId, defaultOpen, formulaDescriptors, sim }: FormulaPanelProps) {
   const { hasFormulas, emptyMessage } = describeFormulaPanelState(formulaDescriptors, sim)
 
   return (
-    <div className="lab-formula-panel">
-      <h3 className="lab-panel-title">Formulas &amp; sources</h3>
+    <InspectorSection id={sectionId} title="Formulas & sources" defaultOpen={defaultOpen} summaryExtra={null}>
       {hasFormulas ? (
         <ul className="lab-formula-list">
           {formulaDescriptors!.map((descriptor) => (
@@ -31,7 +36,7 @@ export function FormulaPanel({ formulaDescriptors, sim }: FormulaPanelProps) {
               <p className="lab-formula-inputs-line">
                 {Object.entries(descriptor.inputs)
                   .map(([key, value]) => `${key}=${String(value)}`)
-                  .join(' \u00b7 ')}
+                  .join(' · ')}
               </p>
               <div className="lab-formula-sources">
                 {descriptor.sources.map((source) => (
@@ -47,6 +52,6 @@ export function FormulaPanel({ formulaDescriptors, sim }: FormulaPanelProps) {
         <p className="sim-placeholder-note">{emptyMessage}</p>
       )}
       <p className="lab-formula-disclaimer">{FORMULA_PANEL_DISCLAIMER}</p>
-    </div>
+    </InspectorSection>
   )
 }

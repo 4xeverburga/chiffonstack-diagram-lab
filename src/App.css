@@ -188,11 +188,8 @@
 
 /* Formula & sources panel (feature 010, US4/FR-008/FR-009) — bottom of the
    Inspector, per the fixed layout decision in spec.md's Assumptions. */
-.lab-formula-panel {
-  margin-top: 16px;
-  padding-top: 16px;
-  border-top: 1px solid var(--border);
-}
+/* Formula panel content — the section chrome (title, hairline, collapse)
+   now comes from .lab-section via InspectorSection. */
 
 .lab-formula-list {
   list-style: none;
@@ -327,20 +324,68 @@
   border-top: 1px solid var(--border);
 }
 
-/* Inspector section header (Fase 1): a title + reserved right-hand slot.
-   Applied together with .lab-panel-title-spaced for the hairline/spacing;
-   the row layout lets ROLE & CAPABILITY host the config-presets picker
-   (next feature) without a layout change. */
-.lab-section-header {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 12px;
+/* Inspector accordion sections: native <details>/<summary>, styled to the
+   same uppercase-mono section-title vocabulary. The hairline top border
+   replaces .lab-panel-title-spaced inside the Inspector; the summary row
+   keeps a right-hand slot (summaryExtra) reserved for the config-presets
+   picker (next feature). */
+.lab-section {
+  border-top: 1px solid var(--border);
 }
 
-.lab-section-header .lab-panel-title {
-  margin: 0;
+.lab-section-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 0;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.lab-section-summary::-webkit-details-marker {
+  display: none;
+}
+
+.lab-section-summary:focus-visible {
+  outline: 1px solid #ff4715;
+  outline-offset: 2px;
+}
+
+.lab-section-title {
+  font-family: var(--mono);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text);
+}
+
+.lab-section-summary:hover .lab-section-title {
+  color: var(--text-h);
+}
+
+/* Chevron drawn with borders so it inherits the hover accent; points right
+   when collapsed, down when open. */
+.lab-section-caret {
+  flex: 0 0 auto;
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid var(--text);
+  border-bottom: 1.5px solid var(--text);
+  transform: translateY(-1px) rotate(-45deg);
+  transition: transform 0.18s cubic-bezier(0.165, 0.84, 0.44, 1);
+}
+
+.lab-section-summary:hover .lab-section-caret {
+  border-color: #ff4715;
+}
+
+.lab-section[open] > .lab-section-summary .lab-section-caret {
+  transform: translateY(-2px) rotate(45deg);
+}
+
+.lab-section-body {
+  padding: 2px 0 8px;
 }
 
 .lab-color-field {
@@ -540,6 +585,31 @@
 
 .lab-danger:hover {
   border-color: #ff0024;
+}
+
+/* Styled trigger for the hidden image file input (same hidden-input +
+   button pattern as the top bar's JSON import). */
+.lab-image-upload {
+  align-self: flex-start;
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-h);
+  cursor: pointer;
+}
+
+.lab-image-upload:hover {
+  border-color: #ff4715;
+}
+
+/* Bottom slot for panel-level actions (Delete edge) below the last
+   accordion section. */
+.lab-inspector-footer {
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
 }
 
 .lab-node-image-preview {
@@ -1134,6 +1204,10 @@
 
   .lab-inspector-flash {
     animation: none;
+  }
+
+  .lab-section-caret {
+    transition: none;
   }
 
   .react-flow__node.sim-status-saturated,
