@@ -5,7 +5,7 @@ import { HEAT_VARIANTS, type HeatVariant } from './heatVariants'
 import { EDGE_THICKNESSES, resolveDirection, resolveThickness, type EdgeThickness } from './edgeStyle'
 import { IMAGE_SIZE_WARNING_BYTES, IMAGE_UPLOAD_ACCEPT, readImageFile } from './imageUpload'
 import { resolveTextSize, TEXT_SIZES, type TextSize } from './textSizes'
-import type { EdgeMetrics, EdgeSimConfig, NodeMetrics, NodeSim } from '../engine/ports'
+import type { EdgeMetrics, EdgeSimConfig, HostNodeSim, NodeMetrics, NodeSim } from '../engine/ports'
 import type { RunStatus } from '../sim/workerProtocol'
 import { HostCapabilityFields, HostScalingFields } from './hostConfigFields'
 import { EdgeConfigFields } from './edgeConfigFields'
@@ -61,6 +61,19 @@ function defaultSimForChoice(choice: SimKindChoice): NodeSim | undefined {
   }
 }
 
+// Fase 3 (consciencia de estado): while the sim is running/paused, the ~10
+// disabled capability+scaling inputs collapse into this single read-only
+// line instead of rendering as dead controls (plan.md Fase 3).
+function hostSpecLine(sim: HostNodeSim): string {
+  if (sim.profile === 'client_pool') return `${sim.requestRatePerSec} req/s`
+  if (sim.profile === 'external_api') return `${sim.manualBaselineLatencyMs}ms latency`
+  const capability =
+    sim.configMode === 'manual'
+      ? `manual \u00b7 ${sim.manualSaturationRPS} sat / ${sim.manualMaxRPS} max / ${sim.manualBaselineLatencyMs}ms`
+      : `calculated \u00b7 ${sim.cpuProcessingTimeMs}ms cpu / ${sim.maxWorkerThreads} threads`
+  return `${capability} \u00b7 replicas ${sim.minReplicas}\u2013${sim.maxReplicas} \u00b7 ${sim.overloadBehavior}`
+}
+
 type HostAndQueueFieldsProps = {
   node: Node
   metrics: NodeMetrics | undefined
@@ -90,7 +103,11 @@ function HostAndQueueFields({ node, metrics, runStatus, onSetNodeSim }: HostAndQ
     onSetNodeSim(node.id, defaultSimForChoice(choice))
   }
 
-  return (
+  // Fase 3: idle keeps the full editable form; running/paused collapses
+  // the (now-disabled) capability+scaling fields into one spec-line and
+  // promotes TELEMETRY+FORMULAS above ROLE & CAPABILITY (plan.md Fase 3).
+  // No animated reorder — a plain render-order swap on runStatus.
+  const roleAndCapability = (
     <>
       <div className="lab-section-header lab-panel-title-spaced">
         <h3 className="lab-panel-title">Role &amp; capability</h3>
@@ -116,20 +133,31 @@ function HostAndQueueFields({ node, metrics, runStatus, onSetNodeSim }: HostAndQ
         </div>
       </div>
       {!canEdit ? <p className="sim-placeholder-note">Reset the simulation to edit roles or config.</p> : null}
-      {sim && sim.kind === 'host' ? (
-        <HostCapabilityFields sim={sim} disabled={!canEdit} onChange={(next) => onSetNodeSim(node.id, next)} />
-      ) : null}
-
-      {hasScaling && sim?.kind === 'host' ? (
+      {canEdit ? (
         <>
-          <h3 className="lab-panel-title lab-panel-title-spaced">Scaling</h3>
-          <HostScalingFields sim={sim} disabled={!canEdit} onChange={(next) => onSetNodeSim(node.id, next)} />
+          {sim && sim.kind === 'host' ? (
+            <HostCapabilityFields sim={sim} disabled={!canEdit} onChange={(next) => onSetNodeSim(node.id, next)} />
+          ) : null}
+          {hasScaling && sim?.kind === 'host' ? (
+            <>
+              <h3 className="lab-panel-title lab-panel-title-spaced">Scaling</h3>
+              <HostScalingFields sim={sim} disabled={!canEdit} onChange={(next) => onSetNodeSim(node.id, next)} />
+            </>
+          ) : null}
         </>
+      ) : sim && sim.kind === 'host' ? (
+        <p className="lab-spec-line">{hostSpecLine(sim)}</p>
       ) : null}
+    </>
+  )
 
-      {sim ? (
+  const telemetry = sim ? (
+    <>
+      <h3 className="lab-panel-title lab-panel-title-spaced">Telemetry</h3>
+      {canEdit ? (
+        <p className="sim-placeholder-note">Start the simulation to read telemetry.</p>
+      ) : (
         <>
-          <h3 className="lab-panel-title lab-panel-title-spaced">Telemetry</h3>
           {sim.kind === 'host' ? (
             <div className="sim-host-metrics">
               <div className="sim-host-meter">
@@ -210,8 +238,23 @@ function HostAndQueueFields({ node, metrics, runStatus, onSetNodeSim }: HostAndQ
             </div>
           ) : null}
         </>
-      ) : null}
-      <FormulaPanel formulaDescriptors={metrics?.formulaDescriptors} sim={sim} />
+      )}
+    </>
+  ) : null
+
+  const formulas = <FormulaPanel formulaDescriptors={metrics?.formulaDescriptors} sim={sim} />
+
+  return canEdit ? (
+    <>
+      {roleAndCapability}
+      {telemetry}
+      {formulas}
+    </>
+  ) : (
+    <>
+      {telemetry}
+      {formulas}
+      {roleAndCapability}
     </>
   )
 }

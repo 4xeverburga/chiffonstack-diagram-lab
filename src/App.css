@@ -114,6 +114,17 @@
   margin: 0;
 }
 
+/* Fase 3 (consciencia de estado): read-only summary of the capability +
+   scaling config while the sim runs — replaces ~10 disabled inputs. */
+.lab-spec-line {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  margin: 0 0 16px;
+  overflow-wrap: break-word;
+}
+
 .lab-field-checkbox {
   flex-direction: row;
   align-items: center;
