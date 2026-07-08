@@ -325,7 +325,7 @@ function LabEditor() {
   return (
     <div className="lab">
       <header className="lab-bar">
-        <span className="lab-title">Diagram Lab</span>
+        <span className="lab-title">SUGAR</span>
         <span className="lab-meta">React Flow authoring tool for system topology diagrams</span>
         <SimulationControls
           runStatus={runStatus}
