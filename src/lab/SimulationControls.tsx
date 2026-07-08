@@ -1,5 +1,5 @@
 import type { RunStatus } from '../sim/workerProtocol'
-import { TRAFFIC_SCALE_LABELS, type TrafficScale } from '../engine/config'
+import { TRAFFIC_SCALE_LABELS, type TrafficScale } from './animation/trafficScalePresets'
 
 type SimulationControlsProps = {
   runStatus: RunStatus

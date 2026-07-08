@@ -43,7 +43,7 @@ import { AlignmentGuides } from './lab/AlignmentGuides'
 import { DEFAULT_DESIGN_TOKENS, type DesignTokens } from './lab/designTokens'
 import { useSimulation } from './sim/useSimulation'
 import { createSimStore, hasGeneratorRole, selectEdgeMetrics, selectNodeMetrics, useSimStore } from './sim/store'
-import { DEFAULT_TRAFFIC_SCALE, SIGMOID_MAPPING_BY_TRAFFIC_SCALE, type TrafficScale } from './engine/config'
+import { DEFAULT_TRAFFIC_SCALE, SIGMOID_MAPPING_BY_TRAFFIC_SCALE, type TrafficScale } from './lab/animation/trafficScalePresets'
 import type { NodeSim } from './engine/ports'
 
 const nodeTypes = { labelNode: LabelNode }
@@ -66,9 +66,9 @@ function LabEditor() {
   // every node's handles for the duration of the drag (US2, research.md R4).
   const [connecting, setConnecting] = useState(false)
   // Which order-of-magnitude of req/s counts as "a lot" for this diagram's
-  // architecture (src/engine/config.ts) — purely a rendering choice for
-  // HeatEdge's animation mapping, not sent to the worker at all (the
-  // engine itself has no notion of "peak" traffic).
+  // architecture (src/lab/animation/trafficScalePresets.ts) — purely a
+  // rendering choice for HeatEdge's animation mapping, not sent to the
+  // worker at all (the engine itself has no notion of "peak" traffic).
   const [trafficScale, setTrafficScale] = useState<TrafficScale>(DEFAULT_TRAFFIC_SCALE)
 
   const mutations = useDiagramMutations(setNodes, setEdges)

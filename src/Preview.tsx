@@ -9,7 +9,7 @@ import { Inspector } from './lab/Inspector'
 import { classNameForKind } from './lab/nodeKinds'
 import { applyHostStatusClass } from './lab/hostStatusTreatment'
 import { DEFAULT_DESIGN_TOKENS } from './lab/designTokens'
-import { DEFAULT_TRAFFIC_SCALE } from './engine/config'
+import { DEFAULT_TRAFFIC_SCALE } from './lab/animation/trafficScalePresets'
 import type { FormulaDescriptor, HostNodeMetrics, NodeMetrics, NodeSim } from './engine/ports'
 
 // Dev-only design/UI preview: mounts the REAL app components (LabelNode,
