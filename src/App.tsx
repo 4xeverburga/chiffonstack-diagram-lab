@@ -28,10 +28,11 @@ import '@xyflow/react/dist/style.css'
 import './App.css'
 import { LabelNode } from './lab/LabelNode'
 import { HeatEdge } from './lab/HeatEdge'
-import { Sidebar, DRAG_MIME_TYPE } from './lab/Sidebar'
+import { Sidebar } from './lab/Sidebar'
 import { SimulationControls } from './lab/SimulationControls'
 import { Inspector } from './lab/Inspector'
-import { classNameForKind, type NodeKind } from './lab/nodeKinds'
+import { classNameForKind } from './lab/nodeKinds'
+import { DRAG_MIME_TYPE, simForPaletteKey } from './lab/nodePalette'
 import { initialEdges, initialNodes } from './lab/initialDiagram'
 import { useDiagramMutations } from './lab/useDiagramMutations'
 import { downloadDiagram, parseDiagram } from './lab/exportDiagram'
@@ -43,6 +44,7 @@ import { DEFAULT_DESIGN_TOKENS, type DesignTokens } from './lab/designTokens'
 import { useSimulation } from './sim/useSimulation'
 import { createSimStore, hasGeneratorRole, selectEdgeMetrics, selectNodeMetrics, useSimStore } from './sim/store'
 import { DEFAULT_TRAFFIC_SCALE, SIGMOID_MAPPING_BY_TRAFFIC_SCALE, type TrafficScale } from './engine/config'
+import type { NodeSim } from './engine/ports'
 
 const nodeTypes = { labelNode: LabelNode }
 const edgeTypes = { heat: HeatEdge }
@@ -275,15 +277,15 @@ function LabEditor() {
   const handleConnectEnd = useCallback(() => setConnecting(false), [])
 
   const addNode = useCallback(
-    (kind: NodeKind, position: XYPosition) => {
+    (sim: NodeSim | undefined, position: XYPosition) => {
       idCounter.current += 1
       const id = `node-${Date.now()}-${idCounter.current}`
       const newNode: Node = {
         id,
         type: 'labelNode',
         position,
-        data: { label: 'New node' },
-        className: classNameForKind(kind),
+        data: sim ? { label: 'New node', sim } : { label: 'New node' },
+        className: classNameForKind('default'),
       }
       setNodes((current) => [...current, newNode])
     },
@@ -291,12 +293,12 @@ function LabEditor() {
   )
 
   const handleAddFromSidebar = useCallback(
-    (kind: NodeKind) => {
+    (sim: NodeSim | undefined) => {
       const rect = canvasRef.current?.getBoundingClientRect()
       const point = rect
         ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
         : { x: window.innerWidth / 2, y: window.innerHeight / 2 }
-      addNode(kind, screenToFlowPosition(point))
+      addNode(sim, screenToFlowPosition(point))
     },
     [addNode, screenToFlowPosition],
   )
@@ -304,9 +306,9 @@ function LabEditor() {
   const onDrop = useCallback(
     (event: DragEvent<HTMLDivElement>) => {
       event.preventDefault()
-      const kind = event.dataTransfer.getData(DRAG_MIME_TYPE) as NodeKind | ''
-      if (!kind) return
-      addNode(kind, screenToFlowPosition({ x: event.clientX, y: event.clientY }))
+      const paletteKey = event.dataTransfer.getData(DRAG_MIME_TYPE)
+      if (!paletteKey) return
+      addNode(simForPaletteKey(paletteKey), screenToFlowPosition({ x: event.clientX, y: event.clientY }))
     },
     [addNode, screenToFlowPosition],
   )
