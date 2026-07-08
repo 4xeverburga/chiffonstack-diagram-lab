@@ -1070,6 +1070,17 @@
   }
 }
 
+/* A booting chip standing in for a replica that just crashed under
+   collapse (research.md D9), not one merely scaling up — solid border
+   and a static X, deliberately NOT the dashed pulse above, so it reads
+   as "this one died" rather than "arriving soon". */
+.scaling-chip-crashed {
+  border-style: solid;
+  border-color: var(--token-primary, #ff4715);
+  color: var(--token-primary, #ff4715);
+  font-weight: 700;
+}
+
 .scaling-group-footer {
   display: flex;
   align-items: center;

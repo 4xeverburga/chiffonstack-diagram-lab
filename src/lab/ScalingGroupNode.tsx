@@ -48,7 +48,10 @@ type ScalingGroupNodeProps = {
 
 function chipTitle(index: number, total: number, booting: boolean, perReplicaRPS: number | undefined, hostMetrics: HostNodeMetrics | undefined): string {
   const label = `Replica ${index + 1} of ${total}`
-  if (booting) return `${label} — booting, not yet serving traffic`
+  if (booting) {
+    if (hostMetrics?.status === 'collapsed') return `${label} — crashed under overload, replacement booting`
+    return `${label} — booting, not yet serving traffic`
+  }
   if (!hostMetrics) return `${label} — no data yet`
   const rps = perReplicaRPS !== undefined ? `${perReplicaRPS.toFixed(1)} req/s, ` : ''
   return `${label} — ${rps}${Math.round(hostMetrics.saturationRatio * 100)}% saturated, ${hostMetrics.status}, ${hostMetrics.latencyMs.toFixed(1)}ms latency`
@@ -61,6 +64,12 @@ export function ScalingGroupNode({ sim, liveTelemetry, hostMetrics }: ScalingGro
   const pulseClass = projection.pulse === 'up' ? ' scaling-pulse-up' : projection.pulse === 'down' ? ' scaling-pulse-down' : ''
   const perReplicaRPS = hostMetrics && telemetry.effectiveCount > 0 ? hostMetrics.incomingRPS / telemetry.effectiveCount : undefined
   const perReplicaSaturationLabel = hostMetrics ? `${Math.round(hostMetrics.saturationRatio * 100)}%` : undefined
+  // A booting chip during a COLLAPSED host's replica-eviction recovery
+  // (research.md D9) isn't merely "pending" the way a normal scale-up
+  // chip is — it's a replacement for one that just crashed under
+  // overload. The pulsing ellipsis reads as "arriving soon"; a static X
+  // reads as "this one died", which is the accurate story here.
+  const isCollapsed = hostMetrics?.status === 'collapsed'
 
   return (
     <div key={telemetry.nominalCount} className={`scaling-group-box${pulseClass}`} data-testid="scaling-group-box">
@@ -68,10 +77,10 @@ export function ScalingGroupNode({ sim, liveTelemetry, hostMetrics }: ScalingGro
         {projection.visibleChips.map((chip) => (
           <span
             key={chip.index}
-            className={`scaling-chip${chip.booting ? ' scaling-chip-booting' : ''}`}
+            className={`scaling-chip${chip.booting ? (isCollapsed ? ' scaling-chip-crashed' : ' scaling-chip-booting') : ''}`}
             title={chipTitle(chip.index, telemetry.nominalCount, chip.booting, perReplicaRPS, hostMetrics)}
           >
-            {chip.booting ? '\u2026' : (perReplicaSaturationLabel ?? '')}
+            {chip.booting ? (isCollapsed ? '\u2715' : '\u2026') : (perReplicaSaturationLabel ?? '')}
           </span>
         ))}
       </div>
