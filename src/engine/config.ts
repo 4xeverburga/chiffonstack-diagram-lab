@@ -152,9 +152,24 @@ export const AUTOSCALE_COOLDOWN_MS = 10000
 // how long a simulation runs.
 export const SCALING_EVENT_HISTORY_LIMIT = 10
 
-// Maximum replica chips rendered inside a scaling group on the canvas
-// before the rest collapse into a "+N" overflow badge (spec User Story 4).
-export const VISIBLE_REPLICA_CAP = 4
+// Above this many declared replica slots, the scaling-group visual switches
+// from discrete per-replica segments to a single proportional-fill bar
+// (scalingGroupProjection.ts) — a rendering-legibility threshold only,
+// same role the old VISIBLE_REPLICA_CAP served for the vertical chip list
+// it replaced. This has NOTHING to do with the scaler's real ceiling:
+// nominalCount can never exceed maxReplicas (the autoscaler is already
+// bounded by it, see autoscaler.ts), so there is no "overflow" to report —
+// only a point past which per-slot ticks would render as unreadable
+// slivers in the node's fixed width, so the bar coalesces into a
+// proportional reading instead.
+export const MAX_DISCRETE_CAPACITY_SEGMENTS = 8
+
+// Bounded ring size for HostSaturationSparkline.tsx's always-on saturation
+// gauge (rendered for every saturating-capable host, in every state — see
+// that file's header). At SIM_TICK_MS=200ms this is ~6s of trailing
+// history: long enough to see a load spike bend the curve over, short
+// enough that the sparkline stays legible at node scale.
+export const SPARKLINE_HISTORY_LENGTH = 30
 
 // Migration-only fallback (constitution v3.2.0, research.md D5-style
 // backward-compat): `bootDelayMs` is now a user-facing capability

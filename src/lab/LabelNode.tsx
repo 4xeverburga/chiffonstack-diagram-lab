@@ -5,6 +5,7 @@ import { labelBandFor, resolveTextSize } from './textSizes'
 import { NodeInfoButton } from './NodeInfoButton'
 import { ScalingGroupNode } from './ScalingGroupNode'
 import { shouldRenderScalingGroup } from './scalingGroupProjection'
+import { HostSaturationSparkline } from './HostSaturationSparkline'
 import type { NodeMetrics, NodeSim } from '../engine/ports'
 
 // Custom node used for every diagram box: keeps the existing className-driven
@@ -39,12 +40,23 @@ export function LabelNode({ id, data, selected }: NodeProps) {
   const labelSize = resolveTextSize(data.labelSize)
   const sim = data.sim as NodeSim | undefined
   const metrics = data.simMetrics as NodeMetrics | undefined
+  const simWindowKey = data.simWindowKey as number | undefined
   // Scaling-group visual (feature 013, User Story 4) — only saturating
   // host profiles carry minReplicas/maxReplicas at all; see ScalingGroupNode.tsx
   // for why this renders inside the existing node rather than as separate
   // canvas nodes.
   const scalingBounds =
     sim && sim.kind === 'host' && 'minReplicas' in sim ? { minReplicas: sim.minReplicas, maxReplicas: sim.maxReplicas } : undefined
+  // HostSaturationSparkline.tsx — rendered for every host profile that can
+  // ever saturate (client_pool/external_api never do, per hostModel.ts:
+  // computeClientPoolMetrics/computeExternalApiMetrics always return
+  // status 'healthy'/saturationRatio 0), and rendered UNCONDITIONALLY
+  // across idle/healthy/saturated/overloaded — not gated on the current
+  // status — so the node's footprint never changes between editing and
+  // any running simulation state (see that file's header for the bug this
+  // fixes).
+  const canSaturate =
+    sim && sim.kind === 'host' && (sim.profile === 'transactional_api' || sim.profile === 'worker_consumer' || sim.profile === 'database_server')
   const imageAspect =
     typeof data.imageAspect === 'number' && Number.isFinite(data.imageAspect) && data.imageAspect > 0
       ? data.imageAspect
@@ -79,6 +91,9 @@ export function LabelNode({ id, data, selected }: NodeProps) {
       <div className="node-content">
         {image ? <img className="node-image" src={image} alt="" /> : null}
         {label.trim() ? <span className={`node-label node-label-${labelSize}`}>{label}</span> : null}
+        {canSaturate ? (
+          <HostSaturationSparkline status={metrics?.host?.status} saturationRatio={metrics?.host?.saturationRatio} windowKey={simWindowKey} />
+        ) : null}
         {shouldRenderScalingGroup(scalingBounds) ? (
           <ScalingGroupNode sim={scalingBounds} liveTelemetry={metrics?.host?.replicas} hostMetrics={metrics?.host} />
         ) : null}

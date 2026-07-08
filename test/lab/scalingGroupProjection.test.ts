@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { isScalingGroupHost, projectScalingGroup, resolveReplicaTelemetry, shouldRenderScalingGroup } from '../../src/lab/scalingGroupProjection'
+import { MAX_DISCRETE_CAPACITY_SEGMENTS } from '../../src/engine/config'
 import type { HostReplicaTelemetry } from '../../src/engine/ports'
 
 function telemetry(overrides: Partial<HostReplicaTelemetry> = {}): HostReplicaTelemetry {
@@ -18,78 +19,83 @@ describe('isScalingGroupHost', () => {
   })
 })
 
-describe('projectScalingGroup — cap and overflow across a 1->6->1 sweep', () => {
-  it('shows exactly nominalCount chips when at or below the visible cap', () => {
-    for (const nominalCount of [1, 2, 3, 4]) {
-      const projection = projectScalingGroup(telemetry({ nominalCount }), null)
-      expect(projection.visibleChips).toHaveLength(nominalCount)
-      expect(projection.overflowCount).toBe(0)
+describe('projectScalingGroup — segments mode (maxReplicas at or below the legibility cap)', () => {
+  it('renders exactly one segment per declared replica slot, not just currently-active ones', () => {
+    const projection = projectScalingGroup(telemetry({ nominalCount: 2 }), 4, null)
+    expect(projection.mode).toBe('segments')
+    expect(projection.segments).toHaveLength(4)
+    expect(projection.segments.map((s) => s.active)).toEqual([true, true, false, false])
+  })
+
+  it('marks every declared slot active once nominalCount reaches maxReplicas — never an overflow', () => {
+    const projection = projectScalingGroup(telemetry({ nominalCount: 4 }), 4, null)
+    expect(projection.segments).toHaveLength(4)
+    expect(projection.segments.every((s) => s.active)).toBe(true)
+  })
+
+  it('switches to segments mode exactly at the MAX_DISCRETE_CAPACITY_SEGMENTS boundary', () => {
+    const atCap = projectScalingGroup(telemetry(), MAX_DISCRETE_CAPACITY_SEGMENTS, null)
+    expect(atCap.mode).toBe('segments')
+    expect(atCap.segments).toHaveLength(MAX_DISCRETE_CAPACITY_SEGMENTS)
+  })
+})
+
+describe('projectScalingGroup — proportional mode (above the legibility cap)', () => {
+  it('switches to proportional mode one slot past the cap, with no discrete segments', () => {
+    const overCap = projectScalingGroup(telemetry({ nominalCount: 3 }), MAX_DISCRETE_CAPACITY_SEGMENTS + 1, null)
+    expect(overCap.mode).toBe('proportional')
+    expect(overCap.segments).toEqual([])
+  })
+
+  it('computes fillRatio and bootingRatio as fractions of maxReplicas', () => {
+    const projection = projectScalingGroup(telemetry({ nominalCount: 20, bootingCount: 5 }), 100, null)
+    expect(projection.fillRatio).toBeCloseTo(0.2)
+    expect(projection.bootingRatio).toBeCloseTo(0.05)
+  })
+
+  it('never reports fillRatio above 1 for a scaler-bounded nominalCount', () => {
+    // The autoscaler never lets nominalCount exceed maxReplicas (see
+    // autoscaler.ts) — this sweeps every legal (nominalCount, maxReplicas)
+    // pair above the segments cap to confirm the projection never implies
+    // an "overflow" past 100% fill either.
+    for (let maxReplicas = MAX_DISCRETE_CAPACITY_SEGMENTS + 1; maxReplicas <= MAX_DISCRETE_CAPACITY_SEGMENTS + 20; maxReplicas += 1) {
+      for (let nominalCount = 1; nominalCount <= maxReplicas; nominalCount += 1) {
+        const projection = projectScalingGroup(telemetry({ nominalCount }), maxReplicas, null)
+        expect(projection.fillRatio).toBeLessThanOrEqual(1)
+      }
     }
   })
+})
 
-  it('caps visible chips at 4 and reports the correct overflow remainder above the cap', () => {
-    const five = projectScalingGroup(telemetry({ nominalCount: 5 }), null)
-    expect(five.visibleChips).toHaveLength(4)
-    expect(five.overflowCount).toBe(1)
-
-    const six = projectScalingGroup(telemetry({ nominalCount: 6 }), null)
-    expect(six.visibleChips).toHaveLength(4)
-    expect(six.overflowCount).toBe(2)
+describe('projectScalingGroup — booting-slot flagging', () => {
+  it('flags exactly the newest active slots as booting, up to bootingCount', () => {
+    const projection = projectScalingGroup(telemetry({ nominalCount: 3, bootingCount: 1 }), 4, null)
+    expect(projection.segments.map((s) => s.booting)).toEqual([false, false, true, false])
   })
 
-  it('shrinks back to zero overflow once nominalCount drops back within the cap', () => {
-    const scaledDown = projectScalingGroup(telemetry({ nominalCount: 1 }), null)
-    expect(scaledDown.visibleChips).toHaveLength(1)
-    expect(scaledDown.overflowCount).toBe(0)
+  it('never flags an inactive (beyond-nominal) slot as booting', () => {
+    const projection = projectScalingGroup(telemetry({ nominalCount: 2, bootingCount: 5 }), 4, null)
+    expect(projection.segments.filter((s) => s.booting)).toHaveLength(2)
+    expect(projection.segments.filter((s) => s.booting).every((s) => s.active)).toBe(true)
+  })
+
+  it('flags zero slots when nothing is booting', () => {
+    const projection = projectScalingGroup(telemetry({ nominalCount: 3, bootingCount: 0 }), 4, null)
+    expect(projection.segments.every((s) => !s.booting)).toBe(true)
   })
 })
 
-describe('projectScalingGroup — booting-chip flagging', () => {
-  it('flags exactly the newest chips as booting, up to bootingCount', () => {
-    const projection = projectScalingGroup(telemetry({ nominalCount: 3, bootingCount: 1 }), null)
-    expect(projection.visibleChips.map((chip) => chip.booting)).toEqual([false, false, true])
-  })
-
-  it('never flags more chips than are actually visible', () => {
-    const projection = projectScalingGroup(telemetry({ nominalCount: 6, bootingCount: 5 }), null)
-    expect(projection.visibleChips).toHaveLength(4)
-    expect(projection.visibleChips.filter((chip) => chip.booting)).toHaveLength(4)
-  })
-
-  it('flags zero chips when nothing is booting', () => {
-    const projection = projectScalingGroup(telemetry({ nominalCount: 3, bootingCount: 0 }), null)
-    expect(projection.visibleChips.every((chip) => !chip.booting)).toBe(true)
-  })
-})
-
-describe('projectScalingGroup — determinism / count-change gating', () => {
+describe('projectScalingGroup — determinism / pulse passthrough', () => {
   it('identical telemetry (deep-equal, not object identity) produces a deep-equal projection', () => {
-    const a = projectScalingGroup(telemetry({ nominalCount: 3, bootingCount: 1 }), 'up')
-    const b = projectScalingGroup(telemetry({ nominalCount: 3, bootingCount: 1 }), 'up')
+    const a = projectScalingGroup(telemetry({ nominalCount: 3, bootingCount: 1 }), 4, 'up')
+    const b = projectScalingGroup(telemetry({ nominalCount: 3, bootingCount: 1 }), 4, 'up')
     expect(a).toEqual(b)
   })
 
   it('passes the pulse argument straight through unchanged', () => {
-    expect(projectScalingGroup(telemetry(), 'up').pulse).toBe('up')
-    expect(projectScalingGroup(telemetry(), 'down').pulse).toBe('down')
-    expect(projectScalingGroup(telemetry(), null).pulse).toBeNull()
-  })
-})
-
-describe('projectScalingGroup — layout metrics', () => {
-  it('grows groupHeightPx monotonically with visible chip count', () => {
-    let previous = -1
-    for (let nominalCount = 1; nominalCount <= 4; nominalCount += 1) {
-      const projection = projectScalingGroup(telemetry({ nominalCount }), null)
-      expect(projection.groupHeightPx).toBeGreaterThan(previous)
-      previous = projection.groupHeightPx
-    }
-  })
-
-  it('does not grow further once the visible cap is reached (overflow does not add height)', () => {
-    const atCap = projectScalingGroup(telemetry({ nominalCount: 4 }), null)
-    const overCap = projectScalingGroup(telemetry({ nominalCount: 8 }), null)
-    expect(overCap.groupHeightPx).toBe(atCap.groupHeightPx)
+    expect(projectScalingGroup(telemetry(), 4, 'up').pulse).toBe('up')
+    expect(projectScalingGroup(telemetry(), 4, 'down').pulse).toBe('down')
+    expect(projectScalingGroup(telemetry(), 4, null).pulse).toBeNull()
   })
 })
 
