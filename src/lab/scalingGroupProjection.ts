@@ -1,38 +1,57 @@
 // Pure visual-projection helper for a scaled host's on-canvas treatment
-// (data-model.md ScalingGroupProjection; spec User Story 4). Deliberately
-// NOT wired into React Flow's node/subflow machinery in this pass — see
-// specs/013-host-autoscaling's implementation notes for the scope
-// decision (a full box-container + individual draggable child chip nodes
-// carries real risk to the existing canvas render pipeline without a
+// (data-model.md ScalingGroupProjection; spec User Story 4, reworked to a
+// capacity-bar treatment — see ScalingGroupNode.tsx for the visual
+// rationale). Deliberately NOT wired into React Flow's node/subflow
+// machinery — see specs/013-host-autoscaling's implementation notes for
+// the scope decision (a full box-container + individual draggable child
+// nodes carries real risk to the existing canvas render pipeline without a
 // live-browser iteration loop to validate it against). This module still
 // delivers the FULLY TESTABLE, engine-independent piece: given a scaled
-// host's replica telemetry, compute exactly what a future ScalingGroupNode
-// would need to render (visible chip count/booting flags, overflow badge,
-// vertical layout metrics, transient pulse direction) — kept pure so it's
-// unit-testable without mounting React (constitution VI) regardless of
-// when the visual lands.
-import { VISIBLE_REPLICA_CAP } from '../engine/config'
+// host's replica telemetry and its declared maxReplicas, compute exactly
+// what ScalingGroupNode needs to render — kept pure so it's unit-testable
+// without mounting React (constitution VI).
+import { MAX_DISCRETE_CAPACITY_SEGMENTS } from '../engine/config'
 import type { HostReplicaTelemetry } from '../engine/ports'
 
-export interface ScalingGroupChip {
+export type ScalingGroupMode = 'segments' | 'proportional'
+
+export interface ScalingGroupSegment {
   index: number
+  /** Whether this declared slot currently holds a replica (index <
+   *  nominalCount) — slots beyond nominalCount up to maxReplicas render as
+   *  empty "declared but not currently scaled to" capacity, which the old
+   *  chip-list treatment never showed at all. */
+  active: boolean
+  /** Occupied but not yet past its boot delay (only meaningful when
+   *  active). */
   booting: boolean
 }
 
 export interface ScalingGroupProjection {
-  visibleChips: ScalingGroupChip[]
-  /** nominalCount - visible.length, >= 0 → the "+N" overflow badge. */
-  overflowCount: number
-  /** Vertical stack layout: one row per visible chip plus fixed padding. */
-  groupHeightPx: number
+  /** 'segments' below MAX_DISCRETE_CAPACITY_SEGMENTS declared slots (each
+   *  slot gets its own tick on the bar); 'proportional' above it, where
+   *  individual ticks would render as unreadable slivers, so the bar
+   *  coalesces into a single continuous fill instead. Purely a rendering
+   *  choice — maxReplicas is the scaler's real, already-enforced ceiling
+   *  either way; nominalCount can never exceed it (see autoscaler.ts), so
+   *  there is no overflow to report in either mode. */
+  mode: ScalingGroupMode
+  /** One entry per declared replica slot (index 0..maxReplicas-1); empty
+   *  in 'proportional' mode, where fillRatio/bootingRatio drive the render
+   *  instead. */
+  segments: ScalingGroupSegment[]
+  /** nominalCount / maxReplicas, in [0, 1] — the bar's fill width in
+   *  'proportional' mode. */
+  fillRatio: number
+  /** bootingCount / maxReplicas — the dashed/pulsing sliver at the fill's
+   *  leading edge in 'proportional' mode. */
+  bootingRatio: number
+  nominalCount: number
+  maxReplicas: number
   /** Transient treatment on the most recent scaling event, or null if the
    *  host has never scaled (or its most recent event already faded). */
   pulse: 'up' | 'down' | null
 }
-
-const CHIP_HEIGHT_PX = 28
-const CHIP_GAP_PX = 6
-const GROUP_PADDING_PX = 16
 
 // A host with min = max = 1 renders as a plain host node — no group box
 // (spec User Story 4 acceptance scenario 1) — callers should check this
@@ -43,25 +62,28 @@ export function isScalingGroupHost(minReplicas: number, maxReplicas: number): bo
   return minReplicas !== maxReplicas || minReplicas > 1
 }
 
-// Pure telemetry -> projection mapping (data-model.md). `nominalCount` is
-// only used to size the overflow badge — this counts BOOTING chips first
-// among the visible slots (a host with more booting entries than
-// VISIBLE_REPLICA_CAP would prioritize showing them, but in practice
-// booting count is always small relative to nominal since it's gated by
-// cooldown).
-export function projectScalingGroup(telemetry: HostReplicaTelemetry, pulse: 'up' | 'down' | null): ScalingGroupProjection {
-  const visibleCount = Math.min(telemetry.nominalCount, VISIBLE_REPLICA_CAP)
-  const bootingCount = Math.min(telemetry.bootingCount, visibleCount)
-  const visibleChips: ScalingGroupChip[] = []
-  for (let index = 0; index < visibleCount; index += 1) {
-    // Booting replicas are the newest ones (appended to the end of the
-    // FIFO) — shown at the tail of the visible stack so a freshly-added
-    // chip appears to "pop in" at the bottom (spec User Story 4).
-    visibleChips.push({ index, booting: index >= visibleCount - bootingCount })
+// Pure telemetry -> projection mapping (data-model.md). Booting replicas
+// are always the newest ones (appended to the end of the FIFO), so in
+// 'segments' mode they're flagged at the tail of the ACTIVE slots — a
+// freshly-added replica appears to "fill in" at the leading edge of the
+// bar, same spot a new chip used to "pop in" at in the old vertical stack.
+export function projectScalingGroup(
+  telemetry: HostReplicaTelemetry,
+  maxReplicas: number,
+  pulse: 'up' | 'down' | null,
+): ScalingGroupProjection {
+  const mode: ScalingGroupMode = maxReplicas <= MAX_DISCRETE_CAPACITY_SEGMENTS ? 'segments' : 'proportional'
+  const segments: ScalingGroupSegment[] = []
+  if (mode === 'segments') {
+    for (let index = 0; index < maxReplicas; index += 1) {
+      const active = index < telemetry.nominalCount
+      const booting = active && index >= telemetry.nominalCount - telemetry.bootingCount
+      segments.push({ index, active, booting })
+    }
   }
-  const overflowCount = Math.max(0, telemetry.nominalCount - visibleChips.length)
-  const groupHeightPx = GROUP_PADDING_PX * 2 + visibleChips.length * CHIP_HEIGHT_PX + Math.max(0, visibleChips.length - 1) * CHIP_GAP_PX
-  return { visibleChips, overflowCount, groupHeightPx, pulse }
+  const fillRatio = maxReplicas > 0 ? telemetry.nominalCount / maxReplicas : 0
+  const bootingRatio = maxReplicas > 0 ? telemetry.bootingCount / maxReplicas : 0
+  return { mode, segments, fillRatio, bootingRatio, nominalCount: telemetry.nominalCount, maxReplicas, pulse }
 }
 
 // Whether a host's sim currently warrants rendering the scaling-group
@@ -78,9 +100,9 @@ export function shouldRenderScalingGroup(
 
 // Falls back to a static "minReplicas, nothing booting, no events"
 // telemetry snapshot before the simulation has ever produced a metrics
-// window (data.simMetrics is undefined at idle) — so the box/chip count
-// already reflects the CONFIGURED bounds instead of only appearing once
-// Start is clicked.
+// window (data.simMetrics is undefined at idle) — so the bar already
+// reflects the CONFIGURED bounds instead of only appearing once Start is
+// clicked.
 export function resolveReplicaTelemetry(
   sim: { minReplicas: number; maxReplicas: number },
   liveTelemetry: HostReplicaTelemetry | undefined,
