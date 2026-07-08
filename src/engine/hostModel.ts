@@ -147,13 +147,16 @@ function computeManualMetrics(
  *  (cpuProcessingTimeMs / 1000); ρ weighted by the traffic-weighted mean
  *  inbound compute multiplier; base latency = cpuProcessingTimeMs plus the
  *  traffic-weighted mean outbound pathIoLatencyMs. No maxRPS parameter
- *  exists in this mode, so `clamp` never sheds (011/013 regression,
- *  SC-003); `collapse` on a non-elastic host sheds past ρ=1 for the first
- *  time, via the same shared retrograde curve as manual mode, keyed off
- *  the weight-adjusted knee (research.md D1: the incomingRPS at which the
- *  unclamped rho above would read exactly 1.0). `collapse` on an elastic
- *  host behaves like `clamp` (never sheds here) while replicas are alive —
- *  overload is resolved by replica eviction instead (research.md D9). */
+ *  exists in this mode, so an ORDINARY (non-elastic) `clamp` host never
+ *  sheds (011/013 regression, SC-003); `collapse` on a non-elastic host
+ *  sheds past ρ=1 for the first time, via the same shared retrograde
+ *  curve as manual mode, keyed off the weight-adjusted knee (research.md
+ *  D1: the incomingRPS at which the unclamped rho above would read
+ *  exactly 1.0). `collapse` on an ELASTIC host plateaus at kneeRPS
+ *  (sheds the excess, like manual mode's clamp) while replicas are
+ *  alive — overload past that point is resolved by replica eviction
+ *  instead (research.md D9; fixed post-D9, this file previously forwarded
+ *  100% of offered load here, contradicting D9's own "plateau" design). */
 function computeCalculatedMetrics(
   sim: Extract<HostNodeSim, { configMode: 'calculated' }>,
   incomingRPS: number,
@@ -170,7 +173,17 @@ function computeCalculatedMetrics(
   const baseLatencyMs = Math.max(0, sim.cpuProcessingTimeMs) + Math.max(0, outboundWeightedIoLatencyMs)
   const kneeRPS = threads > 0 && cpuTimeSec > 0 && weight > 0 ? threads / (weight * cpuTimeSec) : 0
   const usesRetrogradeCurve = sim.overloadBehavior === 'collapse' && !isElasticGroup
-  const forwardedRPS = usesRetrogradeCurve ? collapseForwardedRPS(incoming, kneeRPS) : incoming
+  // An elastic collapse-mode group plateaus (research.md D9: "behaves
+  // exactly like clamp") while its replicas are alive — that means a hard
+  // cap at kneeRPS with the excess SHED, same as manual mode's clamp
+  // below, not "forward everything" (which is calculated mode's ORDINARY
+  // clamp behavior — no maxRPS parameter exists there, so a non-elastic
+  // clamp host never sheds, research.md D6). Gating this cap on
+  // isElasticGroup alone (not on overloadBehavior) would incorrectly cap
+  // an ordinary fixed-replica clamp host too, so it stays scoped to the
+  // collapse-mode elastic case specifically.
+  const usesElasticPlateau = sim.overloadBehavior === 'collapse' && isElasticGroup
+  const forwardedRPS = usesRetrogradeCurve ? collapseForwardedRPS(incoming, kneeRPS) : usesElasticPlateau ? Math.min(incoming, kneeRPS) : incoming
   const shedRPS = Math.max(0, incoming - forwardedRPS)
   void capacityRPS
   return {

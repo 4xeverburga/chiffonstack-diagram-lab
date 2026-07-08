@@ -558,6 +558,22 @@ describe('computeHostMetrics — elastic scaling group + collapse (research.md D
     expect(metrics.status).not.toBe('collapsed')
   })
 
+  it('calculated mode also plateaus (sheds the excess) while replicas are alive — regression for a bug where it forwarded 100% of offered load', () => {
+    const sim = calculatedSim({ overloadBehavior: 'collapse', minReplicas: 1, maxReplicas: 4 })
+    // 2 effective replicas, knee (capacityRPS at weight 1) = 500 each => total cap 1000.
+    const metrics = computeHostMetrics({
+      sim,
+      incomingRPS: 3000, // 3x the group's total cap
+      effectiveReplicas: 2,
+      isElasticGroup: true,
+      inboundWeightedComputeMultiplier: 1,
+      outboundWeightedIoLatencyMs: 0,
+    })
+    expect(metrics.forwardedRPS).toBeCloseTo(1000, 5)
+    expect(metrics.shedRPS).toBeCloseTo(2000, 5)
+    expect(metrics.status).toBe('overloaded')
+  })
+
   it('reports the host as fully dead (forwards nothing, sheds everything, status collapsed) at effectiveReplicas=0', () => {
     const sim = manualSim({ overloadBehavior: 'collapse', minReplicas: 1, maxReplicas: 4 })
     const metrics = computeHostMetrics({
