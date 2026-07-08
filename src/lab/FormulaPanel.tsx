@@ -28,13 +28,11 @@ export function FormulaPanel({ formulaDescriptors, sim }: FormulaPanelProps) {
                 {descriptor.isBinding ? ' (binding)' : ''}
               </div>
               <div className="lab-formula-expression">{descriptor.expression}</div>
-              <ul className="lab-formula-inputs">
-                {Object.entries(descriptor.inputs).map(([key, value]) => (
-                  <li key={key}>
-                    {key}: {String(value)}
-                  </li>
-                ))}
-              </ul>
+              <p className="lab-formula-inputs-line">
+                {Object.entries(descriptor.inputs)
+                  .map(([key, value]) => `${key}=${String(value)}`)
+                  .join(' \u00b7 ')}
+              </p>
               <div className="lab-formula-sources">
                 {descriptor.sources.map((source) => (
                   <a key={source.url} href={source.url} target="_blank" rel="noopener noreferrer" title={source.note}>

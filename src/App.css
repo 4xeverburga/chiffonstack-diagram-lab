@@ -228,12 +228,12 @@
   word-break: break-word;
 }
 
-.lab-formula-inputs {
-  list-style: none;
+.lab-formula-inputs-line {
   margin: 0 0 4px;
-  padding: 0;
   color: var(--text);
   opacity: 0.85;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: break-word;
 }
 
 .lab-formula-sources {
