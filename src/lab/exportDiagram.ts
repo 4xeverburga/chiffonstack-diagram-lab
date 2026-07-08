@@ -3,7 +3,7 @@ import { HEAT_VARIANTS, type HeatVariant } from './heatVariants'
 import { LEGACY_SOURCE_SIDE, LEGACY_TARGET_SIDE, resolveHandleSide } from './handleSides'
 import { resolveDirection, resolveThickness } from './edgeStyle'
 import { resolveTextSize } from './textSizes'
-import { LEGACY_BOOT_DELAY_MS_FOR_IMPORT, LEGACY_HIGH_WATERMARK_FOR_IMPORT, LEGACY_LOW_WATERMARK_FOR_IMPORT } from '../engine/config'
+import { LEGACY_BOOT_DELAY_MS_FOR_IMPORT, LEGACY_HIGH_WATERMARK_FOR_IMPORT, LEGACY_LOW_WATERMARK_FOR_IMPORT, LEGACY_OVERLOAD_BEHAVIOR_FOR_IMPORT } from '../engine/config'
 import type { EdgeSimConfig, NodeSim } from '../engine/ports'
 
 // Tracks whether the current parseDiagram() call dropped any retired-role
@@ -66,6 +66,13 @@ function plainNodeSim(value: unknown): NodeSim | undefined {
     hasWatermarkFields && isValidWatermark(value.lowWatermark) && value.lowWatermark < highWatermark
       ? value.lowWatermark
       : LEGACY_LOW_WATERMARK_FOR_IMPORT
+  // Overload behavior (constitution v3.4.0): a user-facing capability
+  // parameter, not an internal tunable. JSON written before this feature
+  // has no such field at all — that absence (not just an invalid value)
+  // fills in the exact pre-012 behavior (LEGACY_OVERLOAD_BEHAVIOR_FOR_IMPORT,
+  // 'clamp') rather than guessing (CLAUDE.md, FR-005/SC-005).
+  const overloadBehavior: 'clamp' | 'collapse' =
+    value.overloadBehavior === 'clamp' || value.overloadBehavior === 'collapse' ? value.overloadBehavior : LEGACY_OVERLOAD_BEHAVIOR_FOR_IMPORT
   if (
     value.configMode === 'manual' &&
     isFiniteNumber(value.manualBaselineLatencyMs) &&
@@ -82,6 +89,7 @@ function plainNodeSim(value: unknown): NodeSim | undefined {
       manualBaselineLatencyMs: value.manualBaselineLatencyMs,
       manualSaturationRPS: value.manualSaturationRPS,
       manualMaxRPS: value.manualMaxRPS,
+      overloadBehavior,
       minReplicas,
       maxReplicas,
       bootDelayMs,
@@ -102,6 +110,7 @@ function plainNodeSim(value: unknown): NodeSim | undefined {
       configMode: 'calculated',
       cpuProcessingTimeMs: value.cpuProcessingTimeMs,
       maxWorkerThreads: value.maxWorkerThreads,
+      overloadBehavior,
       minReplicas,
       maxReplicas,
       bootDelayMs,

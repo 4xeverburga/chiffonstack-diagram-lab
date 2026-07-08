@@ -176,3 +176,39 @@ export const LEGACY_BOOT_DELAY_MS_FOR_IMPORT = 8000
 export const LEGACY_HIGH_WATERMARK_FOR_IMPORT = 0.8
 export const LEGACY_LOW_WATERMARK_FOR_IMPORT = 0.3
 
+// Overload-collapse tunables (feature 012, research.md D2/D5/D6). Internal
+// per constitution v3.4.0 Principle I — `overloadBehavior` itself is the
+// only new user-facing parameter this feature adds; the curve's steepness
+// and the collapsed-status threshold are not surfaced as user inputs.
+
+// Steepness of the retrograde decay past the knee in collapseForwardedRPS
+// (research.md D2): decay(overloadRatio) = 1 / (1 + kappa*(overloadRatio-1)^2).
+// kappa=2 satisfies SC-001's "<20% of peak by 3x offered load": decay(3) =
+// 1/(1+2*4) = 1/9 ~= 11%.
+export const HOST_COLLAPSE_DECAY_KAPPA = 2
+
+// A collapse-mode host is reported as 'collapsed' once its forwardedRPS
+// falls below this fraction of its knee (kneeRPS) while past the knee
+// (research.md D5) — the "materially degraded" goodput threshold.
+export const HOST_COLLAPSE_STATUS_RATIO = 0.5
+
+// Migration-only fallback (constitution v3.4.0): `overloadBehavior` is a
+// new user-facing capability parameter, not an internal tunable. JSON
+// written before this feature has no such field at all — that absence
+// fills in 'clamp' explicitly at import time (the exact pre-012 behavior),
+// same pattern as LEGACY_BOOT_DELAY_MS_FOR_IMPORT/LEGACY_HIGH_WATERMARK_
+// FOR_IMPORT above (src/lab/exportDiagram.ts).
+export const LEGACY_OVERLOAD_BEHAVIOR_FOR_IMPORT = 'clamp' as const
+
+// 012-overload-collapse refinement (research.md D9): the displayed/
+// telemetry saturationRatio for an elastic collapse host with 0 currently-
+// serving replicas ("virtually dead"). A true ratio is meaningless with 0
+// capacity (would need HOST_ZERO_CAPACITY_EPSILON-style division, which
+// produces an absurd, unreadable percentage like "14000000000%" for any
+// realistic incomingRPS) — this fixed sentinel is simply "unambiguously,
+// maximally overloaded": comfortably above any realistic highWatermark
+// (so the scaler's own watermark logic still treats it as saturated) while
+// staying a sane, finite number to render. The host's `status` field
+// ('collapsed') is the actual authoritative signal here, not this ratio.
+export const HOST_COLLAPSE_DEAD_SATURATION_RATIO = 10
+

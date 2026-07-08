@@ -4,7 +4,9 @@ import {
   drainBootQueue,
   effectiveReplicas,
   evaluateScaling,
+  evictCollapsedReplicas,
   reclampReplicaRuntime,
+  restoreMinReplicaFloor,
   type ReplicaRuntime,
 } from '../../src/engine/autoscaler'
 import { AUTOSCALE_COOLDOWN_MS, AUTOSCALE_SUSTAIN_MS } from '../../src/engine/config'
@@ -375,5 +377,105 @@ describe('reclampReplicaRuntime (research.md D7)', () => {
   it('is a no-op when already within bounds', () => {
     const runtime = createReplicaRuntime(2)
     expect(reclampReplicaRuntime(runtime, 1, 4)).toBe(runtime)
+  })
+})
+
+// 012-overload-collapse refinement (research.md D9): collapse-mode
+// eviction and the min-replicas floor restore it depends on for recovery.
+describe('evictCollapsedReplicas (research.md D9)', () => {
+  it('is a no-op at or below 100% per-replica saturation', () => {
+    const runtime = createReplicaRuntime(4)
+    expect(evictCollapsedReplicas(runtime, 1, 4)).toBe(runtime)
+    expect(evictCollapsedReplicas(runtime, 0.5, 4)).toBe(runtime)
+  })
+
+  it('is a no-op when there are no currently-serving replicas left to evict', () => {
+    const runtime: ReplicaRuntime = { ...createReplicaRuntime(4), nominalCount: 2, booting: [{ readyAtSimTimeMs: 5000 }, { readyAtSimTimeMs: 5000 }] }
+    expect(evictCollapsedReplicas(runtime, 5, 0)).toBe(runtime)
+  })
+
+  it('evicts exactly 1 replica at a mild overload just past 100% saturation', () => {
+    const runtime: ReplicaRuntime = { ...createReplicaRuntime(4), nominalCount: 4 }
+    // 4 effective replicas at 1.2x load => survivors = floor(4/1.2) = 3 => evict 1.
+    const evicted = evictCollapsedReplicas(runtime, 1.2, 4)
+    expect(evicted.nominalCount).toBe(3)
+  })
+
+  it('evicts proportionally more replicas the further over capacity the group is', () => {
+    const runtime: ReplicaRuntime = { ...createReplicaRuntime(4), nominalCount: 4 }
+    // 4 effective replicas at 4x load => survivors = floor(4/4) = 1 => evict 3.
+    const evicted = evictCollapsedReplicas(runtime, 4, 4)
+    expect(evicted.nominalCount).toBe(1)
+  })
+
+  it('can evict every currently-serving replica, taking nominalCount to 0, at extreme overload', () => {
+    const runtime: ReplicaRuntime = { ...createReplicaRuntime(4), nominalCount: 4 }
+    // 4 effective replicas at 10x load => survivors = floor(4/10) = 0 => evict all 4.
+    const evicted = evictCollapsedReplicas(runtime, 10, 4)
+    expect(evicted.nominalCount).toBe(0)
+  })
+
+  it('only removes from currently-serving replicas, leaving booting entries untouched', () => {
+    const runtime: ReplicaRuntime = { ...createReplicaRuntime(4), nominalCount: 5, booting: [{ readyAtSimTimeMs: 5000 }] }
+    // 4 effective (serving) replicas at 4x load => evict 3 servers; the 1
+    // booting entry (not yet serving, can't be "overloaded to death") stays.
+    const evicted = evictCollapsedReplicas(runtime, 4, 4)
+    expect(evicted.nominalCount).toBe(2)
+    expect(evicted.booting).toHaveLength(1)
+  })
+
+  it('allows nominalCount to fall below minReplicas (the whole point — no eviction-time bounds clamp)', () => {
+    const runtime: ReplicaRuntime = { ...createReplicaRuntime(2), nominalCount: 2 }
+    const evicted = evictCollapsedReplicas(runtime, 10, 2)
+    expect(evicted.nominalCount).toBe(0)
+  })
+})
+
+describe('evaluateScaling — min-replicas floor restore (research.md D9)', () => {
+  it('does not itself restore the floor — that is restoreMinReplicaFloor\u2019s job, called separately at the start of the NEXT window', () => {
+    const runtime: ReplicaRuntime = { ...createReplicaRuntime(3), nominalCount: 0, lastActionSimTimeMs: 0 }
+    const decision = evaluateScaling({
+      runtime,
+      perReplicaSaturation: 0,
+      simTimeMs: WINDOW_MS,
+      windowSizeMs: WINDOW_MS,
+      minReplicas: 3,
+      maxReplicas: 6,
+      bootDelayMs: BOOT_DELAY_MS,
+      highWatermark: AUTOSCALE_HIGH_WATERMARK,
+      lowWatermark: AUTOSCALE_LOW_WATERMARK,
+    })
+    // Deep in the low band (saturation=0) with nominalCount already below
+    // minReplicas: the low-side branch requires nominalCount > minReplicas
+    // to act, so this is correctly a hold — nominalCount stays at 0 here,
+    // genuinely observable for this window (see restoreMinReplicaFloor
+    // tests below for how it recovers on the NEXT window).
+    expect(decision.event).toBeUndefined()
+    expect(decision.runtime.nominalCount).toBe(0)
+  })
+})
+
+describe('restoreMinReplicaFloor (research.md D9)', () => {
+  it('is a no-op when nominalCount already meets or exceeds minReplicas', () => {
+    const runtime = createReplicaRuntime(3)
+    expect(restoreMinReplicaFloor(runtime, 3, BOOT_DELAY_MS, WINDOW_MS)).toBe(runtime)
+    const above = { ...createReplicaRuntime(3), nominalCount: 5 }
+    expect(restoreMinReplicaFloor(above, 3, BOOT_DELAY_MS, WINDOW_MS)).toBe(above)
+  })
+
+  it('queues enough booting entries to bring nominalCount back up to minReplicas, at bootDelayMs in the future', () => {
+    const runtime: ReplicaRuntime = { ...createReplicaRuntime(3), nominalCount: 0 }
+    const restored = restoreMinReplicaFloor(runtime, 3, BOOT_DELAY_MS, WINDOW_MS)
+    expect(restored.nominalCount).toBe(3)
+    expect(restored.booting).toHaveLength(3)
+    expect(restored.booting.every((entry) => entry.readyAtSimTimeMs === WINDOW_MS + BOOT_DELAY_MS)).toBe(true)
+  })
+
+  it('only tops up the deficit, preserving any already-booting entries', () => {
+    const runtime: ReplicaRuntime = { ...createReplicaRuntime(3), nominalCount: 1, booting: [{ readyAtSimTimeMs: 500 }] }
+    const restored = restoreMinReplicaFloor(runtime, 3, BOOT_DELAY_MS, WINDOW_MS)
+    expect(restored.nominalCount).toBe(3)
+    expect(restored.booting).toHaveLength(3) // 1 pre-existing + 2 new
+    expect(restored.booting[0]).toEqual({ readyAtSimTimeMs: 500 })
   })
 })

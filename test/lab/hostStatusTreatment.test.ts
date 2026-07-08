@@ -15,9 +15,19 @@ describe('applyHostStatusClass', () => {
     expect(applyHostStatusClass('node', 'overloaded')).toBe('node sim-status-overloaded')
   })
 
+  it('appends the collapsed token', () => {
+    expect(applyHostStatusClass('node', 'collapsed')).toBe('node sim-status-collapsed')
+  })
+
   it('is idempotent: recomputing from an already-decorated className never duplicates the token', () => {
     const once = applyHostStatusClass('node', 'saturated')
     const twice = applyHostStatusClass(once, 'saturated')
+    expect(twice).toBe(once)
+  })
+
+  it('is idempotent for the collapsed token too', () => {
+    const once = applyHostStatusClass('node', 'collapsed')
+    const twice = applyHostStatusClass(once, 'collapsed')
     expect(twice).toBe(once)
   })
 
@@ -27,9 +37,20 @@ describe('applyHostStatusClass', () => {
     expect(overloaded).toBe('node sim-status-overloaded')
   })
 
+  it('swaps from overloaded to collapsed without leaving the old token behind', () => {
+    const overloaded = applyHostStatusClass('node', 'overloaded')
+    const collapsed = applyHostStatusClass(overloaded, 'collapsed')
+    expect(collapsed).toBe('node sim-status-collapsed')
+  })
+
   it('removes the token entirely once status returns to healthy', () => {
     const saturated = applyHostStatusClass('node', 'saturated')
     expect(applyHostStatusClass(saturated, 'healthy')).toBe('node')
+  })
+
+  it('removes the collapsed token entirely once status returns to healthy', () => {
+    const collapsed = applyHostStatusClass('node', 'collapsed')
+    expect(applyHostStatusClass(collapsed, 'healthy')).toBe('node')
   })
 
   it('handles an undefined base className', () => {

@@ -41,6 +41,18 @@ const SOURCE_HPA_DOCS: FormulaSource = {
   note: 'Proportional desiredReplicas = ceil(currentReplicas * currentMetric / targetMetric) scaling formula, plus the watermark/stabilization-window/cooldown policy shape referenced here (research.md D6, revised 2026-07-07 from a fixed +-1 step to match real HPA proportional sizing).',
 }
 
+const SOURCE_MOGUL_RAMAKRISHNAN: FormulaSource = {
+  title: 'Mogul & Ramakrishnan, Eliminating Receive Livelock in an Interrupt-Driven Kernel (USENIX 1996 / ACM TOCS 1997)',
+  url: 'https://www.usenix.org/legacy/publications/library/proceedings/sd96/mogul.html',
+  note: 'Receive livelock: effective throughput collapsing toward zero under sustained overload rather than plateauing.',
+}
+
+const SOURCE_GUNTHER_USL: FormulaSource = {
+  title: "Gunther, Guerrilla Capacity Planning / The Universal Scalability Law",
+  url: 'https://www.perfdynamics.com/Manifesto/USLscalability.html',
+  note: 'The retrograde-throughput region past peak concurrency this curve is a simplified, single-tunable stand-in for (research.md D2/D3).',
+}
+
 export function buildHostSaturationDescriptor(input: {
   incomingRPS: number
   capacityRPS: number
@@ -106,6 +118,55 @@ export function buildHostShedDescriptor(input: {
     inputs: { incomingRPS: input.incomingRPS, manualMaxRPS: input.manualMaxRPS, shedRPS: input.shedRPS },
     sources: [SOURCE_PRODUCT_DATA_MODEL],
     isBinding: input.shedRPS > 0,
+  }
+}
+
+// Feature 012 (Overload Collapse): the retrograde-decay formula, gated in
+// flowPropagation.ts to appear only for overloadBehavior === 'collapse'
+// hosts (research.md D7) — a clamp-mode host's descriptor set is unchanged.
+export function buildHostCollapseDescriptor(input: {
+  incomingRPS: number
+  kneeRPS: number
+  overloadRatio: number
+  forwardedRPS: number
+}): FormulaDescriptor {
+  return {
+    id: 'host.overload-collapse',
+    name: 'Retrograde collapse past the knee',
+    expression: 'forwardedRPS = kneeRPS / (1 + kappa * (overloadRatio - 1)^2), overloadRatio = incomingRPS / kneeRPS',
+    inputs: {
+      incomingRPS: input.incomingRPS,
+      kneeRPS: input.kneeRPS,
+      overloadRatio: input.overloadRatio,
+      forwardedRPS: input.forwardedRPS,
+    },
+    sources: [SOURCE_MOGUL_RAMAKRISHNAN, SOURCE_GUNTHER_USL],
+    isBinding: input.incomingRPS > input.kneeRPS,
+  }
+}
+
+// Feature 012-overload-collapse refinement (research.md D9): an elastic
+// scaling group (minReplicas !== maxReplicas) doesn't apply the retrograde
+// curve above — its overloaded replicas crash and are evicted instead,
+// which can transiently take the group to 0 serving replicas while the
+// scaler boots replacements. Shown only for elastic collapse-mode hosts,
+// in place of buildHostCollapseDescriptor (flowPropagation.ts).
+export function buildHostReplicaEvictionDescriptor(input: {
+  perReplicaSaturation: number
+  effectiveReplicas: number
+  evictedReplicas: number
+}): FormulaDescriptor {
+  return {
+    id: 'host.replica-eviction',
+    name: 'Overloaded replica eviction',
+    expression: 'survivors = floor(effectiveReplicas / perReplicaSaturation); evictedReplicas = max(1, effectiveReplicas - survivors) when perReplicaSaturation > 1',
+    inputs: {
+      perReplicaSaturation: input.perReplicaSaturation,
+      effectiveReplicas: input.effectiveReplicas,
+      evictedReplicas: input.evictedReplicas,
+    },
+    sources: [SOURCE_MOGUL_RAMAKRISHNAN, SOURCE_GUNTHER_USL],
+    isBinding: input.perReplicaSaturation > 1,
   }
 }
 

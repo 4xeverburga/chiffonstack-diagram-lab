@@ -4,7 +4,9 @@ import {
   buildEdgeConnectionsDescriptor,
   buildEdgeRateDescriptor,
   buildHostCapacityDescriptor,
+  buildHostCollapseDescriptor,
   buildHostLatencyDescriptor,
+  buildHostReplicaEvictionDescriptor,
   buildHostSaturationDescriptor,
   buildHostShedDescriptor,
   buildQueueBacklogDescriptor,
@@ -122,6 +124,53 @@ describe('formula catalog — inputs mirror the live computation at a known oper
     })
     expect(aboveHigh.isBinding).toBe(true)
     expect(aboveHigh.sources.length).toBeGreaterThan(0)
+  })
+})
+
+// Feature 012 (Overload Collapse), US4 (T017).
+describe('buildHostCollapseDescriptor (research.md D2/D7)', () => {
+  it('carries at least one literature source citation (SC-005/constitution II)', () => {
+    const descriptor = buildHostCollapseDescriptor({ incomingRPS: 1500, kneeRPS: 500, overloadRatio: 3, forwardedRPS: 500 / 9 })
+    expect(descriptor.sources.length).toBeGreaterThan(0)
+  })
+
+  it('is binding once incomingRPS exceeds kneeRPS, not below it', () => {
+    const belowKnee = buildHostCollapseDescriptor({ incomingRPS: 300, kneeRPS: 500, overloadRatio: 0.6, forwardedRPS: 300 })
+    expect(belowKnee.isBinding).toBe(false)
+    const pastKnee = buildHostCollapseDescriptor({ incomingRPS: 1500, kneeRPS: 500, overloadRatio: 3, forwardedRPS: 500 / 9 })
+    expect(pastKnee.isBinding).toBe(true)
+  })
+
+  it('reports the exact live incomingRPS/kneeRPS/overloadRatio/forwardedRPS used to compute it', () => {
+    const descriptor = buildHostCollapseDescriptor({ incomingRPS: 1650, kneeRPS: 550, overloadRatio: 3, forwardedRPS: 550 / 9 })
+    expect(descriptor.inputs.incomingRPS).toBe(1650)
+    expect(descriptor.inputs.kneeRPS).toBe(550)
+    expect(descriptor.inputs.overloadRatio).toBe(3)
+    expect(descriptor.inputs.forwardedRPS).toBeCloseTo(550 / 9, 10)
+  })
+})
+
+// 012-overload-collapse refinement (research.md D9): the replica-eviction
+// descriptor shown for elastic (scaling-group) collapse-mode hosts instead
+// of buildHostCollapseDescriptor above.
+describe('buildHostReplicaEvictionDescriptor (research.md D9)', () => {
+  it('carries at least one literature source citation (SC-005/constitution II)', () => {
+    const descriptor = buildHostReplicaEvictionDescriptor({ perReplicaSaturation: 2, effectiveReplicas: 4, evictedReplicas: 2 })
+    expect(descriptor.sources.length).toBeGreaterThan(0)
+  })
+
+  it('is binding once per-replica saturation exceeds 1, not at or below it', () => {
+    const atCapacity = buildHostReplicaEvictionDescriptor({ perReplicaSaturation: 1, effectiveReplicas: 4, evictedReplicas: 0 })
+    expect(atCapacity.isBinding).toBe(false)
+    const overCapacity = buildHostReplicaEvictionDescriptor({ perReplicaSaturation: 1.5, effectiveReplicas: 4, evictedReplicas: 1 })
+    expect(overCapacity.isBinding).toBe(true)
+  })
+
+  it('reports the exact live perReplicaSaturation/effectiveReplicas/evictedReplicas used to compute it', () => {
+    const descriptor = buildHostReplicaEvictionDescriptor({ perReplicaSaturation: 4, effectiveReplicas: 4, evictedReplicas: 3 })
+    expect(descriptor.inputs.perReplicaSaturation).toBe(4)
+    expect(descriptor.inputs.effectiveReplicas).toBe(4)
+    expect(descriptor.inputs.evictedReplicas).toBe(3)
   })
 })
 
