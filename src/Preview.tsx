@@ -154,7 +154,7 @@ function Preview() {
   return (
     <div className="lab">
       <header className="lab-bar">
-        <span className="lab-title">Diagram Lab</span>
+        <span className="lab-title">SUGAR</span>
         <span className="lab-meta">Design/UI preview — real components, mock data, dev-only</span>
         <SimulationControls
           runStatus="idle"

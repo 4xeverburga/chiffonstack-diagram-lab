@@ -54,14 +54,14 @@ async function probeNaturalSize(file: File): Promise<{ naturalWidth: number; nat
       return await new Promise((resolve, reject) => {
         const image = new Image()
         image.onload = () => resolve({ naturalWidth: image.naturalWidth, naturalHeight: image.naturalHeight })
-        image.onerror = () => reject(new Error('Diagram Lab: could not decode image dimensions.'))
+        image.onerror = () => reject(new Error('SUGAR: could not decode image dimensions.'))
         image.src = objectUrl
       })
     } finally {
       URL.revokeObjectURL(objectUrl)
     }
   }
-  throw new Error('Diagram Lab: this environment cannot decode image dimensions.')
+  throw new Error('SUGAR: this environment cannot decode image dimensions.')
 }
 
 export async function readImageFile(file: File): Promise<ReadImageFileResult> {

@@ -11,9 +11,9 @@ Current feature plan: specs/013-host-autoscaling/plan.md (constitution: .specify
 - All imports must be declared with relation to  the root of the project. This way refactoring and moving files is easier.
 
 ## Branch Strategies
-main and dev branches are protected to push. You can only pr it.
+main branch is protected to push. You can only pr it.
 
-when finishing a feature you pr to dev first. Only then to main
+when finishing a feature you merge to dev first. Only then pr to main
 
 ### No default parameter values
 

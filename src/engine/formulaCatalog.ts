@@ -30,7 +30,7 @@ const SOURCE_DENNING_BUZEN: FormulaSource = {
 }
 
 const SOURCE_PRODUCT_DATA_MODEL: FormulaSource = {
-  title: 'Diagram Lab data model (011-host-queue-model)',
+  title: 'SUGAR data model (011-host-queue-model)',
   url: '/specs/011-host-queue-model/data-model.md',
   note: 'Definitional conversion/integration used by this product, not an external citation.',
 }

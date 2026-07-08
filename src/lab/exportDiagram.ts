@@ -234,13 +234,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function parsePlainNode(value: unknown, index: number): Node {
   if (!isRecord(value) || typeof value.id !== 'string') {
-    throw new Error(`Diagram Lab: node at index ${index} is missing a string "id".`)
+    throw new Error(`SUGAR: node at index ${index} is missing a string "id".`)
   }
   if (!isRecord(value.position) || typeof value.position.x !== 'number' || typeof value.position.y !== 'number') {
-    throw new Error(`Diagram Lab: node "${value.id}" is missing a numeric "position".`)
+    throw new Error(`SUGAR: node "${value.id}" is missing a numeric "position".`)
   }
   if (!isRecord(value.data) || typeof value.data.label !== 'string') {
-    throw new Error(`Diagram Lab: node "${value.id}" is missing a string "data.label".`)
+    throw new Error(`SUGAR: node "${value.id}" is missing a string "data.label".`)
   }
   const image = typeof value.data.image === 'string' ? value.data.image : undefined
   // imageAspect is dropped (not just left undefined) unless it's a finite,
@@ -267,10 +267,10 @@ function parsePlainNode(value: unknown, index: number): Node {
 
 function parsePlainEdge(value: unknown, index: number): Edge {
   if (!isRecord(value) || typeof value.id !== 'string') {
-    throw new Error(`Diagram Lab: edge at index ${index} is missing a string "id".`)
+    throw new Error(`SUGAR: edge at index ${index} is missing a string "id".`)
   }
   if (typeof value.source !== 'string' || typeof value.target !== 'string') {
-    throw new Error(`Diagram Lab: edge "${value.id}" is missing a string "source"/"target".`)
+    throw new Error(`SUGAR: edge "${value.id}" is missing a string "source"/"target".`)
   }
   // Each endpoint falls back to its own legacy default independently — an
   // edge with a valid sourceHandle but an unrecognized targetHandle keeps
@@ -297,16 +297,16 @@ export function parseDiagram(json: string): { nodes: Node[]; edges: Edge[] } {
   try {
     parsed = JSON.parse(json)
   } catch {
-    throw new Error('Diagram Lab: that file is not valid JSON.')
+    throw new Error('SUGAR: that file is not valid JSON.')
   }
   if (!isRecord(parsed) || !Array.isArray(parsed.nodes) || !Array.isArray(parsed.edges)) {
-    throw new Error('Diagram Lab: expected an object with "nodes" and "edges" arrays.')
+    throw new Error('SUGAR: expected an object with "nodes" and "edges" arrays.')
   }
   const nodes = parsed.nodes.map((node, index) => parsePlainNode(node, index))
   const edges = parsed.edges.map((edge, index) => parsePlainEdge(edge, index))
   if (lastImportDroppedRetiredRoles) {
     console.warn(
-      'Diagram Lab: one or more nodes used a retired simulation role (generator/processor/producer/consumer/sink/kafka) and were imported as plain visual nodes. Reassign a host or queue role to simulate them again.',
+      'SUGAR: one or more nodes used a retired simulation role (generator/processor/producer/consumer/sink/kafka) and were imported as plain visual nodes. Reassign a host or queue role to simulate them again.',
     )
   }
   return { nodes, edges }
