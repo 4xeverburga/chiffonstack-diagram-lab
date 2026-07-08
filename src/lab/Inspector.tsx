@@ -101,7 +101,7 @@ function HostAndQueueFields({ node, metrics, runStatus, onSetNodeSim }: HostAndQ
       </div>
       <div className="lab-field">
         <span>Simulation role</span>
-        <div className="lab-button-row">
+        <div className="lab-button-row lab-role-grid">
           {SIM_KIND_CHOICES.map((choice) => (
             <button
               key={choice}
@@ -132,12 +132,32 @@ function HostAndQueueFields({ node, metrics, runStatus, onSetNodeSim }: HostAndQ
           <h3 className="lab-panel-title lab-panel-title-spaced">Telemetry</h3>
           {sim.kind === 'host' ? (
             <div className="sim-host-metrics">
-              <span>Status: {metrics?.host?.status ?? '\u2014'}</span>
-              <span>Incoming: {metrics?.host ? `${metrics.host.incomingRPS.toFixed(1)} req/s` : '\u2014'}</span>
-              <span>Forwarded: {metrics?.host ? `${metrics.host.forwardedRPS.toFixed(1)} req/s` : '\u2014'}</span>
-              <span>Shed: {metrics?.host ? `${metrics.host.shedRPS.toFixed(1)} req/s` : '\u2014'}</span>
-              <span>Saturation: {metrics?.host ? `${(metrics.host.saturationRatio * 100).toFixed(0)}%` : '\u2014'}</span>
-              <span>Latency: {metrics?.host ? `${metrics.host.latencyMs.toFixed(1)} ms` : '\u2014'}</span>
+              <div className="sim-host-meter">
+                <span>Status</span>
+                <span className="sim-host-meter-value">{metrics?.host?.status ?? '\u2014'}</span>
+              </div>
+              <div className="sim-host-meter">
+                <span>Incoming</span>
+                <span className="sim-host-meter-value">{metrics?.host ? `${metrics.host.incomingRPS.toFixed(1)} req/s` : '\u2014'}</span>
+              </div>
+              <div className="sim-host-meter">
+                <span>Forwarded</span>
+                <span className="sim-host-meter-value">{metrics?.host ? `${metrics.host.forwardedRPS.toFixed(1)} req/s` : '\u2014'}</span>
+              </div>
+              <div className="sim-host-meter">
+                <span>Shed</span>
+                <span className="sim-host-meter-value">{metrics?.host ? `${metrics.host.shedRPS.toFixed(1)} req/s` : '\u2014'}</span>
+              </div>
+              <div className="sim-host-meter">
+                <span>Saturation</span>
+                <span className="sim-host-meter-value">
+                  {metrics?.host ? `${(metrics.host.saturationRatio * 100).toFixed(0)}%` : '\u2014'}
+                </span>
+              </div>
+              <div className="sim-host-meter">
+                <span>Latency</span>
+                <span className="sim-host-meter-value">{metrics?.host ? `${metrics.host.latencyMs.toFixed(1)} ms` : '\u2014'}</span>
+              </div>
             </div>
           ) : null}
           {/* Replica telemetry + scaling event history (feature 013, SC-005) —
@@ -145,10 +165,22 @@ function HostAndQueueFields({ node, metrics, runStatus, onSetNodeSim }: HostAndQ
               replicas block (client_pool/external_api never do). */}
           {sim.kind === 'host' && metrics?.host?.replicas ? (
             <div className="sim-host-metrics">
-              <span>Replicas: {metrics.host.replicas.nominalCount}</span>
-              <span>Booting: {metrics.host.replicas.bootingCount}</span>
-              <span>Effective: {metrics.host.replicas.effectiveCount}</span>
-              <span>Per-replica saturation: {(metrics.host.replicas.perReplicaSaturation * 100).toFixed(0)}%</span>
+              <div className="sim-host-meter">
+                <span>Replicas</span>
+                <span className="sim-host-meter-value">{metrics.host.replicas.nominalCount}</span>
+              </div>
+              <div className="sim-host-meter">
+                <span>Booting</span>
+                <span className="sim-host-meter-value">{metrics.host.replicas.bootingCount}</span>
+              </div>
+              <div className="sim-host-meter">
+                <span>Effective</span>
+                <span className="sim-host-meter-value">{metrics.host.replicas.effectiveCount}</span>
+              </div>
+              <div className="sim-host-meter">
+                <span>Per-replica saturation</span>
+                <span className="sim-host-meter-value">{(metrics.host.replicas.perReplicaSaturation * 100).toFixed(0)}%</span>
+              </div>
               {metrics.host.replicas.events.length > 0 ? (
                 <ul className="sim-scaling-events">
                   {metrics.host.replicas.events.map((event, index) => (
@@ -163,9 +195,18 @@ function HostAndQueueFields({ node, metrics, runStatus, onSetNodeSim }: HostAndQ
           ) : null}
           {sim.kind === 'queue' ? (
             <div className="sim-host-metrics">
-              <span>Inflow: {metrics?.queue ? `${metrics.queue.inflowMBps.toFixed(2)} MB/s` : '\u2014'}</span>
-              <span>Outflow: {metrics?.queue ? `${metrics.queue.outflowMBps.toFixed(2)} MB/s` : '\u2014'}</span>
-              <span>Backlog: {metrics?.queue ? `${metrics.queue.backlogGB.toFixed(3)} GB` : '\u2014'}</span>
+              <div className="sim-host-meter">
+                <span>Inflow</span>
+                <span className="sim-host-meter-value">{metrics?.queue ? `${metrics.queue.inflowMBps.toFixed(2)} MB/s` : '\u2014'}</span>
+              </div>
+              <div className="sim-host-meter">
+                <span>Outflow</span>
+                <span className="sim-host-meter-value">{metrics?.queue ? `${metrics.queue.outflowMBps.toFixed(2)} MB/s` : '\u2014'}</span>
+              </div>
+              <div className="sim-host-meter">
+                <span>Backlog</span>
+                <span className="sim-host-meter-value">{metrics?.queue ? `${metrics.queue.backlogGB.toFixed(3)} GB` : '\u2014'}</span>
+              </div>
             </div>
           ) : null}
         </>
@@ -388,10 +429,30 @@ export function Inspector({
           <>
             <h3 className="lab-panel-title lab-panel-title-spaced">Telemetry</h3>
             <div className="sim-host-metrics">
-              <span>RPS: {selectedEdgeMetrics?.sim ? selectedEdgeMetrics.sim.currentRPS.toFixed(1) : '\u2014'}</span>
-              <span>MB/s: {selectedEdgeMetrics?.sim ? selectedEdgeMetrics.sim.currentMBps.toFixed(2) : '\u2014'}</span>
-              <span>Connections: {selectedEdgeMetrics?.sim ? selectedEdgeMetrics.sim.activeConnections.toFixed(1) : '\u2014'}</span>
-              <span>Congested: {selectedEdgeMetrics?.sim ? (selectedEdgeMetrics.sim.isCongested ? 'yes' : 'no') : '\u2014'}</span>
+              <div className="sim-host-meter">
+                <span>RPS</span>
+                <span className="sim-host-meter-value">
+                  {selectedEdgeMetrics?.sim ? selectedEdgeMetrics.sim.currentRPS.toFixed(1) : '\u2014'}
+                </span>
+              </div>
+              <div className="sim-host-meter">
+                <span>MB/s</span>
+                <span className="sim-host-meter-value">
+                  {selectedEdgeMetrics?.sim ? selectedEdgeMetrics.sim.currentMBps.toFixed(2) : '\u2014'}
+                </span>
+              </div>
+              <div className="sim-host-meter">
+                <span>Connections</span>
+                <span className="sim-host-meter-value">
+                  {selectedEdgeMetrics?.sim ? selectedEdgeMetrics.sim.activeConnections.toFixed(1) : '\u2014'}
+                </span>
+              </div>
+              <div className="sim-host-meter">
+                <span>Congested</span>
+                <span className="sim-host-meter-value">
+                  {selectedEdgeMetrics?.sim ? (selectedEdgeMetrics.sim.isCongested ? 'yes' : 'no') : '\u2014'}
+                </span>
+              </div>
             </div>
           </>
         ) : null}

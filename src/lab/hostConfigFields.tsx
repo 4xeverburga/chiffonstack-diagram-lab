@@ -34,7 +34,7 @@ function ManualComputeFields({
   onChange: (next: HostNodeSim) => void
 }) {
   return (
-    <>
+    <div className="lab-field-grid">
       {numberInput('Baseline latency (ms)', sim.manualBaselineLatencyMs, disabled, 0, (value) =>
         onChange({ ...sim, manualBaselineLatencyMs: value }),
       )}
@@ -44,7 +44,7 @@ function ManualComputeFields({
       {numberInput('Max RPS', sim.manualMaxRPS, disabled, 0, (value) =>
         onChange({ ...sim, manualMaxRPS: Math.max(value, sim.manualSaturationRPS) }),
       )}
-    </>
+    </div>
   )
 }
 
@@ -58,12 +58,12 @@ function CalculatedComputeFields({
   onChange: (next: HostNodeSim) => void
 }) {
   return (
-    <>
+    <div className="lab-field-grid">
       {numberInput('CPU processing time (ms)', sim.cpuProcessingTimeMs, disabled, 0, (value) =>
         onChange({ ...sim, cpuProcessingTimeMs: value }),
       )}
       {numberInput('Max worker threads', sim.maxWorkerThreads, disabled, 0, (value) => onChange({ ...sim, maxWorkerThreads: value }))}
-    </>
+    </div>
   )
 }
 
@@ -97,7 +97,7 @@ function AutoscalingFields({
   onChange: (next: HostNodeSim) => void
 }) {
   return (
-    <>
+    <div className="lab-field-grid">
       {integerInput('Min replicas', sim.minReplicas, disabled, 1, (value) =>
         onChange({ ...sim, minReplicas: value, maxReplicas: Math.max(sim.maxReplicas, value) }),
       )}
@@ -111,7 +111,7 @@ function AutoscalingFields({
       {numberInput('Low watermark', sim.lowWatermark, disabled, 0, (value) =>
         onChange({ ...sim, lowWatermark: Math.min(value, sim.highWatermark - 0.01) }),
       )}
-    </>
+    </div>
   )
 }
 

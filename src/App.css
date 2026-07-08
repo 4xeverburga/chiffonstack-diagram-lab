@@ -161,6 +161,12 @@
   color: var(--text);
 }
 
+.sim-host-meter-value {
+  color: var(--text-h);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
 /* The binding meter is distinguished by weight/border, not color alone
    (spec Edge Cases — low-contrast token accessibility fallback). */
 .sim-host-meter-binding {
@@ -436,6 +442,30 @@
   color: var(--text);
 }
 
+/* Fase 2 (densidad): 2-column grid for numeric config fields — an 8-field
+   single column becomes 4 rows. Children keep their own .lab-field layout;
+   this only governs the grid placement, so no other markup changes. */
+.lab-field-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.lab-field-grid .lab-field {
+  margin-bottom: 0;
+  min-width: 0;
+}
+
+.lab-field-grid .lab-field span {
+  overflow-wrap: break-word;
+}
+
+.lab-field-grid .lab-field input {
+  min-width: 0;
+  width: 100%;
+}
+
 .lab-field input {
   font-family: var(--mono);
   font-size: 13px;
@@ -444,12 +474,29 @@
   border-radius: 6px;
   border: 1px solid var(--border);
   background: var(--bg);
+  box-sizing: border-box;
 }
 
 .lab-button-row {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+}
+
+/* Fase 2 (densidad): Simulation role's 7 chips as an ordered 2-column grid
+   instead of ragged flex-wrap rows. */
+.lab-role-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.lab-role-grid .chip {
+  width: 100%;
+  min-width: 0;
+  text-align: center;
+  white-space: normal;
+  overflow-wrap: break-word;
 }
 
 .chip {
