@@ -1,12 +1,16 @@
-// Pure ring-buffer state for HostStatusSparkline.tsx's live "collapse
-// curve" — the goodput trend line that replaced the sim-status-overloaded/
-// saturated CSS flicker (see App.css history for the prior treatment).
-// Kept as an immutable-state pure module (mirrors flowAnimationSmoothing.ts's
-// split: this file holds no state itself, `pushSparklineSample` is a pure
+// Pure ring-buffer state for HostSaturationSparkline.tsx's always-on
+// saturation gauge (see that file's header for the full rationale: an
+// always-rendered widget so the node's own footprint never changes
+// between idle/editing and any running simulation state). Kept as an
+// immutable-state pure module (mirrors flowAnimationSmoothing.ts's split:
+// this file holds no state itself, `pushSparklineSample` is a pure
 // function from (previous state, new sample) to (next state)) so it's
 // trivially unit-testable without mounting React (constitution VI), and so
-// HostStatusSparkline.tsx can thread it through a useRef exactly like
-// HeatEdge.tsx threads FlowAnimationState.
+// HostSaturationSparkline.tsx can thread it through a useRef exactly like
+// HeatEdge.tsx threads FlowAnimationState. Generic over what's being
+// tracked (a plain number ring buffer) — nothing here is saturation-
+// specific, so this module needed no changes when the plotted value
+// switched from forwardedRPS to saturationRatio.
 
 export interface SparklineHistoryState {
   /** Oldest sample first; bounded to at most `maxLength` entries. */

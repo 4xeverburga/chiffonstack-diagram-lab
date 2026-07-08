@@ -164,11 +164,11 @@ export const SCALING_EVENT_HISTORY_LIMIT = 10
 // proportional reading instead.
 export const MAX_DISCRETE_CAPACITY_SEGMENTS = 8
 
-// Bounded ring size for a saturated/overloaded host's recent goodput
-// history (HostStatusSparkline.tsx) — the live "collapse curve" sparkline
-// that replaced the CSS box-shadow flicker. At SIM_TICK_MS=200ms this is
-// ~6s of trailing history: long enough to see a load spike bend the curve
-// over, short enough that the sparkline stays legible at node scale.
+// Bounded ring size for HostSaturationSparkline.tsx's always-on saturation
+// gauge (rendered for every saturating-capable host, in every state — see
+// that file's header). At SIM_TICK_MS=200ms this is ~6s of trailing
+// history: long enough to see a load spike bend the curve over, short
+// enough that the sparkline stays legible at node scale.
 export const SPARKLINE_HISTORY_LENGTH = 30
 
 // Migration-only fallback (constitution v3.2.0, research.md D5-style

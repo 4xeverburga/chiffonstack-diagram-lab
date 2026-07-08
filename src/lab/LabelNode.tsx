@@ -5,7 +5,7 @@ import { labelBandFor, resolveTextSize } from './textSizes'
 import { NodeInfoButton } from './NodeInfoButton'
 import { ScalingGroupNode } from './ScalingGroupNode'
 import { shouldRenderScalingGroup } from './scalingGroupProjection'
-import { HostStatusSparkline } from './HostStatusSparkline'
+import { HostSaturationSparkline } from './HostSaturationSparkline'
 import type { NodeMetrics, NodeSim } from '../engine/ports'
 
 // Custom node used for every diagram box: keeps the existing className-driven
@@ -47,6 +47,16 @@ export function LabelNode({ id, data, selected }: NodeProps) {
   // canvas nodes.
   const scalingBounds =
     sim && sim.kind === 'host' && 'minReplicas' in sim ? { minReplicas: sim.minReplicas, maxReplicas: sim.maxReplicas } : undefined
+  // HostSaturationSparkline.tsx — rendered for every host profile that can
+  // ever saturate (client_pool/external_api never do, per hostModel.ts:
+  // computeClientPoolMetrics/computeExternalApiMetrics always return
+  // status 'healthy'/saturationRatio 0), and rendered UNCONDITIONALLY
+  // across idle/healthy/saturated/overloaded — not gated on the current
+  // status — so the node's footprint never changes between editing and
+  // any running simulation state (see that file's header for the bug this
+  // fixes).
+  const canSaturate =
+    sim && sim.kind === 'host' && (sim.profile === 'transactional_api' || sim.profile === 'worker_consumer' || sim.profile === 'database_server')
   const imageAspect =
     typeof data.imageAspect === 'number' && Number.isFinite(data.imageAspect) && data.imageAspect > 0
       ? data.imageAspect
@@ -81,8 +91,8 @@ export function LabelNode({ id, data, selected }: NodeProps) {
       <div className="node-content">
         {image ? <img className="node-image" src={image} alt="" /> : null}
         {label.trim() ? <span className={`node-label node-label-${labelSize}`}>{label}</span> : null}
-        {metrics?.host && (metrics.host.status === 'saturated' || metrics.host.status === 'overloaded') ? (
-          <HostStatusSparkline status={metrics.host.status} value={metrics.host.forwardedRPS} windowKey={simWindowKey} />
+        {canSaturate ? (
+          <HostSaturationSparkline status={metrics?.host?.status} saturationRatio={metrics?.host?.saturationRatio} windowKey={simWindowKey} />
         ) : null}
         {shouldRenderScalingGroup(scalingBounds) ? (
           <ScalingGroupNode sim={scalingBounds} liveTelemetry={metrics?.host?.replicas} hostMetrics={metrics?.host} />

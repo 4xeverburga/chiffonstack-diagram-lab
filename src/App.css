@@ -605,7 +605,7 @@
 
 /* Canvas status treatment for saturated/overloaded hosts (feature 011,
    formerly 010's single-status treatment; box-shadow flicker replaced by
-   HostStatusSparkline.tsx — see that file's header for the rationale).
+   HostSaturationSparkline.tsx — see that file's header for the rationale).
    HARD RULE unchanged: the node itself is an invariant element — its
    border-width/border-style/size/footprint never change for any simulated
    status, exactly like every other node on the canvas. Status is conveyed
@@ -630,18 +630,34 @@
   box-shadow: 0 0 10px 1px color-mix(in srgb, var(--token-primary, #ff4715) 45%, transparent);
 }
 
-/* HostStatusSparkline.tsx — the live trailing-goodput readout that carries
-   the saturated/overloaded signal now (see that file's header). Sized to
-   the node's own natural width (no fixed px width, matching
-   .scaling-group-box's width:100% convention) so it fits any node
-   regardless of label length. Deliberately plain/instrument-panel: no
-   fill gradient, no rounded caps — a thin measured line, not a chart
-   "widget". */
+/* HostSaturationSparkline.tsx — an always-on live saturation gauge for
+   every saturating-capable host (transactional_api/worker_consumer/
+   database_server), rendered in EVERY state (idle, healthy, saturated,
+   overloaded) rather than only appearing once a host turns saturated —
+   see LabelNode.tsx. This is deliberate: the previous "only render on
+   saturated/overloaded" gate meant the widget's DOM only existed once a
+   simulation was running and struggling, so the node's own footprint grew
+   the moment that happened — an autoscaling host that was ~98x95px while
+   idle/editing jumped to ~125x141px mid-simulation, purely from UI popping
+   in/out. Rendering the widget unconditionally (with a neutral "idle"
+   placeholder pre-simulation) makes the node's footprint identical across
+   every state; only the WIDGET'S OWN internal color/values change.
+   min-width plus the header spans' nowrap/ellipsis below are a second,
+   independent safety net against the same problem at the WIDTH axis:
+   without it, a wide value string (e.g. "OVERLOADED  8333%") could still
+   force the flex column wider than a short one ("idle  —") even though
+   both are the same DOM shape. Sized to the node's own natural width
+   otherwise (no fixed px width beyond that floor, matching
+   .scaling-group-box's width:100% convention). Deliberately plain/
+   instrument-panel: no fill gradient, no rounded caps — a thin measured
+   line, not a chart "widget". */
 .host-sparkline {
   display: flex;
   flex-direction: column;
   gap: 3px;
   width: 100%;
+  min-width: 96px;
+  box-sizing: border-box;
 }
 
 .host-sparkline-header {
@@ -652,13 +668,30 @@
   font-size: 9px;
   letter-spacing: 0.03em;
   text-transform: uppercase;
-  color: var(--token-primary, #ff4715);
+  color: var(--text);
+}
+
+.host-sparkline-status,
+.host-sparkline-value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .host-sparkline-value {
   color: var(--text);
   text-transform: none;
   letter-spacing: normal;
+}
+
+/* The one moment this widget borrows the brand accent — saturated/
+   overloaded only, matching the "orange is spent rarely" rule everywhere
+   else on this canvas. Healthy and idle both stay neutral so a
+   perfectly-fine host never competes for attention with one that isn't. */
+.host-sparkline-active .host-sparkline-status,
+.host-sparkline-active .host-sparkline-value {
+  color: var(--token-primary, #ff4715);
 }
 
 .host-sparkline-svg {
@@ -669,19 +702,42 @@
 }
 
 .host-sparkline-area {
-  fill: color-mix(in srgb, var(--token-primary, #ff4715) 12%, transparent);
+  fill: color-mix(in srgb, var(--token-secondary, var(--border)) 16%, transparent);
   stroke: none;
 }
 
 .host-sparkline-line {
   fill: none;
-  stroke: var(--token-primary, #ff4715);
+  stroke: var(--token-secondary, var(--border));
   stroke-width: 1.4;
   vector-effect: non-scaling-stroke;
 }
 
 .host-sparkline-dot {
+  fill: var(--token-secondary, var(--border));
+}
+
+.host-sparkline-active .host-sparkline-area {
+  fill: color-mix(in srgb, var(--token-primary, #ff4715) 12%, transparent);
+}
+
+.host-sparkline-active .host-sparkline-line {
+  stroke: var(--token-primary, #ff4715);
+}
+
+.host-sparkline-active .host-sparkline-dot {
   fill: var(--token-primary, #ff4715);
+}
+
+/* The domain's 100%-saturation reference — only drawn once a genuine
+   overload has pushed the chart's own scale past 1.0 (HostSaturation
+   Sparkline.tsx), so a viewer can tell "the line is above the redline"
+   from the gap between it and this guide, not just from color. */
+.host-sparkline-reference {
+  stroke: var(--token-secondary, var(--border));
+  stroke-width: 1;
+  stroke-dasharray: 2 2;
+  vector-effect: non-scaling-stroke;
 }
 
 /* Hover-triggered detail popover (NodeInfoButton.tsx) beside every
