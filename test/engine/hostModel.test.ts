@@ -509,3 +509,102 @@ describe('computeHostMetrics — collapse mode, calculated (research.md D1/D3)',
     expect(Number.isFinite(metrics.saturationRatio)).toBe(true)
   })
 })
+
+// 012-overload-collapse refinement (research.md D9): elastic hosts
+// (minReplicas !== maxReplicas) never use the smooth retrograde curve —
+// they behave like clamp while replicas are alive, and go fully dark
+// (forwardedRPS=0/shedRPS=incoming/status='collapsed') once effectiveReplicas
+// hits 0. Eviction itself is autoscaler.ts's responsibility (see
+// autoscaler.test.ts) — this describe block only covers hostModel.ts's side:
+// the isElasticGroup flag changing forwarding/status behavior.
+describe('computeHostMetrics — elastic scaling group + collapse (research.md D9)', () => {
+  it('below the knee is identical to clamp, same as the non-elastic case', () => {
+    const clamp = computeHostMetrics({
+      sim: manualSim({ overloadBehavior: 'clamp', minReplicas: 1, maxReplicas: 4 }),
+      incomingRPS: 400,
+      effectiveReplicas: 2,
+      isElasticGroup: true,
+      inboundWeightedComputeMultiplier: 1,
+      outboundWeightedIoLatencyMs: 0,
+    })
+    const collapse = computeHostMetrics({
+      sim: manualSim({ overloadBehavior: 'collapse', minReplicas: 1, maxReplicas: 4 }),
+      incomingRPS: 400,
+      effectiveReplicas: 2,
+      isElasticGroup: true,
+      inboundWeightedComputeMultiplier: 1,
+      outboundWeightedIoLatencyMs: 0,
+    })
+    expect(collapse.forwardedRPS).toBe(clamp.forwardedRPS)
+    expect(collapse.shedRPS).toBe(clamp.shedRPS)
+    expect(collapse.status).toBe(clamp.status)
+  })
+
+  it('behaves like clamp (plateau, not retrograde decay) while replicas are alive and overloaded', () => {
+    const sim = manualSim({ overloadBehavior: 'collapse', minReplicas: 1, maxReplicas: 4 })
+    // 2 effective replicas, knee (manualMaxRPS) = 550 each => total cap 1100.
+    const metrics = computeHostMetrics({
+      sim,
+      incomingRPS: 3300, // 3x the group's total cap
+      effectiveReplicas: 2,
+      isElasticGroup: true,
+      inboundWeightedComputeMultiplier: 1,
+      outboundWeightedIoLatencyMs: 0,
+    })
+    // Clamp-equivalent plateau, NOT the retrograde curve's ~1/9 decay.
+    expect(metrics.forwardedRPS).toBeCloseTo(1100, 5)
+    expect(metrics.shedRPS).toBeCloseTo(2200, 5)
+    expect(metrics.status).toBe('overloaded')
+    expect(metrics.status).not.toBe('collapsed')
+  })
+
+  it('reports the host as fully dead (forwards nothing, sheds everything, status collapsed) at effectiveReplicas=0', () => {
+    const sim = manualSim({ overloadBehavior: 'collapse', minReplicas: 1, maxReplicas: 4 })
+    const metrics = computeHostMetrics({
+      sim,
+      incomingRPS: 1000,
+      effectiveReplicas: 0,
+      isElasticGroup: true,
+      inboundWeightedComputeMultiplier: 1,
+      outboundWeightedIoLatencyMs: 0,
+    })
+    expect(metrics.incomingRPS).toBe(1000)
+    expect(metrics.forwardedRPS).toBe(0)
+    expect(metrics.shedRPS).toBe(1000)
+    expect(metrics.status).toBe('collapsed')
+    expect(Number.isFinite(metrics.latencyMs)).toBe(true)
+    expect(Number.isFinite(metrics.saturationRatio)).toBe(true)
+  })
+
+  it('a dead elastic clamp-mode host is unreachable — only collapse hosts can hit effectiveReplicas=0 via eviction, but confirm clamp still divides by the Math.max(1,·) floor if ever called with 0', () => {
+    const sim = manualSim({ overloadBehavior: 'clamp', minReplicas: 1, maxReplicas: 4 })
+    const metrics = computeHostMetrics({
+      sim,
+      incomingRPS: 100,
+      effectiveReplicas: 0,
+      isElasticGroup: true,
+      inboundWeightedComputeMultiplier: 1,
+      outboundWeightedIoLatencyMs: 0,
+    })
+    // clamp mode never gets the "virtually dead" branch (collapse-only) —
+    // it falls through to the existing Math.max(1, effectiveReplicas) floor.
+    expect(metrics.status).not.toBe('collapsed')
+  })
+
+  it('a fixed (non-elastic) multi-replica host keeps the original smooth retrograde curve, not clamp/eviction semantics', () => {
+    const sim = manualSim({ overloadBehavior: 'collapse', minReplicas: 3, maxReplicas: 3 })
+    const metrics = computeHostMetrics({
+      sim,
+      incomingRPS: 3300, // per-replica: 3300/3 = 1100 = 2x the 550 knee
+      effectiveReplicas: 3,
+      isElasticGroup: false,
+      inboundWeightedComputeMultiplier: 1,
+      outboundWeightedIoLatencyMs: 0,
+    })
+    // Retrograde curve (decay(2) = 1/3 per replica => 550*(1/3)*3 = 550
+    // total), NOT the clamp plateau of 1650 — matches the non-elastic
+    // single-node collapse fixtures above.
+    expect(metrics.forwardedRPS).toBeCloseTo(550, 5)
+    expect(metrics.status).toBe('collapsed')
+  })
+})
