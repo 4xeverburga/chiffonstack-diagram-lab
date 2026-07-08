@@ -135,7 +135,11 @@ function LabEditor() {
   // never serialized — exportDiagram.ts whitelists node.data) so LabelNode
   // can render its always-visible status badge AND the hover-triggered
   // NodeInfoButton's detail popover from one source, without a second
-  // selector round-trip per node.
+  // selector round-trip per node. `data.simWindowKey` rides alongside it
+  // (also transient) so HostStatusSparkline.tsx can tell "a new metrics
+  // window landed" apart from "this node re-rendered for an unrelated
+  // reason" — windowEndSimTimeMs is undefined at idle/after Reset, which is
+  // exactly when the sparkline's own history should clear.
   const handlesVisibleNodeIds = useHandleVisibility(selection)
   const renderedNodes = useMemo(
     () =>
@@ -144,7 +148,9 @@ function LabEditor() {
         const withHandles = withHandlesVisibleClass(node.className, handlesVisibleNodeIds.has(node.id))
         const className = applyHostStatusClass(withHandles, nodeMetrics?.host?.status)
         const next = className === (node.className ?? '') ? node : { ...node, className }
-        return next.data.simMetrics === nodeMetrics ? next : { ...next, data: { ...next.data, simMetrics: nodeMetrics } }
+        const simWindowKey = latestWindow?.windowEndSimTimeMs
+        if (next.data.simMetrics === nodeMetrics && next.data.simWindowKey === simWindowKey) return next
+        return { ...next, data: { ...next.data, simMetrics: nodeMetrics, simWindowKey } }
       }),
     [nodes, handlesVisibleNodeIds, latestWindow],
   )
