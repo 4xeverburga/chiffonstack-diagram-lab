@@ -6,6 +6,7 @@ import type { HeatVariant } from './heatVariants'
 import { nextThickness, resolveDirection, resolveThickness, type EdgeThickness } from './edgeStyle'
 import { computeImageFit, heightForRatioLockedWidth } from './imageFit'
 import { labelBandFor, resolveTextSize, type TextSize } from './textSizes'
+import type { EdgeSimConfig, NodeSim } from '../engine/ports'
 
 type SetNodes = Dispatch<SetStateAction<Node[]>>
 type SetEdges = Dispatch<SetStateAction<Edge[]>>
@@ -168,6 +169,44 @@ export function useDiagramMutations(setNodes: SetNodes, setEdges: SetEdges) {
     [setEdges],
   )
 
+  // Sets or clears a node's simulation config (FR-001/FR-010). `undefined`
+  // returns the node to a plain diagram node (no `sim` key at all — kept
+  // out of `data` entirely rather than left as `sim: undefined`, so
+  // exportDiagram's whitelist and legacy-diagram comparisons see exactly
+  // the pre-pivot shape for nodes nobody has assigned a role to).
+  const setNodeSim = useCallback(
+    (id: string, sim: NodeSim | undefined) => {
+      setNodes((current) =>
+        current.map((node) => {
+          if (node.id !== id) return node
+          const nextData = { ...node.data } as Record<string, unknown>
+          if (sim) nextData.sim = sim
+          else delete nextData.sim
+          return { ...node, data: nextData }
+        }),
+      )
+    },
+    [setNodes],
+  )
+
+  // Sets or clears an edge's traffic-shaping configuration (data-model.md
+  // EdgeSimConfig). `undefined` drops it entirely, same rationale as
+  // setNodeSim above.
+  const setEdgeSimConfig = useCallback(
+    (id: string, simConfig: EdgeSimConfig | undefined) => {
+      setEdges((current) =>
+        current.map((edge) => {
+          if (edge.id !== id) return edge
+          const nextData = { ...edge.data } as Record<string, unknown>
+          if (simConfig) nextData.simConfig = simConfig
+          else delete nextData.simConfig
+          return { ...edge, data: nextData }
+        }),
+      )
+    },
+    [setEdges],
+  )
+
   return useMemo(
     () => ({
       renameNode,
@@ -179,6 +218,8 @@ export function useDiagramMutations(setNodes: SetNodes, setEdges: SetEdges) {
       cycleEdgeThickness,
       reverseEdgeDirection,
       deleteEdge,
+      setNodeSim,
+      setEdgeSimConfig,
     }),
     [
       renameNode,
@@ -190,6 +231,8 @@ export function useDiagramMutations(setNodes: SetNodes, setEdges: SetEdges) {
       cycleEdgeThickness,
       reverseEdgeDirection,
       deleteEdge,
+      setNodeSim,
+      setEdgeSimConfig,
     ],
   )
 }

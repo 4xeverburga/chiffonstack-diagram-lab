@@ -2,7 +2,18 @@
 
 Guidance for Claude Code when working in this repository.
 
+<!-- SPECKIT START -->
+Current feature plan: specs/012-overload-collapse/plan.md (constitution: .specify/memory/constitution.md v3.3.0; feature includes v3.4.0 amendment)
+<!-- SPECKIT END -->
+
 ## Coding conventions
+- Centralize any parameter on a config file or .env
+- All imports must be declared with relation to  the root of the project. This way refactoring and moving files is easier.
+
+## Branch Strategies
+main branch is protected to push. You can only pr it.
+
+when finishing a feature you merge to dev first. Only then pr to main
 
 ### No default parameter values
 
@@ -20,9 +31,3 @@ function loadKey(name: string) { … }
 If a call site needs "the usual" value, pass it explicitly (or use an options
 object with every key provided). Behavior should never depend on an omitted
 argument.
-
-<!-- SPECKIT START -->
-For additional context about technologies to be used, project structure,
-shell commands, and other important information, read the current plan:
-[specs/003-edge-styling-controls/plan.md](specs/003-edge-styling-controls/plan.md)
-<!-- SPECKIT END -->

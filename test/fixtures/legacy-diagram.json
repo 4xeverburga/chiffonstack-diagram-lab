@@ -1,0 +1,45 @@
+{
+  "nodes": [
+    {
+      "id": "user",
+      "type": "labelNode",
+      "position": { "x": 0, "y": 0 },
+      "data": { "label": "user", "labelSize": "normal" },
+      "className": "node"
+    },
+    {
+      "id": "router",
+      "type": "labelNode",
+      "position": { "x": 200, "y": 0 },
+      "data": { "label": "router", "labelSize": "normal" },
+      "className": "node node-active"
+    },
+    {
+      "id": "fallback",
+      "type": "labelNode",
+      "position": { "x": 400, "y": 0 },
+      "data": { "label": "fallback", "labelSize": "normal" },
+      "className": "node node-dim"
+    }
+  ],
+  "edges": [
+    {
+      "id": "user-router",
+      "source": "user",
+      "target": "router",
+      "type": "heat",
+      "data": { "variant": "default", "thickness": "normal", "direction": "forward" },
+      "sourceHandle": "right",
+      "targetHandle": "left"
+    },
+    {
+      "id": "router-fallback",
+      "source": "router",
+      "target": "fallback",
+      "type": "heat",
+      "data": { "variant": "heat-flow", "thickness": "normal", "direction": "forward" },
+      "sourceHandle": "right",
+      "targetHandle": "left"
+    }
+  ]
+}

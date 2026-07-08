@@ -35,6 +35,203 @@
   display: none;
 }
 
+.sim-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
+
+.sim-controls-buttons {
+  display: flex;
+  gap: 6px;
+}
+
+.sim-controls-buttons button {
+  font-family: var(--mono);
+  font-size: 12px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-h);
+  cursor: pointer;
+}
+
+.sim-controls-buttons button:hover:not(:disabled) {
+  border-color: #ff4715;
+}
+
+.sim-controls-buttons button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.sim-scale-select {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text);
+}
+
+.sim-scale-select select {
+  font-family: var(--mono);
+  font-size: 12px;
+  padding: 5px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-h);
+  cursor: pointer;
+}
+
+.sim-scale-select select:hover {
+  border-color: #ff4715;
+}
+
+.sim-controls-message {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text);
+}
+
+.sim-controls-error {
+  color: #ff4715;
+}
+
+.sim-placeholder-note {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text);
+  opacity: 0.8;
+  margin: 0;
+}
+
+.lab-field-checkbox {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Host/queue metrics readout (feature 011). */
+.sim-host-metrics {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.sim-status-badge {
+  align-self: flex-start;
+  font-family: var(--mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--token-secondary, var(--border));
+  color: var(--text-h);
+}
+
+.sim-status-badge-saturated {
+  border-color: var(--token-primary, #ff4715);
+  border-style: solid;
+}
+
+.sim-status-badge-overloaded {
+  border-color: var(--token-primary, #ff4715);
+  border-style: dotted;
+}
+
+.sim-host-meter {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text);
+}
+
+/* The binding meter is distinguished by weight/border, not color alone
+   (spec Edge Cases — low-contrast token accessibility fallback). */
+.sim-host-meter-binding {
+  font-weight: 600;
+  color: var(--text-h);
+  border-bottom: 1px solid var(--token-primary, #ff4715);
+}
+
+/* Formula & sources panel (feature 010, US4/FR-008/FR-009) — bottom of the
+   Inspector, per the fixed layout decision in spec.md's Assumptions. */
+.lab-formula-panel {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.lab-formula-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.lab-formula {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text);
+  padding: 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
+
+.lab-formula-binding {
+  border-color: var(--token-primary, #ff4715);
+}
+
+.lab-formula-name {
+  font-weight: 600;
+  color: var(--text-h);
+  margin-bottom: 4px;
+}
+
+.lab-formula-expression {
+  color: var(--text);
+  margin-bottom: 4px;
+  word-break: break-word;
+}
+
+.lab-formula-inputs {
+  list-style: none;
+  margin: 0 0 4px;
+  padding: 0;
+  color: var(--text);
+  opacity: 0.85;
+}
+
+.lab-formula-sources {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.lab-formula-sources a {
+  color: var(--token-primary, #ff4715);
+}
+
+.lab-formula-disclaimer {
+  margin-top: 10px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text);
+  opacity: 0.75;
+}
+
 .lab-body {
   display: flex;
   flex: 1 1 auto;
@@ -406,6 +603,247 @@
   border-style: dashed;
 }
 
+/* Canvas status treatment for saturated/overloaded hosts (feature 011,
+   formerly 010's single-status treatment; box-shadow flicker replaced by
+   HostSaturationSparkline.tsx — see that file's header for the rationale).
+   HARD RULE unchanged: the node itself is an invariant element — its
+   border-width/border-style/size/footprint never change for any simulated
+   status, exactly like every other node on the canvas. Status is conveyed
+   by (a) a border-COLOR change on the node (still 1px, still solid — a
+   color swap, not a shape change) and (b) a static, non-animated glow whose
+   INTENSITY (not motion) differentiates saturated from overloaded — a
+   second glow animation on top of the sparkline's own live-updating motion
+   would be redundant motion competing with the one signal that actually
+   carries information now. Applied via hostStatusTreatment.ts's idempotent
+   class derivation — see App.tsx's renderedNodes useMemo. */
+.react-flow__node.sim-status-saturated,
+.react-flow__node.sim-status-overloaded,
+.react-flow__node.sim-status-collapsed {
+  border-color: var(--token-primary, #ff4715);
+  transition: box-shadow 200ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.react-flow__node.sim-status-saturated {
+  box-shadow: 0 0 8px 0 color-mix(in srgb, var(--token-primary, #ff4715) 25%, transparent);
+}
+
+.react-flow__node.sim-status-overloaded {
+  box-shadow: 0 0 10px 1px color-mix(in srgb, var(--token-primary, #ff4715) 45%, transparent);
+}
+
+/* Collapsed (feature 012): the most severe tier — a host whose
+   goodput has materially degraded past its knee, not merely "more
+   overloaded" than the overloaded tier above. Same static-glow language
+   (no animation, per this block's own rule above): simply the strongest
+   intensity in the saturated < overloaded < collapsed ladder. The
+   sparkline itself (HostSaturationSparkline.tsx) carries the deeper
+   story — its line reads well above the 100% reference once a host is
+   genuinely collapsing, and the widget's own color swaps to the accent
+   for this status too (see .host-sparkline-active below). */
+.react-flow__node.sim-status-collapsed {
+  box-shadow: 0 0 12px 2px color-mix(in srgb, var(--token-primary, #ff4715) 60%, transparent);
+}
+
+/* HostSaturationSparkline.tsx — an always-on live saturation gauge for
+   every saturating-capable host (transactional_api/worker_consumer/
+   database_server), rendered in EVERY state (idle, healthy, saturated,
+   overloaded, collapsed) rather than only appearing once a host turns
+   saturated — see LabelNode.tsx. This is deliberate: the previous "only
+   render on saturated/overloaded" gate meant the widget's DOM only
+   existed once a simulation was running and struggling, so the node's
+   own footprint grew the moment that happened — an autoscaling host that
+   was ~98x95px while idle/editing jumped to ~125x141px mid-simulation,
+   purely from UI popping in/out. Rendering the widget unconditionally
+   (with a neutral "idle" placeholder pre-simulation) makes the node's
+   footprint identical across every state; only the WIDGET'S OWN internal
+   color/values change. min-width plus the header spans' nowrap/ellipsis
+   below are a second, independent safety net against the same problem at
+   the WIDTH axis: without it, a wide value string (e.g. "OVERLOADED
+   8333%") could still force the flex column wider than a short one
+   ("idle  —") even though both are the same DOM shape. Sized to the
+   node's own natural width otherwise (no fixed px width beyond that
+   floor, matching .scaling-group-box's width:100% convention).
+   Deliberately plain/instrument-panel: no fill gradient, no rounded caps
+   — a thin measured line, not a chart "widget". */
+.host-sparkline {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 100%;
+  min-width: 96px;
+  box-sizing: border-box;
+}
+
+.host-sparkline-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  font-size: 9px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--text);
+}
+
+.host-sparkline-status,
+.host-sparkline-value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.host-sparkline-value {
+  color: var(--text);
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+/* The one moment this widget borrows the brand accent — saturated/
+   overloaded/collapsed only, matching the "orange is spent rarely" rule
+   everywhere else on this canvas. Healthy and idle both stay neutral so a
+   perfectly-fine host never competes for attention with one that isn't. */
+.host-sparkline-active .host-sparkline-status,
+.host-sparkline-active .host-sparkline-value {
+  color: var(--token-primary, #ff4715);
+}
+
+.host-sparkline-svg {
+  display: block;
+  width: 100%;
+  height: 20px;
+  overflow: visible;
+}
+
+.host-sparkline-area {
+  fill: color-mix(in srgb, var(--token-secondary, var(--border)) 16%, transparent);
+  stroke: none;
+}
+
+.host-sparkline-line {
+  fill: none;
+  stroke: var(--token-secondary, var(--border));
+  stroke-width: 1.4;
+  vector-effect: non-scaling-stroke;
+}
+
+.host-sparkline-dot {
+  fill: var(--token-secondary, var(--border));
+}
+
+.host-sparkline-active .host-sparkline-area {
+  fill: color-mix(in srgb, var(--token-primary, #ff4715) 12%, transparent);
+}
+
+.host-sparkline-active .host-sparkline-line {
+  stroke: var(--token-primary, #ff4715);
+}
+
+.host-sparkline-active .host-sparkline-dot {
+  fill: var(--token-primary, #ff4715);
+}
+
+/* The domain's 100%-saturation reference — only drawn once a genuine
+   overload has pushed the chart's own scale past 1.0 (HostSaturation
+   Sparkline.tsx), so a viewer can tell "the line is above the redline"
+   from the gap between it and this guide, not just from color. */
+.host-sparkline-reference {
+  stroke: var(--token-secondary, var(--border));
+  stroke-width: 1;
+  stroke-dasharray: 2 2;
+  vector-effect: non-scaling-stroke;
+}
+/* Hover-triggered detail popover (NodeInfoButton.tsx) beside every
+   simulated node: the canvas keeps its FR-006-required always-visible
+   signal (the border color/style/blink treatment above), while richer
+   detail (rates, saturation meters, lag, binding constraint, the
+   producer's dual-unit reading) lives one hover away instead of
+   permanently occupying canvas space. z-index 1002 deliberately outranks
+   React Flow's own selected-node z-index:1000 (confirmed via
+   getComputedStyle — the library inlines it on whichever node is
+   currently selected), so the popover is never clipped by a neighboring
+   selected node. */
+.node-info-button-wrapper {
+  position: absolute;
+  top: -9px;
+  right: -9px;
+}
+
+.node-info-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid var(--token-secondary, var(--border));
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 10px;
+  font-style: italic;
+  /* Deliberately the node's own resting cursor, not `help` — hovering
+     canvas chrome shouldn't change the pointer, same as every other
+     canvas control. */
+  cursor: default;
+}
+
+.node-info-button:hover,
+.node-info-button:focus-visible {
+  border-color: var(--token-primary, #ff4715);
+  color: var(--text-h);
+}
+
+.node-info-popover {
+  display: none;
+  position: absolute;
+  /* Expands UP and to the RIGHT from the button (bottom/left-anchored),
+     never down or left — down would grow the popover directly over the
+     node it describes, hiding the very thing being inspected, and left
+     reads against the grain for anyone scanning left-to-right. */
+  bottom: 20px;
+  left: 0;
+  z-index: 1002;
+  min-width: 170px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--token-secondary, var(--border));
+  background: var(--bg);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  font-family: var(--mono);
+  font-size: 11px;
+  /* Explicit unitless line-height: without it, this inherits :root's
+     `font: 18px/145%` as an already-resolved 26.1px absolute length (CSS
+     percentage line-heights compute once, against the ancestor's own
+     font-size, then inherit as that fixed px value) — 2.4x too tall for
+     an 11px row, and much more obvious once scaled up by the canvas's own
+     zoom transform (nodes/their children live inside
+     `.react-flow__viewport`, which is scaled directly). */
+  line-height: 1.4;
+  color: var(--text);
+}
+
+.node-info-button-wrapper:hover .node-info-popover,
+.node-info-button-wrapper:focus-within .node-info-popover {
+  display: block;
+}
+
+.node-info-popover-title {
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-h);
+  margin-bottom: 6px;
+}
+
+.node-info-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  white-space: nowrap;
+}
+
 /* Connection handles (LabelNode.tsx renders one per side: top/bottom/left/
    right) are hidden at rest and revealed only during interaction, so the
    canvas stays as clean as the exports it produces (US2, FR-002). The real
@@ -493,8 +931,11 @@
 
 .lab-edge-heat-flow {
   stroke-width: 2.5;
-  stroke-dasharray: 6 6;
-  animation: heat-flow 0.7s linear infinite;
+  stroke-dasharray: var(--sim-flow-dash, 6 6);
+  animation-name: heat-flow;
+  animation-duration: var(--sim-flow-duration, 0.7s);
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
   filter: drop-shadow(0 0 3px color-mix(in srgb, var(--token-primary, #ff4715) 55%, transparent));
 }
 
@@ -509,6 +950,14 @@
 
 .lab-edge-default {
   stroke: var(--token-secondary, var(--border));
+}
+
+/* Congested-edge treatment (feature 011, US1): an inbound edge to a host
+   past EDGE_CONGESTION_THRESHOLD renders red regardless of its base
+   variant color, so congestion is visible without opening the Inspector
+   (driven by per-window EdgeSimMetrics.isCongested, HeatEdge.tsx). */
+.lab-edge-congested {
+  stroke: #ff3b30 !important;
 }
 
 /* Thickness steps (edgeStyle.ts): only thin/thick override — `normal` keeps
@@ -581,7 +1030,15 @@
 
 @keyframes heat-flow {
   from {
-    stroke-dashoffset: 24;
+    /* Must be an exact multiple of the current dash pattern's total repeat
+       length (dash + gap) or the loop visibly snaps every iteration once
+       --sim-flow-dash's gap varies with throughput (24 is only a seamless
+       distance for the static default "6 6" pattern, not for arbitrary
+       simulated gaps). --sim-flow-loop-distance carries the correct,
+       already-doubled distance for the current pattern (set alongside
+       --sim-flow-dash in HeatEdge.tsx); the 24 fallback keeps the exact
+       pre-pivot visual speed when no simulation is running. */
+    stroke-dashoffset: var(--sim-flow-loop-distance, 24);
   }
   to {
     stroke-dashoffset: 0;
@@ -595,5 +1052,198 @@
 
   .lab-inspector-flash {
     animation: none;
+  }
+
+  .react-flow__node.sim-status-saturated,
+  .react-flow__node.sim-status-overloaded,
+  .react-flow__node.sim-status-collapsed {
+    transition: none;
+  }
+
+  .scaling-group-box.scaling-pulse-up,
+  .scaling-group-box.scaling-pulse-down,
+  .capacity-seg-booting,
+  .capacity-fill-booting {
+    animation: none;
+  }
+
+  .capacity-seg,
+  .capacity-fill {
+    transition: none;
+  }
+}
+
+/* Scaling-group visual (feature 013, User Story 4, ScalingGroupNode.tsx).
+   Rendered INSIDE the host's existing single node rather than as separate
+   canvas nodes (see ScalingGroupNode.tsx for the rationale) — this box is
+   a visually distinct dashed container nested in .node-content. Reworked
+   from a vertical chip stack (which grew taller with every replica added,
+   needing a "+N" overflow badge once that growth outran the node's
+   reasonable height) to a fixed-height horizontal capacity bar: the box's
+   height is now constant regardless of replica count, so there's no
+   overflow to report and no layout jump to animate around. */
+.scaling-group-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px dashed var(--token-secondary, var(--border));
+  border-radius: 6px;
+  box-sizing: border-box;
+}
+
+/* 'segments' mode (scalingGroupProjection.ts): at most
+   MAX_DISCRETE_CAPACITY_SEGMENTS ticks, one per DECLARED replica slot
+   (maxReplicas), not just the currently-active ones — an empty tick is new
+   information the old chip stack never showed: "declared capacity that
+   isn't currently scaled to", same as an unlit segment on a fuel gauge. */
+.capacity-bar {
+  display: flex;
+  gap: 2px;
+  width: 100%;
+  height: 16px;
+}
+
+.capacity-seg {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--token-secondary, var(--border));
+  border-radius: 2px;
+  background: transparent;
+  transition: background-color 200ms cubic-bezier(0.16, 1, 0.3, 1);
+  box-sizing: border-box;
+}
+
+.capacity-seg-active {
+  background: var(--text-h);
+  border-color: var(--text-h);
+}
+
+/* Booting replicas occupy a slot but don't yet serve traffic (spec
+   FR-006/User Story 4) — rendered hollow-dashed with a gentle pulse so the
+   boot-delay lag reads as "pending", not "present", instead of showing a
+   saturation reading it doesn't have yet. */
+.capacity-seg-booting {
+  background: transparent;
+  border-style: dashed;
+  border-color: var(--token-primary, #ff4715);
+  animation: capacity-seg-pending 1.1s ease-in-out infinite;
+}
+
+@keyframes capacity-seg-pending {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 0.9;
+  }
+}
+
+/* A booting segment standing in for a replica that just crashed under
+   collapse (research.md D9, feature 012), not one merely scaling up —
+   solid border, static (no pulse), and an "x" glyph, deliberately NOT the
+   dashed-pulse treatment above, so it reads as "this one died" rather
+   than "arriving soon" (ScalingGroupNode.tsx gates this on
+   hostMetrics.status === 'collapsed', same rule feature 012 originally
+   applied to the vertical chip stack this bar replaced). */
+.capacity-seg-crashed {
+  background: transparent;
+  border-style: solid;
+  border-color: var(--token-primary, #ff4715);
+  color: var(--token-primary, #ff4715);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 8px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+/* 'proportional' mode: above the discrete-segment legibility cap, a
+   single continuous fill replaces per-replica ticks (unreadable slivers
+   at that count). fillRatio/bootingRatio (both nominalCount/maxReplicas-
+   scaled) drive the two overlaid widths inline via style — see
+   ScalingGroupNode.tsx. */
+.capacity-bar-proportional {
+  position: relative;
+  width: 100%;
+  height: 16px;
+  border: 1px solid var(--token-secondary, var(--border));
+  border-radius: 3px;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.capacity-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  height: 100%;
+  background: var(--text-h);
+  transition: width 200ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* The newest (still-booting) slice of the current fill, overlaid at its
+   leading edge — same hollow-dashed-pulse treatment as .capacity-seg-
+   booting, just applied to a proportional width instead of a whole tick. */
+.capacity-fill-booting {
+  position: absolute;
+  inset: 0 auto 0 auto;
+  height: 100%;
+  border-left: 1px dashed var(--token-primary, #ff4715);
+  background: color-mix(in srgb, var(--token-primary, #ff4715) 35%, transparent);
+  animation: capacity-seg-pending 1.1s ease-in-out infinite;
+}
+
+/* Proportional-mode counterpart to .capacity-seg-crashed: the same
+   "replacement for a crashed replica" slice, static and solid instead of
+   the dashed-pulse booting overlay above — there's no room for the "x"
+   glyph at this width, so solid-vs-dashed carries the distinction here. */
+.capacity-fill-crashed {
+  position: absolute;
+  inset: 0 auto 0 auto;
+  height: 100%;
+  border-left: 1px solid var(--token-primary, #ff4715);
+  background: color-mix(in srgb, var(--token-primary, #ff4715) 55%, transparent);
+}
+
+.scaling-group-footer {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 10px;
+  color: var(--text);
+}
+
+.scaling-count-badge {
+  font-weight: 600;
+}
+
+.scaling-max-label {
+  color: var(--token-secondary, var(--border));
+}
+
+/* One-shot transient treatment on the window a scaling event fires
+   (ScalingGroupNode.tsx keys its root element on nominalCount, so this
+   animation replays exactly once per event via remount — no JS timer,
+   constitution V). Direction-differentiated by color family only (both are
+   the SAME shape/duration) since the count badge/chip delta already
+   conveys up-vs-down structurally. */
+.scaling-group-box.scaling-pulse-up {
+  animation: scaling-pulse-flash 0.6s ease-out;
+}
+
+.scaling-group-box.scaling-pulse-down {
+  animation: scaling-pulse-flash 0.6s ease-out;
+}
+
+@keyframes scaling-pulse-flash {
+  0% {
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--token-primary, #ff4715) 55%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--token-primary, #ff4715) 0%, transparent);
   }
 }

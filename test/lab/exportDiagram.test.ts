@@ -1,7 +1,15 @@
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { parseDiagram, serializeDiagram, toPlainDiagram } from '../../src/lab/exportDiagram'
 import { kitchenSinkEdges, kitchenSinkNodes } from './fixtures/kitchenSink'
 import { HOSTILE_LABEL, hostileLabelNode } from './fixtures/hostileLabel'
+
+const legacyDiagramJson = readFileSync(
+  path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'fixtures', 'legacy-diagram.json'),
+  'utf-8',
+)
 
 describe('parseDiagram', () => {
   it('round-trips a serialized diagram back into React Flow nodes/edges', () => {
@@ -249,5 +257,376 @@ describe('parseDiagram', () => {
     const reExported = JSON.parse(serializeDiagram(nodes, edges)) as { edges: Array<Record<string, unknown>> }
     expect(reExported.edges[0].sourceHandle).toBe('right')
     expect(reExported.edges[0].targetHandle).toBe('left')
+  })
+
+  // --- Simulation config (011-host-queue-model) ---
+
+  it('round-trips client_pool/external_api hosts and a queue', () => {
+    const nodes = [
+      {
+        id: 'pool',
+        type: 'labelNode',
+        position: { x: 0, y: 0 },
+        data: { label: 'pool', sim: { kind: 'host', profile: 'client_pool', requestRatePerSec: 100 } },
+      },
+      {
+        id: 'ext',
+        type: 'labelNode',
+        position: { x: 100, y: 0 },
+        data: { label: 'ext', sim: { kind: 'host', profile: 'external_api', manualBaselineLatencyMs: 40 } },
+      },
+      { id: 'q', type: 'labelNode', position: { x: 200, y: 0 }, data: { label: 'q', sim: { kind: 'queue' } } },
+    ]
+    const json = serializeDiagram(nodes, [])
+    const { nodes: parsedNodes } = parseDiagram(json)
+    expect(parsedNodes.find((node) => node.id === 'pool')?.data.sim).toEqual({
+      kind: 'host',
+      profile: 'client_pool',
+      requestRatePerSec: 100,
+    })
+    expect(parsedNodes.find((node) => node.id === 'ext')?.data.sim).toEqual({
+      kind: 'host',
+      profile: 'external_api',
+      manualBaselineLatencyMs: 40,
+    })
+    expect(parsedNodes.find((node) => node.id === 'q')?.data.sim).toEqual({ kind: 'queue' })
+  })
+
+  it('round-trips a manual-mode and a calculated-mode compute host', () => {
+    const nodes = [
+      {
+        id: 'manual',
+        type: 'labelNode',
+        position: { x: 0, y: 0 },
+        data: {
+          label: 'manual',
+          sim: {
+            kind: 'host',
+            profile: 'transactional_api',
+            configMode: 'manual',
+            manualBaselineLatencyMs: 10,
+            manualSaturationRPS: 500,
+            manualMaxRPS: 600,
+            overloadBehavior: 'collapse',
+            minReplicas: 1,
+            maxReplicas: 3,
+            bootDelayMs: 8000,
+            highWatermark: 0.8,
+            lowWatermark: 0.3,
+          },
+        },
+      },
+      {
+        id: 'calculated',
+        type: 'labelNode',
+        position: { x: 100, y: 0 },
+        data: {
+          label: 'calculated',
+          sim: {
+            kind: 'host',
+            profile: 'database_server',
+            configMode: 'calculated',
+            cpuProcessingTimeMs: 16,
+            maxWorkerThreads: 8,
+            overloadBehavior: 'clamp',
+            minReplicas: 2,
+            maxReplicas: 2,
+            bootDelayMs: 8000,
+            highWatermark: 0.8,
+            lowWatermark: 0.3,
+          },
+        },
+      },
+    ]
+    const json = serializeDiagram(nodes, [])
+    const { nodes: parsedNodes } = parseDiagram(json)
+    expect(parsedNodes.find((node) => node.id === 'manual')?.data.sim).toEqual({
+      kind: 'host',
+      profile: 'transactional_api',
+      configMode: 'manual',
+      manualBaselineLatencyMs: 10,
+      manualSaturationRPS: 500,
+      manualMaxRPS: 600,
+      overloadBehavior: 'collapse',
+      minReplicas: 1,
+      maxReplicas: 3,
+      bootDelayMs: 8000,
+      highWatermark: 0.8,
+      lowWatermark: 0.3,
+    })
+    expect(parsedNodes.find((node) => node.id === 'calculated')?.data.sim).toEqual({
+      kind: 'host',
+      profile: 'database_server',
+      configMode: 'calculated',
+      cpuProcessingTimeMs: 16,
+      maxWorkerThreads: 8,
+      overloadBehavior: 'clamp',
+      minReplicas: 2,
+      maxReplicas: 2,
+      bootDelayMs: 8000,
+      highWatermark: 0.8,
+      lowWatermark: 0.3,
+    })
+  })
+
+  it('imports a pre-013 host (no minReplicas/maxReplicas fields at all) as minReplicas = maxReplicas = 1 (research.md D5/FR-013)', () => {
+    const pre013Json = JSON.stringify({
+      nodes: [
+        {
+          id: 'legacy-api',
+          type: 'labelNode',
+          position: { x: 0, y: 0 },
+          data: {
+            label: 'legacy api',
+            sim: {
+              kind: 'host',
+              profile: 'transactional_api',
+              configMode: 'manual',
+              manualBaselineLatencyMs: 10,
+              manualSaturationRPS: 500,
+              manualMaxRPS: 600,
+            },
+          },
+        },
+      ],
+      edges: [],
+    })
+    const { nodes: parsedNodes } = parseDiagram(pre013Json)
+    expect(parsedNodes[0].data.sim).toEqual({
+      kind: 'host',
+      profile: 'transactional_api',
+      configMode: 'manual',
+      manualBaselineLatencyMs: 10,
+      manualSaturationRPS: 500,
+      manualMaxRPS: 600,
+      overloadBehavior: 'clamp',
+      minReplicas: 1,
+      maxReplicas: 1,
+      bootDelayMs: 8000,
+      highWatermark: 0.8,
+      lowWatermark: 0.3,
+    })
+  })
+
+  it('imports a pre-3.2.0 host (minReplicas/maxReplicas present, no bootDelayMs) with the legacy boot delay filled in (constitution v3.2.0)', () => {
+    const pre320Json = JSON.stringify({
+      nodes: [
+        {
+          id: 'scaled-api',
+          type: 'labelNode',
+          position: { x: 0, y: 0 },
+          data: {
+            label: 'scaled api',
+            sim: {
+              kind: 'host',
+              profile: 'transactional_api',
+              configMode: 'manual',
+              manualBaselineLatencyMs: 10,
+              manualSaturationRPS: 500,
+              manualMaxRPS: 600,
+              minReplicas: 1,
+              maxReplicas: 4,
+            },
+          },
+        },
+      ],
+      edges: [],
+    })
+    const { nodes: parsedNodes } = parseDiagram(pre320Json)
+    expect(parsedNodes[0].data.sim).toEqual({
+      kind: 'host',
+      profile: 'transactional_api',
+      configMode: 'manual',
+      manualBaselineLatencyMs: 10,
+      manualSaturationRPS: 500,
+      manualMaxRPS: 600,
+      overloadBehavior: 'clamp',
+      minReplicas: 1,
+      maxReplicas: 4,
+      bootDelayMs: 8000,
+      highWatermark: 0.8,
+      lowWatermark: 0.3,
+    })
+  })
+
+  it('imports a pre-3.3.0 host (minReplicas/maxReplicas/bootDelayMs present, no watermarks) with the legacy watermarks filled in (constitution v3.3.0)', () => {
+    const pre330Json = JSON.stringify({
+      nodes: [
+        {
+          id: 'scaled-api',
+          type: 'labelNode',
+          position: { x: 0, y: 0 },
+          data: {
+            label: 'scaled api',
+            sim: {
+              kind: 'host',
+              profile: 'transactional_api',
+              configMode: 'manual',
+              manualBaselineLatencyMs: 10,
+              manualSaturationRPS: 500,
+              manualMaxRPS: 600,
+              minReplicas: 1,
+              maxReplicas: 4,
+              bootDelayMs: 3000,
+            },
+          },
+        },
+      ],
+      edges: [],
+    })
+    const { nodes: parsedNodes } = parseDiagram(pre330Json)
+    expect(parsedNodes[0].data.sim).toEqual({
+      kind: 'host',
+      profile: 'transactional_api',
+      configMode: 'manual',
+      manualBaselineLatencyMs: 10,
+      manualSaturationRPS: 500,
+      manualMaxRPS: 600,
+      overloadBehavior: 'clamp',
+      minReplicas: 1,
+      maxReplicas: 4,
+      bootDelayMs: 3000,
+      highWatermark: 0.8,
+      lowWatermark: 0.3,
+    })
+  })
+
+  it('imports a pre-012 host (minReplicas/maxReplicas/bootDelayMs/watermarks present, no overloadBehavior) with the legacy clamp behavior filled in (constitution v3.4.0)', () => {
+    const pre012Json = JSON.stringify({
+      nodes: [
+        {
+          id: 'scaled-api',
+          type: 'labelNode',
+          position: { x: 0, y: 0 },
+          data: {
+            label: 'scaled api',
+            sim: {
+              kind: 'host',
+              profile: 'transactional_api',
+              configMode: 'manual',
+              manualBaselineLatencyMs: 10,
+              manualSaturationRPS: 500,
+              manualMaxRPS: 600,
+              minReplicas: 1,
+              maxReplicas: 4,
+              bootDelayMs: 3000,
+              highWatermark: 0.7,
+              lowWatermark: 0.2,
+            },
+          },
+        },
+      ],
+      edges: [],
+    })
+    const { nodes: parsedNodes } = parseDiagram(pre012Json)
+    expect(parsedNodes[0].data.sim).toEqual({
+      kind: 'host',
+      profile: 'transactional_api',
+      configMode: 'manual',
+      manualBaselineLatencyMs: 10,
+      manualSaturationRPS: 500,
+      manualMaxRPS: 600,
+      overloadBehavior: 'clamp',
+      minReplicas: 1,
+      maxReplicas: 4,
+      bootDelayMs: 3000,
+      highWatermark: 0.7,
+      lowWatermark: 0.2,
+    })
+  })
+
+  it('round-trips an edge simConfig', () => {
+    const nodes = [kitchenSinkNodes[0], kitchenSinkNodes[1]]
+    const edges = [
+      {
+        id: 'e1',
+        source: 'default-node',
+        target: 'active-node',
+        type: 'heat',
+        data: {
+          variant: 'default',
+          simConfig: { trafficShareRatio: 0.5, averagePayloadSizeKB: 12, targetComputeWeightMultiplier: 1.2, pathIoLatencyMs: 5 },
+        },
+      },
+    ]
+    const json = serializeDiagram(nodes, edges)
+    const { edges: parsedEdges } = parseDiagram(json)
+    expect(parsedEdges[0].data?.simConfig).toEqual({
+      trafficShareRatio: 0.5,
+      averagePayloadSizeKB: 12,
+      targetComputeWeightMultiplier: 1.2,
+      pathIoLatencyMs: 5,
+    })
+  })
+
+  it('degrades a retired-role node (generator/processor/producer/consumer/sink/kafka) to a plain visual node on import', () => {
+    const json = JSON.stringify({
+      nodes: [
+        { id: 'gen', position: { x: 0, y: 0 }, data: { label: 'gen', sim: { role: 'generator', ratePerSec: 100 } } },
+        { id: 'kafka', position: { x: 100, y: 0 }, data: { label: 'kafka', sim: { role: 'kafka', hardwareProfile: 'm6i.large' } } },
+      ],
+      edges: [],
+    })
+    const { nodes } = parseDiagram(json)
+    expect(nodes.every((node) => node.data.sim === undefined)).toBe(true)
+    expect(nodes.map((node) => node.data.label)).toEqual(['gen', 'kafka'])
+  })
+
+  it('omits data.sim entirely for a node with no simulation role', () => {
+    const json = JSON.parse(serializeDiagram(kitchenSinkNodes, kitchenSinkEdges)) as { nodes: Array<{ data: Record<string, unknown> }> }
+    for (const node of json.nodes) {
+      expect('sim' in node.data).toBe(false)
+    }
+  })
+
+  it('never serializes a node\'s transient simMetrics', () => {
+    const nodes = [
+      {
+        id: 'gen',
+        type: 'labelNode',
+        position: { x: 0, y: 0 },
+        data: {
+          label: 'gen',
+          sim: { kind: 'host', profile: 'client_pool', requestRatePerSec: 100 },
+          simMetrics: { throughputPerSec: 100, queueDepth: 0 },
+        },
+      },
+    ]
+    const json = JSON.parse(serializeDiagram(nodes, [])) as { nodes: Array<{ data: Record<string, unknown> }> }
+    expect('simMetrics' in json.nodes[0].data).toBe(false)
+  })
+
+  it('never serializes an edge\'s transient simMetrics', () => {
+    const nodes = [kitchenSinkNodes[0], kitchenSinkNodes[1]]
+    const edges = [
+      {
+        id: 'e1',
+        source: 'default-node',
+        target: 'active-node',
+        type: 'heat',
+        data: { variant: 'heat-flow', simMetrics: { throughputPerSec: 50 } },
+      },
+    ]
+    const json = JSON.parse(serializeDiagram(nodes, edges)) as { edges: Array<{ data: Record<string, unknown> }> }
+    expect('simMetrics' in json.edges[0].data).toBe(false)
+  })
+
+  it('drops an invalid sim config (negative rate, unrecognized kind) rather than throwing', () => {
+    const json = JSON.stringify({
+      nodes: [
+        { id: 'a', position: { x: 0, y: 0 }, data: { label: 'a', sim: { kind: 'host', profile: 'client_pool', requestRatePerSec: -1 } } },
+        { id: 'b', position: { x: 100, y: 0 }, data: { label: 'b', sim: { kind: 'not-a-real-kind' } } },
+      ],
+      edges: [],
+    })
+    const { nodes } = parseDiagram(json)
+    expect(nodes.every((node) => node.data.sim === undefined)).toBe(true)
+  })
+
+  it('imports the pre-008 legacy fixture without error and with no simulation role on any node', () => {
+    const { nodes, edges } = parseDiagram(legacyDiagramJson)
+    expect(nodes).toHaveLength(3)
+    expect(edges).toHaveLength(2)
+    expect(nodes.every((node) => node.data.sim === undefined)).toBe(true)
   })
 })
