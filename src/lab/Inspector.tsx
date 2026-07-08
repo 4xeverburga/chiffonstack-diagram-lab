@@ -7,7 +7,7 @@ import { IMAGE_SIZE_WARNING_BYTES, IMAGE_UPLOAD_ACCEPT, readImageFile } from './
 import { resolveTextSize, TEXT_SIZES, type TextSize } from './textSizes'
 import type { EdgeMetrics, EdgeSimConfig, NodeMetrics, NodeSim } from '../engine/ports'
 import type { RunStatus } from '../sim/workerProtocol'
-import { HostConfigFields } from './hostConfigFields'
+import { HostCapabilityFields, HostScalingFields } from './hostConfigFields'
 import { EdgeConfigFields } from './edgeConfigFields'
 import { FormulaPanel } from './FormulaPanel'
 
@@ -70,6 +70,10 @@ type HostAndQueueFieldsProps = {
 
 // Extracted so Inspector renders this with `key={node.id}`, remounting (and
 // so resetting its hooks) whenever the selected node changes.
+//
+// Section order (plan: "Inspector denso y estado-consciente" Fase 1):
+// ROLE & CAPABILITY -> SCALING -> TELEMETRY -> FORMULAS. APPEARANCE (Style/
+// Size/Image) lives in the parent Inspector component, below this block.
 function HostAndQueueFields({ node, metrics, runStatus, onSetNodeSim }: HostAndQueueFieldsProps) {
   const sim = (node.data as { sim?: NodeSim } | undefined)?.sim
   // Editing roles/config is only allowed in edit mode (idle) — see the
@@ -78,71 +82,96 @@ function HostAndQueueFields({ node, metrics, runStatus, onSetNodeSim }: HostAndQ
   // a paused run with changed config but preserved runtime state is a
   // different, murkier feature than "start a fresh run with this config".
   const canEdit = runStatus === 'idle'
+  // Only the three compute profiles carry an autoscaler (data-model.md) —
+  // client_pool/external_api never reach the SCALING section.
+  const hasScaling = sim?.kind === 'host' && sim.profile !== 'client_pool' && sim.profile !== 'external_api'
 
   const handleKindChange = (choice: SimKindChoice) => {
     onSetNodeSim(node.id, defaultSimForChoice(choice))
   }
 
   return (
-    <div className="lab-field">
-      <span>Simulation role</span>
-      <div className="lab-button-row">
-        {SIM_KIND_CHOICES.map((choice) => (
-          <button
-            key={choice}
-            type="button"
-            disabled={!canEdit}
-            className={`chip ${simKindChoice(sim) === choice ? 'chip-active' : ''}`}
-            onClick={() => handleKindChange(choice)}
-          >
-            {choice === 'none' ? 'plain' : choice}
-          </button>
-        ))}
+    <>
+      <div className="lab-section-header lab-panel-title-spaced">
+        <h3 className="lab-panel-title">Role &amp; capability</h3>
+        {/* Reserved for the config-presets picker (next feature) — kept as
+            a real flex slot now so that feature is a content change, not a
+            layout change. */}
+        <div className="lab-section-header-actions" />
+      </div>
+      <div className="lab-field">
+        <span>Simulation role</span>
+        <div className="lab-button-row">
+          {SIM_KIND_CHOICES.map((choice) => (
+            <button
+              key={choice}
+              type="button"
+              disabled={!canEdit}
+              className={`chip ${simKindChoice(sim) === choice ? 'chip-active' : ''}`}
+              onClick={() => handleKindChange(choice)}
+            >
+              {choice === 'none' ? 'plain' : choice}
+            </button>
+          ))}
+        </div>
       </div>
       {!canEdit ? <p className="sim-placeholder-note">Reset the simulation to edit roles or config.</p> : null}
       {sim && sim.kind === 'host' ? (
-        <HostConfigFields sim={sim} disabled={!canEdit} onChange={(next) => onSetNodeSim(node.id, next)} />
+        <HostCapabilityFields sim={sim} disabled={!canEdit} onChange={(next) => onSetNodeSim(node.id, next)} />
       ) : null}
-      {sim && sim.kind === 'host' ? (
-        <div className="sim-host-metrics">
-          <span>Status: {metrics?.host?.status ?? '\u2014'}</span>
-          <span>Incoming: {metrics?.host ? `${metrics.host.incomingRPS.toFixed(1)} req/s` : '\u2014'}</span>
-          <span>Forwarded: {metrics?.host ? `${metrics.host.forwardedRPS.toFixed(1)} req/s` : '\u2014'}</span>
-          <span>Shed: {metrics?.host ? `${metrics.host.shedRPS.toFixed(1)} req/s` : '\u2014'}</span>
-          <span>Saturation: {metrics?.host ? `${(metrics.host.saturationRatio * 100).toFixed(0)}%` : '\u2014'}</span>
-          <span>Latency: {metrics?.host ? `${metrics.host.latencyMs.toFixed(1)} ms` : '\u2014'}</span>
-        </div>
+
+      {hasScaling && sim?.kind === 'host' ? (
+        <>
+          <h3 className="lab-panel-title lab-panel-title-spaced">Scaling</h3>
+          <HostScalingFields sim={sim} disabled={!canEdit} onChange={(next) => onSetNodeSim(node.id, next)} />
+        </>
       ) : null}
-      {/* Replica telemetry + scaling event history (feature 013, SC-005) —
-          only rendered for saturating profiles that actually carry a
-          replicas block (client_pool/external_api never do). */}
-      {sim && sim.kind === 'host' && metrics?.host?.replicas ? (
-        <div className="sim-host-metrics">
-          <span>Replicas: {metrics.host.replicas.nominalCount}</span>
-          <span>Booting: {metrics.host.replicas.bootingCount}</span>
-          <span>Effective: {metrics.host.replicas.effectiveCount}</span>
-          <span>Per-replica saturation: {(metrics.host.replicas.perReplicaSaturation * 100).toFixed(0)}%</span>
-          {metrics.host.replicas.events.length > 0 ? (
-            <ul className="sim-scaling-events">
-              {metrics.host.replicas.events.map((event, index) => (
-                <li key={`${event.simTimeMs}-${index}`}>
-                  {event.direction === 'up' ? '\u2191' : '\u2193'} scaled {event.direction === 'up' ? 'up' : 'down'} to {event.newCount} at
-                  t={(event.simTimeMs / 1000).toFixed(1)}s
-                </li>
-              ))}
-            </ul>
+
+      {sim ? (
+        <>
+          <h3 className="lab-panel-title lab-panel-title-spaced">Telemetry</h3>
+          {sim.kind === 'host' ? (
+            <div className="sim-host-metrics">
+              <span>Status: {metrics?.host?.status ?? '\u2014'}</span>
+              <span>Incoming: {metrics?.host ? `${metrics.host.incomingRPS.toFixed(1)} req/s` : '\u2014'}</span>
+              <span>Forwarded: {metrics?.host ? `${metrics.host.forwardedRPS.toFixed(1)} req/s` : '\u2014'}</span>
+              <span>Shed: {metrics?.host ? `${metrics.host.shedRPS.toFixed(1)} req/s` : '\u2014'}</span>
+              <span>Saturation: {metrics?.host ? `${(metrics.host.saturationRatio * 100).toFixed(0)}%` : '\u2014'}</span>
+              <span>Latency: {metrics?.host ? `${metrics.host.latencyMs.toFixed(1)} ms` : '\u2014'}</span>
+            </div>
           ) : null}
-        </div>
-      ) : null}
-      {sim?.kind === 'queue' ? (
-        <div className="sim-host-metrics">
-          <span>Inflow: {metrics?.queue ? `${metrics.queue.inflowMBps.toFixed(2)} MB/s` : '\u2014'}</span>
-          <span>Outflow: {metrics?.queue ? `${metrics.queue.outflowMBps.toFixed(2)} MB/s` : '\u2014'}</span>
-          <span>Backlog: {metrics?.queue ? `${metrics.queue.backlogGB.toFixed(3)} GB` : '\u2014'}</span>
-        </div>
+          {/* Replica telemetry + scaling event history (feature 013, SC-005) —
+              only rendered for saturating profiles that actually carry a
+              replicas block (client_pool/external_api never do). */}
+          {sim.kind === 'host' && metrics?.host?.replicas ? (
+            <div className="sim-host-metrics">
+              <span>Replicas: {metrics.host.replicas.nominalCount}</span>
+              <span>Booting: {metrics.host.replicas.bootingCount}</span>
+              <span>Effective: {metrics.host.replicas.effectiveCount}</span>
+              <span>Per-replica saturation: {(metrics.host.replicas.perReplicaSaturation * 100).toFixed(0)}%</span>
+              {metrics.host.replicas.events.length > 0 ? (
+                <ul className="sim-scaling-events">
+                  {metrics.host.replicas.events.map((event, index) => (
+                    <li key={`${event.simTimeMs}-${index}`}>
+                      {event.direction === 'up' ? '\u2191' : '\u2193'} scaled {event.direction === 'up' ? 'up' : 'down'} to{' '}
+                      {event.newCount} at t={(event.simTimeMs / 1000).toFixed(1)}s
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
+          ) : null}
+          {sim.kind === 'queue' ? (
+            <div className="sim-host-metrics">
+              <span>Inflow: {metrics?.queue ? `${metrics.queue.inflowMBps.toFixed(2)} MB/s` : '\u2014'}</span>
+              <span>Outflow: {metrics?.queue ? `${metrics.queue.outflowMBps.toFixed(2)} MB/s` : '\u2014'}</span>
+              <span>Backlog: {metrics?.queue ? `${metrics.queue.backlogGB.toFixed(3)} GB` : '\u2014'}</span>
+            </div>
+          ) : null}
+        </>
       ) : null}
       <FormulaPanel formulaDescriptors={metrics?.formulaDescriptors} sim={sim} />
-    </div>
+    </>
   )
 }
 
@@ -213,6 +242,8 @@ export function Inspector({
           <span>Label</span>
           <input value={label} onChange={(event) => onRenameNode(selectedNode.id, event.target.value)} />
         </label>
+        <HostAndQueueFields node={selectedNode} metrics={selectedNodeMetrics} runStatus={runStatus} onSetNodeSim={onSetNodeSim} />
+        <h3 className="lab-panel-title lab-panel-title-spaced">Appearance</h3>
         <div className="lab-field">
           <span>Style</span>
           <div className="lab-button-row">
@@ -268,7 +299,6 @@ export function Inspector({
             </div>
           ) : null}
         </div>
-        <HostAndQueueFields node={selectedNode} metrics={selectedNodeMetrics} runStatus={runStatus} onSetNodeSim={onSetNodeSim} />
       </aside>
     )
   }
@@ -282,8 +312,9 @@ export function Inspector({
     return (
       <aside key={`edge-${selectedEdge.id}`} className="lab-inspector lab-inspector-flash">
         <h2 className="lab-panel-title">Edge</h2>
+        <h3 className="lab-panel-title">Style</h3>
         <div className="lab-field">
-          <span>Style</span>
+          <span>Line</span>
           <div className="lab-button-row">
             {HEAT_VARIANTS.map((v) => (
               <button
@@ -326,6 +357,7 @@ export function Inspector({
             </div>
           </div>
         ) : null}
+        <h3 className="lab-panel-title lab-panel-title-spaced">Traffic</h3>
         <div className="lab-field">
           <span>Traffic config</span>
           {simConfig ? (
@@ -353,12 +385,15 @@ export function Inspector({
           )}
         </div>
         {simConfig ? (
-          <div className="sim-host-metrics">
-            <span>RPS: {selectedEdgeMetrics?.sim ? selectedEdgeMetrics.sim.currentRPS.toFixed(1) : '\u2014'}</span>
-            <span>MB/s: {selectedEdgeMetrics?.sim ? selectedEdgeMetrics.sim.currentMBps.toFixed(2) : '\u2014'}</span>
-            <span>Connections: {selectedEdgeMetrics?.sim ? selectedEdgeMetrics.sim.activeConnections.toFixed(1) : '\u2014'}</span>
-            <span>Congested: {selectedEdgeMetrics?.sim ? (selectedEdgeMetrics.sim.isCongested ? 'yes' : 'no') : '\u2014'}</span>
-          </div>
+          <>
+            <h3 className="lab-panel-title lab-panel-title-spaced">Telemetry</h3>
+            <div className="sim-host-metrics">
+              <span>RPS: {selectedEdgeMetrics?.sim ? selectedEdgeMetrics.sim.currentRPS.toFixed(1) : '\u2014'}</span>
+              <span>MB/s: {selectedEdgeMetrics?.sim ? selectedEdgeMetrics.sim.currentMBps.toFixed(2) : '\u2014'}</span>
+              <span>Connections: {selectedEdgeMetrics?.sim ? selectedEdgeMetrics.sim.activeConnections.toFixed(1) : '\u2014'}</span>
+              <span>Congested: {selectedEdgeMetrics?.sim ? (selectedEdgeMetrics.sim.isCongested ? 'yes' : 'no') : '\u2014'}</span>
+            </div>
+          </>
         ) : null}
         {simConfig ? <FormulaPanel formulaDescriptors={selectedEdgeMetrics?.formulaDescriptors} sim={undefined} /> : null}
         <button type="button" className="lab-danger" onClick={() => onDeleteEdge(selectedEdge.id)}>

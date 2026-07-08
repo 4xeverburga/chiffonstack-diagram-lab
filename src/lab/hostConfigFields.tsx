@@ -154,13 +154,19 @@ function OverloadBehaviorField({
 // selector lives in Inspector.tsx (same chip-row pattern as every other
 // closed choice in this app); this file renders exactly the FR-020 fields
 // for the current profile/mode combination — no other inputs (SC-008).
+//
+// Split into two exports (plan: "Inspector denso y estado-consciente" Fase
+// 1) so Inspector.tsx can place them under separate ROLE & CAPABILITY /
+// SCALING sections: capability fields exist for every host profile;
+// scaling fields (replica bounds/boot delay/watermarks) only exist for the
+// three compute profiles that carry an autoscaler.
 type HostConfigFieldsProps = {
   sim: HostNodeSim
   disabled: boolean
   onChange: (next: HostNodeSim) => void
 }
 
-export function HostConfigFields({ sim, disabled, onChange }: HostConfigFieldsProps) {
+export function HostCapabilityFields({ sim, disabled, onChange }: HostConfigFieldsProps) {
   if (sim.profile === 'client_pool') {
     return numberInput('Rate (req/s)', sim.requestRatePerSec, disabled, 0, (value) => onChange({ ...sim, requestRatePerSec: value }))
   }
@@ -228,7 +234,14 @@ export function HostConfigFields({ sim, disabled, onChange }: HostConfigFieldsPr
         <CalculatedComputeFields sim={sim} disabled={disabled} onChange={onChange} />
       )}
       <OverloadBehaviorField sim={sim} disabled={disabled} onChange={onChange} />
-      <AutoscalingFields sim={sim} disabled={disabled} onChange={onChange} />
     </>
   )
+}
+
+// null for client_pool/external_api (data-model.md — those two profiles
+// never carry replica bounds), so Inspector.tsx can render the SCALING
+// section header only when this returns something.
+export function HostScalingFields({ sim, disabled, onChange }: HostConfigFieldsProps) {
+  if (sim.profile === 'client_pool' || sim.profile === 'external_api') return null
+  return <AutoscalingFields sim={sim} disabled={disabled} onChange={onChange} />
 }
