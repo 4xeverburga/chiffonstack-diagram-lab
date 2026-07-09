@@ -1,345 +1,280 @@
-# Assessment: engine extraction, contributor-pluggable node models, agent-skill export, and shareable URLs
+# Assessment: agent-skill distribution, privacy-first sharing, and the node-model registry
 
-Date: 2026-07-08. Grounded in the actual code on `dev` (post 012-overload-collapse).
+Date: 2026-07-08 (rev 2, post engine extraction). Grounded in the actual code
+on diagram-lab `dev` and the extracted `sugar` repo.
 
 ## 0. The strategy in one paragraph
 
-The plan is a three-layer value stack: (1) a headless, open-source simulation
-engine whose node models anyone can contribute to, (2) the SUGAR canvas UI as
-the flagship consumer, and (3) distribution — an agent skill wrapping the
-headless engine, plus reliably shareable architecture URLs. The engine is the
-commons that attracts contributors; the skill and the UI are the products; the
-URL is the viral loop. This assessment maps each layer against what exists
-today and names the gaps.
+Same three-layer value stack as rev 1 — headless engine as the commons, the
+SUGAR canvas UI as the flagship consumer, distribution as the growth engine —
+but two things changed. First, the engine extraction is **done**: `sugar` is a
+standalone MIT-licensed repo published to npm, and diagram-lab consumes it as
+a dependency, so all of rev 1's Goal A is scrapped from this document. Second,
+the distribution thesis is revised: the primary channel is an **agent skill on
+the open Agent Skills standard** (one SKILL.md, every major harness), and
+sharing is **privacy-first** — JSON export/import stays a first-class,
+permanent feature because devs will not send proprietary architecture
+blueprints to anyone's server, "it's only CSR, pinky promise" included. URL
+sharing is a convenience layer on top, not a replacement. A hosted demo UI
+(minified, no source maps) linked from the skill repo closes the loop: agent
+recommends a fix → user opens the diagram in the demo and sees it collapse.
 
 ---
 
-## 1. Where the codebase already is (the part that's done right)
+## 1. What is already done (scrapped from rev 1)
 
-- **The engine is genuinely headless.** `src/engine/` (13 files, ~2,300 LOC)
-  imports nothing from React/DOM/xyflow/Zustand — the boundary is documented in
-  `src/engine/ports.ts` and enforced by an oxlint override. `Simulation` is
-  clockless (`tick(elapsedMs)` driven), the traffic source and metrics sink are
-  injected ports, and randomness is a seeded `mulberry32`. It would run in Node
-  today, unmodified. This is the single most important precondition for both
-  the library split and the agent skill, and it's already met.
-- **Determinism is real.** Seed flows in through `workerProtocol.ts`'s `init`
-  message; `test/engine/` exercises full windows with fixed steps. An agent
-  skill can promise reproducible runs.
-- **A serialization format exists and is defensively parsed.**
-  `src/lab/exportDiagram.ts` whitelists fields on export and tolerates unknown/
-  legacy shapes on import (retired roles degrade to plain visual nodes with a
-  console notice). That tolerance pattern is exactly what shared-forever URLs
-  need — it just isn't formalized yet (see §5.1).
-- **Formulas are already first-class data.** `FormulaDescriptor` (id, name,
-  expression, inputs, sources, isBinding) travels inside `MetricsWindow`. The
-  "traceable formulas" constitution principle is the natural spine of a
-  contribution contract: a contributed model that ships descriptors with real
-  citations is reviewable; one that doesn't is rejectable by CI
-  (`validateFormulaDescriptorsHaveSources` already exists).
-- **A Cloudflare foothold exists.** `wrangler.jsonc` deploys `dist/` as static
-  assets. Adding a Worker + KV binding is an increment, not a new platform.
+Rev 1's Goal A (decouple UI from engine) shipped in full:
+
+- **The engine lives in its own repo** — `github.com/4xeverburga/sugar`,
+  published to npm as `sugar-skills@0.2.1` (MIT LICENSE, `dist/` build with
+  ESM-correct `.js` extensions, `prepublishOnly` gate of typecheck + tests).
+- **diagram-lab consumes it as a normal dependency.** `src/engine/` is deleted
+  (commit `591ec87`); 28 files import from the `sugar-skills` barrel.
+- **The public API barrel exists** (rev 1 A4): `src/index.ts` in the engine
+  repo names the supported surface (`createSimulation`, `buildSimTopology`,
+  ports, Poisson source, `mulberry32`, selected constants); everything else is
+  documented as churnable internals.
+- **Topology building is de-xyflow'd** (rev 1 A2): `buildSimTopology` takes
+  structural `TopologyNodeInput`/`TopologyEdgeInput`, not React Flow types.
+  The engine can now validate/run diagrams in a Worker, Node, or a CF Worker.
+- **Presentation math moved to the app** (rev 1 A3): `sigmoidMapping`,
+  `flowAnimationSmoothing`, traffic-scale presets now live in
+  `diagram-lab/src/lab/animation/`. The engine package is physics only.
+- **License gap closed** (rev 1 B6's fatal blocker): MIT, in the repo and on
+  npm.
+
+Still app-owned from rev 1 A5: `simWorker.ts`/`workerProtocol.ts`. Fine for
+now — revisit only if a second browser consumer appears.
+
+### 1.1 One repo, two roles — not a collision
+
+`sugar/` is a single repo that is deliberately both the engine and the skill:
+it publishes unscoped as `sugar-skills@0.2.1` on npm, and the CLI/skill
+scripts (`sugar/src/cli.ts`, §2) live in the same package rather than a
+separate one. There was a stray `sugar-skills/` scaffold directory sitting
+next to it in the ChiffonStack workspace (two orphaned files, no `.git`,
+never deployed or referenced) that looked like a second, competing package —
+it has since been deleted. There is no naming collision and nothing to
+rename: `sugar-skills` is already the correct, live, unscoped name for the
+combined engine+skill package.
+
+The one implication worth stating explicitly: because it's one package, the
+skill and the engine **version and release together**. A breaking engine
+change and a SKILL.md change ship in the same npm release — there's no
+separate skill-version-vs-engine-version matrix to track, which simplifies
+§2's "pin the skill to an engine version" concern (rev 1 wording assumed two
+packages; there's only one to pin).
 
 ---
 
-## 2. Goal A — Decouple the UI from the engine
+## 2. Goal A — Ship the agent skill, distributed to every harness
 
-### Current coupling map
+This is now the front of the queue. The good news from research: **there is no
+translation problem to solve.** Agent Skills (a folder with a `SKILL.md`:
+frontmatter name/description + markdown instructions) is an open standard
+adopted across Claude Code, OpenAI Codex CLI, Gemini CLI, Cursor, GitHub
+Copilot and more — the same skill folder works in all of them; only the
+install directory differs (`~/.claude/skills/`, `~/.codex/skills/`,
+`~/.gemini/skills/`, `.cursor/skills/`, …). And the install-directory problem
+is already solved by tooling: **Vercel's `npx skills` CLI** is the de-facto
+package manager of the ecosystem (~20k stars, 27+ supported agents) — it
+installs a skill from a GitHub repo into whichever agents the user has.
 
-| Layer | Imports engine? | Imports UI libs? | Verdict |
-|---|---|---|---|
-| `src/engine/` | — | no | clean |
-| `src/sim/` (adapter) | yes | `@xyflow/react` types, `zustand`, `react` | mixed concerns |
-| `src/lab/` + `App.tsx` | 17 files import from `src/engine/` | yes | expected, but too wide |
+So the distribution plan is: author **one** SKILL.md inside `sugar/` (the
+single engine+skill repo, §1.1), make it installable via
+`npx skills add 4xeverburga/sugar`, and list Claude Code's native install
+path in the README. No per-harness ports, no translator to build or
+maintain, and no second repo to keep in sync with the engine.
 
 ### Gaps
 
-**A1. No package boundary — the engine is a folder, not an artifact.**
-`package.json` is a single private Vite app. There is no `exports` map, no
-library build, no independent versioning. "Export as an agent skill" and "let
-people build on the engine" both require `@chiffonstack/sugar-engine` (or
-similar) to exist as an installable unit. Options: npm workspaces monorepo
-(`packages/engine`, `packages/app`, later `packages/skill`, `packages/share-worker`)
-or a single package with subpath exports. Workspaces is the honest answer given
-four planned artifacts. Note this collides with the CLAUDE.md "root-relative
-imports" convention — the convention should be restated per-package.
+**A1. The CLI is a placeholder.** `sugar/src/cli.ts` today prints help and
+`install` confirmation only. The skill has nothing to invoke. Needed:
+`sugar run topology.json --duration 300s --seed 42 --out windows.json` —
+load topology, tick virtual time as fast as CPU allows (no wall-clock timers),
+emit results. ~100 LOC over the existing ports; `simWorker.ts` is the
+template. The `bin` wiring, ESM build, and npm publish pipeline already exist,
+so this is genuinely just the runner logic.
 
-**A2. `src/sim/store.ts` binds the adapter to xyflow.** `buildSimTopology(nodes:
-Node[], edges: Edge[])` takes React Flow types and digs `data.sim` /
-`data.simConfig` out of them. The engine-facing translation should accept a
-structural shape (`{ id, sim }[]`, `{ id, source, target, config }[]`) so the
-same adapter serves the headless runner; the xyflow unwrapping belongs in the
-app layer. Same file mixes the Zustand store (UI state) with topology
-building (domain translation) — split them.
-
-**A3. `src/engine/config.ts` mixes engine physics with presentation tuning.**
-`SIM_TICK_MS`, `HOST_RHO_CLAMP`, collapse constants — engine. But
-`SIGMOID_MAPPING_BY_TRAFFIC_SCALE`, `TRAFFIC_SCALE_LABELS` (user-facing dropdown
-strings!), and the flow-animation smoothing config are presentation concerns
-that force `App.tsx` to import from `engine/config`. Likewise
-`sigmoidMapping.ts` and `flowAnimationSmoothing.ts` are throughput→animation
-mapping — pure math, but *visual* math. Decide: either they move to a
-`packages/engine-viz` (or into the app), or the engine package documents them
-as an optional "presentation helpers" subpath. They should not be in the core's
-public API.
-
-**A4. No defined public API surface.** 17 UI files import engine internals
-directly (`hostModel`, `formulaCatalog`, `config`, `ports`, …). Before
-publishing, the engine needs an `index.ts` barrel that names what's public
-(`createSimulation`, port types, `SimTopology`, metric types, `PoissonTrafficSource`,
-`mulberry32`, selected constants) and a commitment that everything else may
-churn. Every UI import should go through it, so the package boundary is
-mechanical to introduce later.
-
-**A5. The worker adapter is app-owned but generally useful.** `simWorker.ts` +
-`workerProtocol.ts` are engine-agnostic hosting code any browser consumer
-would want. Ship them with the engine package (as an optional entry, e.g.
-`@chiffonstack/sugar-engine/worker`) rather than leaving each consumer to
-rewrite the auto-pause/status protocol.
-
----
-
-## 3. Goal B — Modularize node models so anyone can contribute
-
-This is the largest refactor and the one with a real design decision inside it.
-
-### Current shape: a closed world
-
-`NodeSim` is a closed discriminated union in `ports.ts` (5 host profiles + 1
-queue kind). Behavior is dispatched by string comparison on `sim.profile`
-scattered across the engine:
-
-- `components.ts` — `profile === 'client_pool'` picks generators
-- `simulation.ts` — three-profile checks decide who gets a `ReplicaRuntime`
-- `flowPropagation.ts` — `isSaturatingProfile`, `hostCapacityRPS`,
-  `hostAcceptCapacityRPS` all switch on profile/configMode; queue vs host is
-  an if/else in the main loop
-- engine-owned cross-window state is hardcoded per kind: `queueBacklogGB` for
-  queues, `replicaRuntimeByNode` for saturating hosts
-
-And on the UI side, adding a node kind today touches at least:
-`hostConfigFields.tsx` (hand-written inspector form), `nodePalette.ts`,
-`nodeKinds.ts`, `exportDiagram.ts` (`plainNodeSim` whitelist validation),
-`formulaCatalog.ts`, plus tests. **Six-plus files across two layers per
-contribution is a contribution-killer.**
-
-### Gaps
-
-**B1. No behavior contract.** The target is a `NodeModel` (or "component
-model") registry entry that owns everything the engine currently hardcodes:
-
-```
-interface NodeModel<Config, State> {
-  kind: string                        // namespaced: 'core/host', 'community/redis-cache'
-  paramSchema: ParamSchema            // drives Inspector form, import validation, docs
-  validateConfig(raw: unknown): Config | undefined   // replaces plainNodeSim branch
-  initialState(config: Config): State                // replaces hardcoded backlog/replica maps
-  isTrafficSource(config: Config): boolean           // replaces client_pool checks
-  computeWindow(input): { metrics, formulas, nextState, forwardedRPS, acceptCapacityRPS }
-}
-```
-
-The per-window loop in `flowPropagation.ts` becomes: resolve topological
-order → for each node, call its model's `computeWindow` with inbound RPS and
-prior state. The existing host/queue/client-pool logic becomes the three
-built-in models — the reference implementations contributors copy.
-
-**B2. Engine cross-window state must generalize.** `simulation.ts` keeps
-`queueBacklogGB` and `replicaRuntimeByNode` as named maps with kind-specific
-reset/reclamp logic. Generalize to one `stateByNode: Map<string, unknown>`
-owned by each node's model (`initialState` / `reconcileState` on live topology
-edits — the reclamp-vs-reset distinction in `loadTopology` must become a model
-hook, since "preserve sustain/cooldown across a live edit" is model-specific
-knowledge).
-
-**B3. The Inspector must become schema-driven.** `hostConfigFields.tsx` /
-`edgeConfigFields.tsx` are hand-built per profile. If contributed models are
-to appear in the UI without UI PRs, `paramSchema` (fields, types, ranges,
-units, help text, conditional visibility like configMode) must be rich enough
-for the Inspector to render generically. This is the hidden second half of the
-refactor and it's UI work, not engine work.
-
-**B4. Distribution model for contributed code — the key strategic decision.**
-Three options, in ascending risk:
-
-1. **In-repo curated registry (recommended start).** Contributions are TS
-   modules PR'd into `packages/engine/models/community/`, reviewed, tested,
-   shipped with releases. Virality = GitHub contributions. Safe (code review),
-   deterministic, and every SUGAR deployment/skill version has an identical
-   model set — which shared URLs *require* (a shared architecture referencing
-   a model the viewer's build doesn't have is a broken link).
-2. **Declarative formula DSL.** Configs carry expressions evaluated by a safe
-   interpreter. Maximal shareability (models travel inside the diagram JSON),
-   no code execution — but a whole expression-language project, and it caps
-   what a model can do (stateful things like the autoscaler don't fit a pure
-   expression).
-3. **Runtime-loaded plugins (npm/URL).** Do not do this while URLs are a
-   distribution channel: a shared link that causes third-party code execution
-   in the viewer's browser is an XSS factory.
-
-Start with (1); design the `kind` namespace and schema so (2) can be layered
-on later for simple capacity-curve models.
-
-**B5. No conformance suite.** For PRs from strangers, review must be cheap.
-Ship a reusable behavior test kit: determinism (same seed ⇒ same windows),
-conservation sanity (forwarded ≤ accepted inflow unless declared a source),
-no NaN/negative metrics, every formula descriptor has ≥1 source, schema
-round-trips through export/import. CI runs it against every registered model.
-
-**B6. No contributor surface.** Missing entirely: `LICENSE` file (README says
-"open-source" but the repo ships no license — **nothing else in the virality
-plan works until this exists**), CONTRIBUTING.md, a "write your first node
-model" tutorial, PR template requiring citations. The constitution's
-sourced-formula principle should be recast as the *contribution bar*: your
-model merges when its math is cited and its tests pass.
-
----
-
-## 4. Goal C — Export the headless project as an agent skill
-
-### Gaps
-
-**C1. No headless entrypoint.** The engine runs anywhere, but nothing invokes
-it outside the Web Worker. Needed: a small runner package/CLI —
-`sugar-sim run topology.json --duration 300s --seed 42 --out windows.json` —
-that loads a topology, ticks virtual time as fast as the CPU allows (no
-`setInterval`; simulated minutes complete in wall-clock milliseconds), and
-emits results. ~100 LOC on top of the existing ports; the worker (`simWorker.ts`)
-is the template.
-
-**C2. No agent-friendly output.** `MetricsWindow` per 200ms of sim time is
-far too verbose for a model's context window. The skill needs a summarizer:
+**A2. No agent-friendly output.** A `MetricsWindow` per 200ms of sim time
+will blow any context window. The runner's default output must be a summary:
 final steady-state per node (status, ρ, latency, shed), first-saturation
 ordering ("db-1 saturates first at t=42s"), backlog growth rates, scaling
-event log. Design the summary as the primary output; raw windows behind a flag.
+events. Raw windows behind `--raw`.
 
-**C3. The killer skill verb is missing: breaking-point search.** The question
-agents will be asked is "will this hold at 10×, and where does it break?" A
-`sugar-sim sweep --param <clientPool>.requestRatePerSec --from 100 --to 100000`
-that binary-searches for the first collapse/saturation is a pure loop over the
+**A3. The killer verb: breaking-point search.** Agents will be asked "will
+this hold at 10×, and where does it break first?" A
+`sugar sweep --param <clientPool>.requestRatePerSec --from 100 --to 100000`
+that binary-searches for first saturation/collapse is a pure loop over the
 existing engine and turns the skill from "runs a sim" into "answers the
-question." Nothing in the engine blocks this.
+question."
 
-**C4. No input schema documentation.** For an agent to *author* topology JSON
-(not just replay exports), the diagram/topology format needs a written schema
-(JSON Schema or a precise markdown contract) with field semantics, units, and
-constraints — the knowledge currently embedded in `plainNodeSim`'s validation
-code and scattered spec files. This doubles as the shared-URL format spec and
-the contributor param-schema docs; write it once (see §5.1).
+**A4. No input schema documentation.** For an agent to *author* topology JSON
+(not just replay app exports), the format needs a written contract — JSON
+Schema or precise markdown — with field semantics, units, constraints. That
+knowledge currently lives in `plainNodeSim`-style validation code and spec
+files. This same document serves import validation, the future contributor
+param-schema docs, and the share format (§4). Write it once.
 
-**C5. The skill package itself.** A `SKILL.md` (when to use, how to author a
-topology, how to run/sweep/interpret), bundled examples (3–4 canonical
-topologies: web tier + DB, queue-backed worker pool, fan-out, collapse demo),
-and the pinned engine version. Distribution: an npm package the skill invokes
-via `npx`, or the skill vendors the built engine. Decide versioning policy —
-the skill's SKILL.md documents schema version N; engine releases must state
-which N they accept.
+**A5. The skill package itself.** In `sugar/`: `SKILL.md` (when to trigger,
+how to author a topology, how to run/sweep/interpret, **and a link to the
+hosted demo UI so the user can *see* the result** — §3), plus 3–4 bundled
+example topologies (web tier + DB, queue-backed worker pool, fan-out,
+collapse demo). Since engine and skill are one package (§1.1), there's no
+version-pinning gap between them — the skill just states which schema
+version its own release authors.
 
-**C6. UI-topology vs engine-topology mismatch.** The natural agent format is
-the *diagram* JSON (has labels agents need for readable output), but the
-engine takes `SimTopology` (ids only). The runner should accept diagram JSON
-and reuse the translation — which requires §A2's decoupling of
-`buildSimTopology` from xyflow types, and label passthrough into summaries.
+**A6. UI-topology vs engine-topology.** The natural agent format is the
+diagram JSON (labels make summaries readable), but the engine takes
+`SimTopology` (ids). The runner should accept diagram JSON; the de-xyflow'd
+`buildSimTopology` makes this a small mapping layer now, with label
+passthrough into summaries.
 
 ---
 
-## 5. Goal D — Shareable architecture URLs (Cloudflare KV shortener)
+## 3. Goal B — Hosted demo UI (new)
+
+The skill's output is text; the UI is the proof. A public deployment lets a
+skill user paste/open the topology the agent produced and watch it saturate —
+zero install, and it advertises the full product from inside every agent
+session.
 
 ### Gaps
 
-**D1. Consider the zero-backend floor first.** A diagram compressed
-(lz-string / native `CompressionStream`) into a URL fragment (`#d=...`) needs
-no storage, never expires, and works on any static deploy. Text-only diagrams
-(the common case) compress to low single-digit KB — long but functional links.
-Recommendation: ship fragment-encoding as the reliability floor, then the KV
-shortener as the pretty layer on top (`sugar.link/a1b2c3` → 302 to the app
-with the fragment, or the app fetches by id). If KV is ever down or abused,
-old short links can degrade but nothing is lost architecturally.
+**B1. Deploy target exists, demo posture doesn't.** `wrangler.jsonc` already
+serves `dist/` as static assets — deploying is not the gap. The gap is build
+posture: Vite already minifies for production; additionally ship **no source
+maps** and strip dev artifacts. Be honest about the threat model: minification
+deters casual copying only — the real IP protection is that the *engine* is
+already open source (MIT) and the only thing being obscured is UI code. Don't
+over-invest here; "no sourcemaps + minified" is the right level.
 
-**D2. No Worker, no KV binding.** `wrangler.jsonc` is assets-only. Needed:
-a Worker script with `POST /api/share` (validate, store, return id) and
-`GET /s/:id` (fetch, redirect/serve), a `kv_namespaces` binding, and routes.
-KV fits: 25 MB value limit is ample; ~60s eventual consistency is fine for
-"create then paste a link"; reads on the hot path are cheap and cacheable.
+**B2. No way to open a topology on boot.** For "agent hands you a link/file →
+see it live," the app needs an entry path: at minimum a prominent
+import-JSON affordance on first load; ideally `#d=<compressed>` fragment
+support (§4.2), which the skill can emit directly. `parseDiagram` exists and
+is tolerant; it's only wired to file upload today.
 
-**D3. Image payloads break the size story.** `imageUpload.ts` embeds base64
-images in node data, so a diagram JSON can be megabytes. Decide the shared
-artifact's policy: strip images on share (recommended v1 — the *architecture*
-is the payload), or cap total size (e.g. 256 KB) and reject with a clear
-message. Fragment encoding (D1) forces this decision anyway: URLs can't carry
-megabytes.
+**B3. Cross-linking.** `sugar/`'s README + SKILL.md link to the demo; the
+demo links back to `sugar/` ("run this from your agent"). This loop is the
+whole distribution story — make both edges explicit.
 
-**D4. An open write endpoint is free anonymous storage.** Mitigations, all
-needed: server-side validation that the payload parses as a diagram (run the
-same `parseDiagram` logic in the Worker — another reason it must not import
-xyflow, see A2), a hard size cap, Cloudflare rate limiting per IP (Turnstile
-if abused), and a TTL policy — e.g. `expirationTtl` of 6–12 months, refreshed
-on read, rather than promising permanence you can't moderate. Unguessable ids
-(crypto-random, ≥64 bits / 11 base62 chars), no enumeration/listing endpoint,
-and a takedown path (even just an email + `DELETE` with an admin token).
+---
 
-**D5. Privacy expectations.** Shared topologies are internal-architecture
-sketches — mildly sensitive. Anyone with the link can read it; say so in the
-share dialog. Don't log payloads; strip images (D3) to reduce accidental
-leakage of screenshots.
+## 4. Goal C — Sharing, privacy-first (revised from rev 1's Goal D)
 
-**D6. The app can't open a shared diagram yet.** `parseDiagram` exists but is
-only wired to file upload. Needed: on boot, check fragment/`?d=` id → fetch →
-parse → load, with the existing tolerant-degrade behavior and a visible
-"imported from a shared link" state. Also an explicit "Share" action in the
-UI that produces the URL (and shows its size/what was stripped).
+Rev 1 treated the KV URL shortener as the viral loop. Revision: **devs
+modeling proprietary architectures will not POST their blueprints to a
+server**, and no CSR pledge changes that. So the sharing stack is reordered
+around where the data travels:
 
-### 5.1 Cross-cutting: the JSON schema is now a public, versioned contract
+1. **JSON export/import — permanent, never deprecated.** The fully-offline
+   path: the artifact is a file the user controls, shared over whatever
+   channel they already trust (their repo, their Slack, their email). This is
+   the privacy floor and for a segment of users it is the *preferred* mode,
+   not a fallback. `exportDiagram.ts`'s whitelist-on-export /
+   tolerate-on-import machinery is already the right shape — keep investing
+   here (schema version, §4.1).
+2. **URL-fragment encoding (`#d=<compressed>`) — zero-server sharing.**
+   Compress the diagram (lz-string / `CompressionStream`) into the fragment.
+   Privacy property worth stating in the UI: **fragments are never sent to
+   the server** — the payload travels only inside the link itself, peer to
+   peer. No storage, no expiry, works on any static deploy, and doubles as
+   the demo-UI entry path (B2). Long URLs, but functional; text-only diagrams
+   compress to low single-digit KB. Strip embedded base64 images on share
+   (the *architecture* is the payload; images are both a size and an
+   accidental-leak problem).
+3. **KV shortener — optional, later, clearly labeled.** Pretty links
+   (`sugar.link/a1b2c3`) require storing the payload server-side; that's a
+   *feature for people who opt in*, presented with an explicit "anyone with
+   the link can read this; stored on our infrastructure" notice. All of rev
+   1's D4 mitigations apply if/when built (validate-in-Worker, size cap, rate
+   limit, TTL not permanence, unguessable ids, takedown path). It is no
+   longer on the critical path — build it only when demand shows up.
 
-This is the keystone gap that D, C, and B all land on. Today the exported JSON
-has **no schema-version field** — versioning is implicit in `plainNodeSim`'s
-absence-based back-fills (legacy boot delay, watermarks, overload behavior).
-That works for files you re-import yourself; it's too fragile for URLs that
-live for years, skills pinned to old versions, and community node kinds.
-Needed:
+**C1. Export/import UX should reflect its promotion.** If JSON is a
+first-class sharing mode, the export deserves: the schema version stamped in
+(§4.1), a stable field order (diff-able in PRs — architecture files will get
+committed to repos, which is exactly the workflow to encourage), and an
+"images included/stripped" choice at export time.
 
-- `schemaVersion` (or `sugarVersion`) field written on export/share.
-- A written schema document (serves C4, B3, D2 validation simultaneously).
-- A compatibility policy: parsers accept ≤ current version forever
-  (the existing tolerance machinery is 90% of this); unknown node kinds
-  degrade to visual nodes exactly like retired roles do today, with a UI
-  notice ("this diagram uses `community/foo` from a newer version").
+### 4.1 Cross-cutting keystone (unchanged, still open): versioned schema
+
+Still the gap everything lands on, now with three consumers instead of two:
+exported JSON files that live in repos for years, skill-authored topologies
+pinned to old engine versions, and (eventually) shared URLs. Today the export
+has **no schema-version field** — versioning is implicit in absence-based
+back-fills (`LEGACY_*_FOR_IMPORT` constants, now part of the engine's public
+barrel). Needed, unchanged from rev 1:
+
+- `schemaVersion` field written on every export.
+- The written schema document (same artifact as A4).
+- Compatibility policy: parsers accept ≤ current version forever; unknown
+  node kinds degrade to visual nodes (the retired-roles machinery already
+  does this) with a visible notice.
+
+---
+
+## 5. Goal D — Node-model registry (unchanged in substance, still last)
+
+Rev 1 §3 stands as written; the extraction changed its geography, not its
+content. Summary of what remains open:
+
+- **D1. Behavior contract**: `NodeModel` registry entry owning
+  `paramSchema`, `validateConfig`, `initialState`, `computeWindow`; the
+  per-profile string dispatch in `components.ts` / `simulation.ts` /
+  `flowPropagation.ts` becomes three built-in reference models. This work now
+  happens **in the `sugar` repo**, and lands with better leverage than
+  before: a contributed model automatically ships to the app, the skill, and
+  every export.
+- **D2. Generalize cross-window state** (`queueBacklogGB`,
+  `replicaRuntimeByNode` → model-owned `stateByNode` with a reconcile hook).
+- **D3. Schema-driven Inspector** in diagram-lab — the hidden second half;
+  UI work, not engine work.
+- **D4. Distribution model**: still start with the in-repo curated registry
+  (PRs reviewed, tested, shipped with releases). Still hold the line against
+  runtime-loaded plugin code — with URLs/files as distribution channels,
+  third-party code execution in the viewer is an XSS factory. The declarative
+  formula DSL remains the possible middle layer, later.
+- **D5. Conformance kit** (determinism, conservation, no-NaN, sourced
+  formulas, schema round-trip) run by the engine repo's CI against every
+  registered model.
+- **D6. Contributor surface**: CONTRIBUTING.md, "write your first node
+  model" tutorial, PR template requiring citations. LICENSE is done; the
+  sourced-formula constitution principle as the contribution bar stands.
 
 ---
 
 ## 6. Suggested sequencing
 
-Each phase ships something usable on its own; later phases get cheaper
-because of earlier ones.
-
-1. **License + schema formalization** (small, unblocks everything):
-   add LICENSE, add `schemaVersion` to export/share format, write the
-   topology schema doc, define the engine's `index.ts` public barrel.
-2. **Adapter cleanup (A2/A3/A4):** de-xyflow `buildSimTopology`, evict
-   presentation config from `engine/config.ts`, route all UI imports through
-   the barrel. Pure refactor, fully covered by existing tests.
-3. **Headless runner + skill (C):** CLI runner, summarizer, sweep command,
-   SKILL.md, examples. Fastest path to new distribution — doesn't wait for
-   the plugin refactor, because the built-in models are already valuable.
-4. **Share URLs (D):** fragment encoding + open-from-URL in the app, then the
-   KV Worker. Independent of everything except phase 1's schema work.
-5. **Node-model registry (B):** the big refactor — behavior contract,
-   generalized state, schema-driven Inspector, conformance kit,
-   CONTRIBUTING.md. Do it last: by then the public schema, package boundary,
-   and skill exist, so the contribution story lands with distribution already
-   in place ("write a model, it ships in the app, the skill, and every shared
-   link").
-6. **Workspace/package split (A1):** can happen alongside 3–5; do it no later
-   than the first npm publish.
+1. **Schema formalization** (small, unblocks everything): add
+   `schemaVersion` to export; write the topology schema doc (serves A4, C1,
+   D3).
+2. **Headless runner + skill (Goal A):** `sugar run`, summarizer, `sugar
+   sweep`, SKILL.md + examples, all in `sugar/`, `npx skills`-installable.
+   Fastest path to distribution; nothing blocks it.
+3. **Demo deployment (Goal B):** no-sourcemap production build to the
+   existing CF assets target; import-on-boot (file + fragment); cross-links
+   with the skill repo. Small, and multiplies the skill's value.
+4. **Sharing polish (Goal C):** export UX upgrades (stable ordering, image
+   strip choice), fragment encoding. KV shortener deferred until demanded.
+5. **Node-model registry (Goal D):** the big refactor, still last, now in
+   the engine repo — by then schema, skill, and demo exist, so contributions
+   land with distribution already in place.
 
 ## 7. Top risks
 
-- **Scope trap in B:** the registry + schema-driven Inspector is easily 3–5×
-  the effort of any other phase. The strategy survives without it for months
-  (contributors can PR into the closed union meanwhile); don't let it block
-  the skill or URLs.
-- **No license = no virality.** Trivial to fix, fatal to ignore.
-- **Shared-link permanence vs. moderation:** promise "long-lived", not
-  "forever"; keep the fragment fallback so links outlive the KV store.
-- **Plugin security:** hold the line against runtime-loaded code while URLs
-  are a distribution channel (B4).
+- **Scope trap in D** (unchanged): registry + schema-driven Inspector is
+  3–5× any other phase; don't let it block the skill or the demo.
+- **Pre-v0.1 API churn vs pinning:** diagram-lab and exported files pin a
+  `sugar-skills` version. Until `1.0.0`, every release must say which schema
+  version it reads/writes, or old exports quietly rot. (The skill itself
+  doesn't need separate pinning — it ships in lockstep with the engine, §1.1.)
+- **Privacy is a positioning claim — make it verifiable:** "your diagram
+  never leaves the browser" must stay literally true in the default paths
+  (JSON, fragment). One analytics call that includes diagram content, or a
+  share default that POSTs silently, burns the exact audience this pivot
+  targets.
+- **Skill-ecosystem drift:** the Agent Skills standard and `npx skills`
+  tooling are young; re-verify the install story at ship time rather than
+  trusting today's snapshot.
