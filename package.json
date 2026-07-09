@@ -11,6 +11,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@4xeverburga/sugar-skills": "file:../sugar-skills",
     "@fontsource-variable/hanken-grotesk": "^5.2.8",
     "@fontsource-variable/jetbrains-mono": "^5.2.8",
     "@fontsource-variable/quicksand": "^5.2.10",
