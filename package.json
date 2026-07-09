@@ -11,13 +11,13 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@4xeverburga/sugar-skills": "file:../sugar",
     "@fontsource-variable/hanken-grotesk": "^5.2.8",
     "@fontsource-variable/jetbrains-mono": "^5.2.8",
     "@fontsource-variable/quicksand": "^5.2.10",
     "@xyflow/react": "^12.11.1",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
+    "sugar-skills": "^0.2.1",
     "zustand": "^5.0.9"
   },
   "devDependencies": {

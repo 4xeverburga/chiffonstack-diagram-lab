@@ -1,4 +1,4 @@
-import type { NodeSim } from '../engine/ports'
+import type { NodeSim } from 'sugar-skills'
 
 // Fase 5 (plan.md "Inspector denso y estado-consciente"): paleta reducida a
 // 2 roles semánticos. Active/Dim ya no viven aquí — son estética pura

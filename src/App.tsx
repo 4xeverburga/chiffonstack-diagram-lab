@@ -44,7 +44,7 @@ import { DEFAULT_DESIGN_TOKENS, type DesignTokens } from './lab/designTokens'
 import { useSimulation } from './sim/useSimulation'
 import { createSimStore, hasGeneratorRole, selectEdgeMetrics, selectNodeMetrics, useSimStore } from './sim/store'
 import { DEFAULT_TRAFFIC_SCALE, SIGMOID_MAPPING_BY_TRAFFIC_SCALE, type TrafficScale } from './lab/animation/trafficScalePresets'
-import type { NodeSim } from './engine/ports'
+import type { NodeSim } from 'sugar-skills'
 
 const nodeTypes = { labelNode: LabelNode }
 const edgeTypes = { heat: HeatEdge }

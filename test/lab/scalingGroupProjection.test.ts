@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { isScalingGroupHost, projectScalingGroup, resolveReplicaTelemetry, shouldRenderScalingGroup } from '../../src/lab/scalingGroupProjection'
-import { MAX_DISCRETE_CAPACITY_SEGMENTS } from '../../src/engine/config'
-import type { HostReplicaTelemetry } from '../../src/engine/ports'
+import { MAX_DISCRETE_CAPACITY_SEGMENTS } from 'sugar-skills'
+import type { HostReplicaTelemetry } from 'sugar-skills'
 
 function telemetry(overrides: Partial<HostReplicaTelemetry> = {}): HostReplicaTelemetry {
   return { nominalCount: 1, bootingCount: 0, effectiveCount: 1, perReplicaSaturation: 0, events: [], ...overrides }

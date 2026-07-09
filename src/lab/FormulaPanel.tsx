@@ -1,4 +1,4 @@
-import type { FormulaDescriptor, NodeSim } from '../engine/ports'
+import type { FormulaDescriptor, NodeSim } from 'sugar-skills'
 import { FORMULA_PANEL_DISCLAIMER, describeFormulaPanelState } from './formulaPanelState'
 import { InspectorSection } from './InspectorSection'
 import type { InspectorSectionId } from './inspectorSectionState'

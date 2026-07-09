@@ -1,4 +1,4 @@
-import type { HostNodeMetrics } from '../engine/ports'
+import type { HostNodeMetrics } from 'sugar-skills'
 
 const STATUS_CLASS_PREFIX = 'sim-status-'
 const APPLIED_STATUSES = ['saturated', 'overloaded', 'collapsed'] as const

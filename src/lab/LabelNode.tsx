@@ -6,7 +6,7 @@ import { NodeInfoButton } from './NodeInfoButton'
 import { ScalingGroupNode } from './ScalingGroupNode'
 import { shouldRenderScalingGroup } from './scalingGroupProjection'
 import { HostSaturationSparkline } from './HostSaturationSparkline'
-import type { NodeMetrics, NodeSim } from '../engine/ports'
+import type { NodeMetrics, NodeSim } from 'sugar-skills'
 
 // Custom node used for every diagram box: keeps the existing className-driven
 // look (node / node-active / node-dim). Renaming and image assignment happen

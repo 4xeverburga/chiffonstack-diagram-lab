@@ -6,7 +6,7 @@ import type { HeatVariant } from './heatVariants'
 import { nextThickness, resolveDirection, resolveThickness, type EdgeThickness } from './edgeStyle'
 import { computeImageFit, heightForRatioLockedWidth } from './imageFit'
 import { labelBandFor, resolveTextSize, type TextSize } from './textSizes'
-import type { EdgeSimConfig, NodeSim } from '../engine/ports'
+import type { EdgeSimConfig, NodeSim } from 'sugar-skills'
 
 type SetNodes = Dispatch<SetStateAction<Node[]>>
 type SetEdges = Dispatch<SetStateAction<Edge[]>>

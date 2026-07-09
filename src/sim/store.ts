@@ -1,8 +1,8 @@
 import { createStore } from 'zustand/vanilla'
 import { useStore } from 'zustand'
 import type { Edge, Node } from '@xyflow/react'
-import type { EdgeMetrics, EdgeSimConfig, MetricsWindow, NodeMetrics, NodeSim, SimTopology } from '../engine/ports'
-import { buildSimTopology as buildSimTopologyFromStructural, hasGeneratorRole as hasGeneratorRoleFromStructural } from '../engine/topology'
+import type { EdgeMetrics, EdgeSimConfig, MetricsWindow, NodeMetrics, NodeSim, SimTopology } from 'sugar-skills'
+import { buildSimTopology as buildSimTopologyFromStructural, hasGeneratorRole as hasGeneratorRoleFromStructural } from 'sugar-skills'
 import type { RunStatus } from './workerProtocol'
 
 // Zustand holds the simulation-run's cross-cutting state (run status, the

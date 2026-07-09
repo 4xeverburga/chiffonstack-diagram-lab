@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { FORMULA_PANEL_DISCLAIMER, describeFormulaPanelState } from '../../src/lab/formulaPanelState'
-import type { FormulaDescriptor } from '../../src/engine/ports'
+import type { FormulaDescriptor } from 'sugar-skills'
 
 const descriptor: FormulaDescriptor = {
   id: 'host.saturation-ratio',

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react'
 import type { Edge, Node } from '@xyflow/react'
-import { SIM_TICK_MS } from '../engine/config'
+import { SIM_TICK_MS } from 'sugar-skills'
 import { buildSimTopology, type SimStore } from './store'
 import type { FromWorker, ToWorker } from './workerProtocol'
 

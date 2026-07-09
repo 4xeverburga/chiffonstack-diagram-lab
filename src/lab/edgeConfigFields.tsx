@@ -1,5 +1,5 @@
 import { useEffect, useState, type ChangeEvent } from 'react'
-import type { EdgeSimConfig } from '../engine/ports'
+import type { EdgeSimConfig } from 'sugar-skills'
 
 type EdgeConfigFieldsProps = {
   config: EdgeSimConfig

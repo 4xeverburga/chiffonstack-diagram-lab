@@ -3,10 +3,10 @@
 // useSimulation.ts and store.ts — is an adapter: it may import the engine,
 // but nothing in src/engine/ may import from here (constitution Principle
 // IV, enforced by the oxlint override on src/engine/**).
-import { createSimulation } from '../engine/simulation'
-import { mulberry32, PoissonTrafficSource } from '../engine/poisson'
-import { CycleError, type MetricsWindow, type Simulation } from '../engine/ports'
-import { SIM_TICK_MS } from '../engine/config'
+import { createSimulation } from 'sugar-skills'
+import { mulberry32, PoissonTrafficSource } from 'sugar-skills'
+import { CycleError, type MetricsWindow, type Simulation } from 'sugar-skills'
+import { SIM_TICK_MS } from 'sugar-skills'
 import type { FromWorker, ToWorker } from './workerProtocol'
 
 let simulation: Simulation | undefined

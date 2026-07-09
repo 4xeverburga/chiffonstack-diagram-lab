@@ -1,5 +1,5 @@
 import { useEffect, useState, type ChangeEvent } from 'react'
-import type { HostNodeSim } from '../engine/ports'
+import type { HostNodeSim } from 'sugar-skills'
 
 type ComputeProfile = Extract<HostNodeSim, { profile: 'transactional_api' | 'worker_consumer' | 'database_server' }>
 

@@ -1,7 +1,7 @@
 import type { DragEvent } from 'react'
 import { classNameForKind } from './nodeKinds'
 import type { DesignTokens } from './designTokens'
-import type { NodeSim } from '../engine/ports'
+import type { NodeSim } from 'sugar-skills'
 import { DRAG_MIME_TYPE, PALETTE, type PaletteKey } from './nodePalette'
 
 type SidebarProps = {

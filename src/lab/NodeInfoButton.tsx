@@ -1,5 +1,5 @@
 import type { ReactElement } from 'react'
-import type { NodeMetrics, NodeSim } from '../engine/ports'
+import type { NodeMetrics, NodeSim } from 'sugar-skills'
 
 // Hover-triggered detail popover beside a simulated node: the node itself
 // only ever needs to carry the minimal always-visible signal FR-013

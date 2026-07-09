@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { SPARKLINE_HISTORY_LENGTH } from '../engine/config'
+import { SPARKLINE_HISTORY_LENGTH } from 'sugar-skills'
 import { createInitialSparklineHistory, pushSparklineSample, type SparklineHistoryState } from './hostSparklineHistory'
-import type { HostNodeMetrics } from '../engine/ports'
+import type { HostNodeMetrics } from 'sugar-skills'
 
 // An always-on live saturation gauge for every saturating-capable host
 // (transactional_api/worker_consumer/database_server) — see LabelNode.tsx,
