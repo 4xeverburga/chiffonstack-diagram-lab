@@ -6,6 +6,15 @@ import { resolveTextSize } from './textSizes'
 import { LEGACY_BOOT_DELAY_MS_FOR_IMPORT, LEGACY_HIGH_WATERMARK_FOR_IMPORT, LEGACY_LOW_WATERMARK_FOR_IMPORT, LEGACY_OVERLOAD_BEHAVIOR_FOR_IMPORT } from 'sugar-skills'
 import type { EdgeSimConfig, NodeSim } from 'sugar-skills'
 
+// The interchange-format version stamped on every export (assessment.md §4.1
+// "versioned schema" keystone). Canonically this is `sugar-skills`'
+// DIAGRAM_SCHEMA_VERSION — the engine owns the schema contract (SCHEMA.md) and
+// ships it in lockstep with the package (§1.1). Kept as a local mirror here
+// only until the installed sugar-skills version exports the constant; when it
+// does, import it from 'sugar-skills' and delete this. It MUST match that
+// value. See sugar's SCHEMA.md for the compatibility policy this enables.
+const DIAGRAM_SCHEMA_VERSION = 1
+
 // Tracks whether the current parseDiagram() call dropped any retired-role
 // node so a single, one-time console notice can be surfaced (research.md
 // D7) rather than one per node.
@@ -219,7 +228,10 @@ export function toPlainDiagram(nodes: Node[], edges: Edge[]) {
     targetHandle: resolveHandleSide(edge.targetHandle, LEGACY_TARGET_SIDE),
   }))
 
-  return { nodes: plainNodes, edges: plainEdges }
+  // schemaVersion leads the object so it's the first key in the serialized
+  // JSON — a stable, diff-friendly field order for architecture files that
+  // get committed to repos (assessment.md C1).
+  return { schemaVersion: DIAGRAM_SCHEMA_VERSION, nodes: plainNodes, edges: plainEdges }
 }
 
 export function serializeDiagram(nodes: Node[], edges: Edge[]): string {
@@ -310,6 +322,17 @@ export function parseDiagram(json: string): { nodes: Node[]; edges: Edge[] } {
   }
   if (!isRecord(parsed) || !Array.isArray(parsed.nodes) || !Array.isArray(parsed.edges)) {
     throw new Error('SUGAR: expected an object with "nodes" and "edges" arrays.')
+  }
+  // A file written by a newer build (schemaVersion above ours) is still parsed
+  // best-effort — the per-field tolerance below degrades anything unrecognized
+  // to a plain node — but we surface a one-time notice so a silently-dropped
+  // new field is at least visible (assessment.md §4.1 compatibility policy).
+  // Absent or older versions need no notice: absence is legacy, older is fully
+  // supported forever.
+  if (typeof parsed.schemaVersion === 'number' && parsed.schemaVersion > DIAGRAM_SCHEMA_VERSION) {
+    console.warn(
+      `SUGAR: this diagram was written by a newer version (schemaVersion ${parsed.schemaVersion}; this build reads ${DIAGRAM_SCHEMA_VERSION}). Unrecognized fields were ignored.`,
+    )
   }
   const nodes = parsed.nodes.map((node, index) => parsePlainNode(node, index))
   const edges = parsed.edges.map((edge, index) => parsePlainEdge(edge, index))
