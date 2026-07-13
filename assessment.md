@@ -102,13 +102,26 @@ gain an optional "view it with browser-MCP" note (§3, B4).
 
 ---
 
-## 3. Goal B — Hosted demo UI — ⬅ NEXT
+## 3. Goal B — Hosted demo UI — ✅ DONE (2026-07-13)
 
 The skill's output is text; the UI is the proof. A public deployment lets a
 skill user open the topology the agent produced and watch it saturate — zero
 install, and it advertises the full product from inside every agent session.
 
-### Gaps
+**Shipped:** the demo *is* diagram-lab itself, live at **sugar.kekeros.com**
+(Cloudflare Pages, `wrangler.jsonc → ./dist/`) — there was never a separate
+site to build. Delivered: **B1** production build pinned to `sourcemap: false`
+(verified: zero `.map` files emitted); **B2** file-based load — dropping a
+`.json` on the canvas now imports it (shared `importDiagramFromFile` with the
+existing real `<input type="file">`) plus a deterministic ready-signal
+`[data-testid="diagram-status"]` exposing `data-diagram-source`/`-node-count`/
+`-edge-count`/`-run-status` and an aria-live status line (run stays manual);
+**B3** cross-links (sugar README + SKILL.md → sugar.kekeros.com, demo header →
+the sugar repo); **B4** the autonomous browser-MCP path, verified end-to-end
+with Playwright `browser_file_upload` → the signal flips to
+`data-diagram-source="file"`. The gap analysis below is retained for context.
+
+### Gaps (resolved — see "Shipped" above)
 
 **B1. Deploy target exists, demo posture doesn't.** `wrangler.jsonc` already
 serves `dist/` as static assets — deploying is not the gap. The gap is build
