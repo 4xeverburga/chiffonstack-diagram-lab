@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { parseDiagram, serializeDiagram, toPlainDiagram } from '../../src/lab/exportDiagram'
 import { kitchenSinkEdges, kitchenSinkNodes } from './fixtures/kitchenSink'
 import { HOSTILE_LABEL, hostileLabelNode } from './fixtures/hostileLabel'
@@ -621,6 +621,36 @@ describe('parseDiagram', () => {
     })
     const { nodes } = parseDiagram(json)
     expect(nodes.every((node) => node.data.sim === undefined)).toBe(true)
+  })
+
+  it('stamps schemaVersion as the first key on every export', () => {
+    const serialized = serializeDiagram(kitchenSinkNodes, kitchenSinkEdges)
+    const parsed = JSON.parse(serialized) as { schemaVersion: number }
+    expect(parsed.schemaVersion).toBe(1)
+    // First key so the field order stays stable and diff-friendly.
+    expect(Object.keys(parsed)[0]).toBe('schemaVersion')
+  })
+
+  it('imports a versioned export and round-trips its nodes/edges', () => {
+    const json = serializeDiagram(kitchenSinkNodes, kitchenSinkEdges)
+    const { nodes, edges } = parseDiagram(json)
+    expect(nodes).toEqual(toPlainDiagram(kitchenSinkNodes, kitchenSinkEdges).nodes)
+    expect(edges).toEqual(toPlainDiagram(kitchenSinkNodes, kitchenSinkEdges).edges)
+  })
+
+  it('imports a legacy file with no schemaVersion without a warning', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    parseDiagram(JSON.stringify({ nodes: [{ id: 'a', position: { x: 0, y: 0 }, data: { label: 'a' } }], edges: [] }))
+    expect(warn).not.toHaveBeenCalled()
+    warn.mockRestore()
+  })
+
+  it('warns once when importing a diagram from a newer schemaVersion', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    parseDiagram(JSON.stringify({ schemaVersion: 999, nodes: [{ id: 'a', position: { x: 0, y: 0 }, data: { label: 'a' } }], edges: [] }))
+    expect(warn).toHaveBeenCalledTimes(1)
+    expect(warn.mock.calls[0][0]).toContain('newer version')
+    warn.mockRestore()
   })
 
   it('imports the pre-008 legacy fixture without error and with no simulation role on any node', () => {
