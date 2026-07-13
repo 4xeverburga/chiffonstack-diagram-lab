@@ -1,23 +1,29 @@
 # Assessment: agent-skill distribution, privacy-first sharing, and the node-model registry
 
-Date: 2026-07-08 (rev 2, post engine extraction). Grounded in the actual code
-on diagram-lab `dev` and the extracted `sugar` repo.
+Date: 2026-07-13 (rev 3). Grounded in the actual code on diagram-lab `dev` and
+the public `sugar` repo.
+
+**Changes since rev 2:** Goals A and the versioned-schema keystone are **shipped**
+(`sugar-skills@0.3.0`, both repos now public — sugar MIT, diagram-lab BSL 1.1),
+so §2 and §4.1 are compressed to done-summaries. The sharing thesis is
+tightened: **no diagram data ever goes in a URL** — the URL-fragment and KV
+shortener ideas are scrapped. Loading a diagram is file-based: drag-and-drop /
+file-picker for humans, and an agent with browser-MCP (e.g. Playwright) uploads
+the file to the demo itself. Sharing = the JSON file, full stop.
 
 ## 0. The strategy in one paragraph
 
 Same three-layer value stack as rev 1 — headless engine as the commons, the
-SUGAR canvas UI as the flagship consumer, distribution as the growth engine —
-but two things changed. First, the engine extraction is **done**: `sugar` is a
-standalone MIT-licensed repo published to npm, and diagram-lab consumes it as
-a dependency, so all of rev 1's Goal A is scrapped from this document. Second,
-the distribution thesis is revised: the primary channel is an **agent skill on
-the open Agent Skills standard** (one SKILL.md, every major harness), and
-sharing is **privacy-first** — JSON export/import stays a first-class,
-permanent feature because devs will not send proprietary architecture
-blueprints to anyone's server, "it's only CSR, pinky promise" included. URL
-sharing is a convenience layer on top, not a replacement. A hosted demo UI
-(minified, no source maps) linked from the skill repo closes the loop: agent
-recommends a fix → user opens the diagram in the demo and sees it collapse.
+SUGAR canvas UI as the flagship consumer, distribution as the growth engine.
+The engine extraction is **done** (`sugar`, MIT, on npm; diagram-lab consumes
+it), and the agent skill is **done** (`sugar run`/`sugar sweep` + SKILL.md,
+`npx skills`-installable). What remains is the hosted demo that closes the
+loop — agent recommends a fix → the diagram opens in the demo and you watch it
+collapse — plus sharing polish and the node-model registry. Sharing is
+**privacy-first and file-based**: the artifact is a JSON file the user controls,
+shared over whatever channel they already trust. No diagram content is ever
+encoded into a URL or POSTed to a server by default; the demo loads a file the
+user (or their agent) hands it, never a link.
 
 ---
 
@@ -67,176 +73,115 @@ packages; there's only one to pin).
 
 ---
 
-## 2. Goal A — Ship the agent skill, distributed to every harness
+## 2. Goal A — Ship the agent skill — ✅ DONE
 
-> **✅ DONE (2026-07-13, shipped in `sugar-skills@0.3.0`).** All gaps below
-> (A1–A6) are closed: `sugar run` / `sugar sweep`, the agent-facing summarizer,
-> `SCHEMA.md`, `SKILL.md`, and four bundled examples all ship in the public
-> sugar repo, installable via `npx skills add 4xeverburga/sugar`. The one
-> follow-up is A5's demo link, which depends on Goal B (§3) existing.
+Shipped in `sugar-skills@0.3.0` (public repo, `npx skills add 4xeverburga/sugar`).
+The distribution insight held: Agent Skills is an open standard (one `SKILL.md`
+works across Claude Code, Codex CLI, Gemini CLI, Cursor, …), and Vercel's
+`npx skills` CLI handles per-harness install dirs — so one skill folder in the
+single engine+skill repo (§1.1) covers every harness, no translator.
 
-This was the front of the queue. The good news from research: **there is no
-translation problem to solve.** Agent Skills (a folder with a `SKILL.md`:
-frontmatter name/description + markdown instructions) is an open standard
-adopted across Claude Code, OpenAI Codex CLI, Gemini CLI, Cursor, GitHub
-Copilot and more — the same skill folder works in all of them; only the
-install directory differs (`~/.claude/skills/`, `~/.codex/skills/`,
-`~/.gemini/skills/`, `.cursor/skills/`, …). And the install-directory problem
-is already solved by tooling: **Vercel's `npx skills` CLI** is the de-facto
-package manager of the ecosystem (~20k stars, 27+ supported agents) — it
-installs a skill from a GitHub repo into whichever agents the user has.
+What shipped (was A1–A6):
 
-So the distribution plan is: author **one** SKILL.md inside `sugar/` (the
-single engine+skill repo, §1.1), make it installable via
-`npx skills add 4xeverburga/sugar`, and list Claude Code's native install
-path in the README. No per-harness ports, no translator to build or
-maintain, and no second repo to keep in sync with the engine.
+- **`sugar run <diagram.json>`** — headless deterministic runner (`src/runner.ts`),
+  `--duration`/`--seed`/`--window`/`--json`/`--raw`.
+- **Agent-facing summary** (`src/summary.ts`) — steady state per node (averaged
+  over the trailing 25% of windows to smooth Poisson noise), first-saturation
+  order, backlog growth, scaling events; raw windows behind `--raw`.
+- **`sugar sweep --param <node>.<field> --from X --to Y`** (`src/sweep.ts`) —
+  binary-searches the breaking point and names the node that gives out first.
+- **`SCHEMA.md`** — the written topology contract; `src/diagramInput.ts` its
+  executable counterpart, accepting diagram JSON (app-export `data.sim` nesting
+  or a flattened form) with label passthrough into summaries.
+- **`SKILL.md`** + four topologies in `sugar/examples/` (checkout-system,
+  web-tier-and-db, queue-backed-workers, collapse-demo).
 
-### Gaps
-
-**A1. ✅ DONE — CLI runner.** Shipped as `sugar run <diagram.json> --duration
-300s --seed 42` (`src/runner.ts` + `src/cli.ts`), plus `--json`/`--raw`. Was:
-`sugar/src/cli.ts` today prints help and
-`install` confirmation only. The skill has nothing to invoke. Needed:
-`sugar run topology.json --duration 300s --seed 42 --out windows.json` —
-load topology, tick virtual time as fast as CPU allows (no wall-clock timers),
-emit results. ~100 LOC over the existing ports; `simWorker.ts` is the
-template. The `bin` wiring, ESM build, and npm publish pipeline already exist,
-so this is genuinely just the runner logic.
-
-**A2. ✅ DONE — agent-friendly summary.** `src/summary.ts` (`summarizeRun`)
-emits steady state per node (averaged over the trailing 25% of windows to
-smooth Poisson noise), first-saturation order, backlog growth, and scaling
-events; raw windows behind `--raw`. Was: A `MetricsWindow` per 200ms of sim time
-will blow any context window. The runner's default output must be a summary:
-final steady-state per node (status, ρ, latency, shed), first-saturation
-ordering ("db-1 saturates first at t=42s"), backlog growth rates, scaling
-events. Raw windows behind `--raw`.
-
-**A3. ✅ DONE — breaking-point search.** `src/sweep.ts` (`sugar sweep --param
-<node>.<field> --from X --to Y`) binary-searches the threshold and names the
-node that gives out first. Was: Agents will be asked "will
-this hold at 10×, and where does it break first?" A
-`sugar sweep --param <clientPool>.requestRatePerSec --from 100 --to 100000`
-that binary-searches for first saturation/collapse is a pure loop over the
-existing engine and turns the skill from "runs a sim" into "answers the
-question."
-
-**A4. ✅ DONE — input schema documentation.** `sugar/SCHEMA.md` is the written
-contract (profiles, fields, units, constraints, `schemaVersion`, compat
-policy); `src/diagramInput.ts` is its executable counterpart. Was: For an agent to *author* topology JSON
-(not just replay app exports), the format needs a written contract — JSON
-Schema or precise markdown — with field semantics, units, constraints. That
-knowledge currently lives in `plainNodeSim`-style validation code and spec
-files. This same document serves import validation, the future contributor
-param-schema docs, and the share format (§4). Write it once.
-
-**A5. ✅ DONE (demo link pending Goal B).** `sugar/SKILL.md` + four topologies
-in `sugar/examples/` (checkout-system, web-tier-and-db, queue-backed-workers,
-collapse-demo) ship in 0.3.0. The only open piece is the hosted-demo link,
-which needs §3 to exist first (currently points at the repo README). Was: In `sugar/`: `SKILL.md` (when to trigger,
-how to author a topology, how to run/sweep/interpret, **and a link to the
-hosted demo UI so the user can *see* the result** — §3), plus 3–4 bundled
-example topologies (web tier + DB, queue-backed worker pool, fan-out,
-collapse demo). Since engine and skill are one package (§1.1), there's no
-version-pinning gap between them — the skill just states which schema
-version its own release authors.
-
-**A6. ✅ DONE — accepts diagram JSON.** `src/diagramInput.ts` maps diagram
-JSON (app-export `data.sim` nesting or a flattened form) to `SimTopology` via
-`buildSimTopology`, carrying labels through into summaries. Was: The natural agent format is the
-diagram JSON (labels make summaries readable), but the engine takes
-`SimTopology` (ids). The runner should accept diagram JSON; the de-xyflow'd
-`buildSimTopology` makes this a small mapping layer now, with label
-passthrough into summaries.
+**Open follow-up:** SKILL.md's "see it live" link points at the repo README
+until the hosted demo (§3) exists. Once the demo is live, SKILL.md should also
+gain an optional "view it with browser-MCP" note (§3, B4).
 
 ---
 
-## 3. Goal B — Hosted demo UI (new)
+## 3. Goal B — Hosted demo UI — ⬅ NEXT
 
 The skill's output is text; the UI is the proof. A public deployment lets a
-skill user paste/open the topology the agent produced and watch it saturate —
-zero install, and it advertises the full product from inside every agent
-session.
+skill user open the topology the agent produced and watch it saturate — zero
+install, and it advertises the full product from inside every agent session.
 
 ### Gaps
 
 **B1. Deploy target exists, demo posture doesn't.** `wrangler.jsonc` already
 serves `dist/` as static assets — deploying is not the gap. The gap is build
 posture: Vite already minifies for production; additionally ship **no source
-maps** and strip dev artifacts. Be honest about the threat model: minification
-deters casual copying only — the real IP protection is that the *engine* is
-already open source (MIT) and the only thing being obscured is UI code. Don't
-over-invest here; "no sourcemaps + minified" is the right level.
+maps** (`build.sourcemap: false`) and strip dev artifacts, so the shipped
+bundle can't be reconstructed back into readable source. Be honest about the
+threat model: minification deters casual copying only — the real IP protection
+is the BSL license plus the fact that the *engine* is already open (MIT), so
+the only thing obscured is UI code. Don't over-invest; "no sourcemaps +
+minified" is the right level.
 
-**B2. No way to open a topology on boot.** For "agent hands you a link/file →
-see it live," the app needs an entry path: at minimum a prominent
-import-JSON affordance on first load; ideally `#d=<compressed>` fragment
-support (§4.2), which the skill can emit directly. `parseDiagram` exists and
-is tolerant; it's only wired to file upload today.
+**B2. Load a topology from a file — never from the URL.** Deliberate decision:
+**no diagram data goes in the URL** (no `#fragment`, no query param). Long,
+fragile links; the payload leaks into browser history and shared-link logs;
+and it's an XSS surface. Instead the entry path is file-based:
+
+- A prominent **drag-and-drop + file-picker** affordance on first load,
+  backed by a **real `<input type="file">`** (the drop zone wraps it, it isn't
+  a synthetic-drop-only widget). `parseDiagram` already exists and is tolerant;
+  it's only wired to a hidden upload today — surface it as the primary boot
+  affordance.
+- A **deterministic "diagram loaded / simulation ready" signal** in the DOM
+  (a `data-testid` or an accessible status region) so an automated driver
+  knows when to read the result.
+
+This keeps sharing purely file-based (§4) and makes the demo trivially
+scriptable by agents (B4).
 
 **B3. Cross-linking.** `sugar/`'s README + SKILL.md link to the demo; the
 demo links back to `sugar/` ("run this from your agent"). This loop is the
 whole distribution story — make both edges explicit.
 
+**B4. Autonomous agent path (browser-MCP).** For a fully autonomous "author →
+run → *show me*" loop, an agent with a browser-MCP tool (e.g. Playwright)
+drives the hosted demo itself: `browser_navigate` to the demo, `browser_file_upload`
+onto the real `<input type="file">` from B2 (no synthetic drag needed), wait on
+the B2 ready-signal, `browser_take_screenshot`. Nothing to build in `sugar` for
+this — browser-MCP is provided by the agent's harness, not the CLI (and the
+MIT CLI can't bundle the BSL UI anyway). The only requirements are the B2 real
+input + ready-signal; SKILL.md documents the flow as an **optional** "to see
+it" section (many harnesses lack a browser tool). Note the demo is the visual
+*proof*; the *answer* still comes from `sugar run`'s text, no browser needed.
+
 ---
 
-## 4. Goal C — Sharing, privacy-first (revised from rev 1's Goal D)
+## 4. Goal C — Sharing, privacy-first and file-based
 
-Rev 1 treated the KV URL shortener as the viral loop. Revision: **devs
-modeling proprietary architectures will not POST their blueprints to a
-server**, and no CSR pledge changes that. So the sharing stack is reordered
-around where the data travels:
+**Sharing is the JSON file — the only mechanism.** The URL-fragment and KV
+shortener ideas from rev 2 are **scrapped**: no diagram content is ever put in
+a URL or POSTed to a server. Rationale — devs modeling proprietary architectures
+will not send their blueprints anywhere, URLs carrying data are fragile and
+leak into history/logs, and a server-stored payload is a liability with no
+demand behind it. The artifact is a file the user controls, shared over
+whatever channel they already trust (their repo, Slack, email); the demo loads
+that file directly (§3 B2), and an agent uploads it via browser-MCP (§3 B4).
+`exportDiagram.ts`'s whitelist-on-export / tolerate-on-import machinery is
+already the right shape.
 
-1. **JSON export/import — permanent, never deprecated.** The fully-offline
-   path: the artifact is a file the user controls, shared over whatever
-   channel they already trust (their repo, their Slack, their email). This is
-   the privacy floor and for a segment of users it is the *preferred* mode,
-   not a fallback. `exportDiagram.ts`'s whitelist-on-export /
-   tolerate-on-import machinery is already the right shape — keep investing
-   here (schema version, §4.1).
-2. **URL-fragment encoding (`#d=<compressed>`) — zero-server sharing.**
-   Compress the diagram (lz-string / `CompressionStream`) into the fragment.
-   Privacy property worth stating in the UI: **fragments are never sent to
-   the server** — the payload travels only inside the link itself, peer to
-   peer. No storage, no expiry, works on any static deploy, and doubles as
-   the demo-UI entry path (B2). Long URLs, but functional; text-only diagrams
-   compress to low single-digit KB. Strip embedded base64 images on share
-   (the *architecture* is the payload; images are both a size and an
-   accidental-leak problem).
-3. **KV shortener — optional, later, clearly labeled.** Pretty links
-   (`sugar.link/a1b2c3`) require storing the payload server-side; that's a
-   *feature for people who opt in*, presented with an explicit "anyone with
-   the link can read this; stored on our infrastructure" notice. All of rev
-   1's D4 mitigations apply if/when built (validate-in-Worker, size cap, rate
-   limit, TTL not permanence, unguessable ids, takedown path). It is no
-   longer on the critical path — build it only when demand shows up.
-
-**C1. Export/import UX should reflect its promotion.** If JSON is a
-first-class sharing mode, the export deserves: the schema version stamped in
-(§4.1 — ✅ **done**, written as the first key), a stable field order (diff-able
-in PRs — ✅ partially: `schemaVersion` leads the object), and an "images
-included/stripped" choice at export time (⬜ still open). Only the image-strip
-choice remains here.
+**C1. Export UX polish (⬜ the only open item here).** `schemaVersion` is
+stamped as the first key (✅ done, §4.1) — so field order is already stable and
+diff-able for architecture files committed to repos. What remains: an "images
+included/stripped" choice at export time (strip embedded base64 images by
+default on share — the *architecture* is the payload; images are a size and an
+accidental-leak problem).
 
 ### 4.1 Cross-cutting keystone — ✅ DONE (versioned schema)
 
-> **✅ DONE (2026-07-13).** `DIAGRAM_SCHEMA_VERSION = 1` in `sugar/src/config.ts`
-> (barrel-exported) is the single source of truth; `sugar/SCHEMA.md` is the
-> written document; the export stamps `schemaVersion` (diagram-lab PR #7, merged
-> to dev) and both parsers (app + CLI) apply the ≤-current compat policy with a
-> newer-version notice. diagram-lab mirrors the constant locally until it bumps
-> to a `sugar-skills` release that exports it.
-
-This was the gap everything lands on, with three consumers: exported JSON files
-that live in repos for years, skill-authored topologies pinned to old engine
-versions, and (eventually) shared URLs. Delivered:
-
-- ✅ `schemaVersion` field written on every export.
-- ✅ The written schema document (same artifact as A4 — `SCHEMA.md`).
-- ✅ Compatibility policy: parsers accept ≤ current version forever; unknown
-  node kinds degrade to visual nodes (the retired-roles machinery already
-  does this) with a visible notice.
+`DIAGRAM_SCHEMA_VERSION = 1` in `sugar/src/config.ts` (barrel-exported) is the
+single source of truth; `sugar/SCHEMA.md` is the written document; the export
+stamps `schemaVersion` as its first key (diagram-lab PR #7); both parsers (app +
+CLI) accept `≤ current` forever, degrade unknown node kinds to visual nodes, and
+notice a newer version. diagram-lab mirrors the constant locally until it bumps
+to a `sugar-skills` release that exports it.
 
 ---
 
@@ -258,7 +203,7 @@ content. Summary of what remains open:
   UI work, not engine work.
 - **D4. Distribution model**: still start with the in-repo curated registry
   (PRs reviewed, tested, shipped with releases). Still hold the line against
-  runtime-loaded plugin code — with URLs/files as distribution channels,
+  runtime-loaded plugin code — with diagram files loaded from anywhere,
   third-party code execution in the viewer is an XSS factory. The declarative
   formula DSL remains the possible middle layer, later.
 - **D5. Conformance kit** (determinism, conservation, no-NaN, sourced
@@ -278,12 +223,13 @@ content. Summary of what remains open:
    `sugar-skills@0.3.0`): `sugar run`, summarizer, `sugar sweep`, SKILL.md +
    four examples, all in `sugar/`, `npx skills`-installable.
 3. ⬅ **NEXT — Demo deployment (Goal B):** no-sourcemap production build to the
-   existing CF assets target; import-on-boot (file + fragment); cross-links
-   with the skill repo. Small, and multiplies the skill's value — also closes
-   A5's open demo link.
-4. **Sharing polish (Goal C):** export UX upgrades (image strip choice —
-   stable ordering / `schemaVersion` already done), fragment encoding. KV
-   shortener deferred until demanded.
+   existing CF assets target; file-based load-on-boot (drag-drop + real
+   `<input type="file">` + a "ready" signal, **no URL inputs**); cross-links
+   with the skill repo; browser-MCP-scriptable for autonomous agents (B4).
+   Small, multiplies the skill's value, and closes A5's open demo link.
+4. **Sharing polish (Goal C):** the one remaining item is the export "images
+   included/stripped" choice — `schemaVersion` / stable order already done, and
+   URL/KV sharing is scrapped.
 5. **Node-model registry (Goal D):** the big refactor, still last, now in
    the engine repo — by then schema, skill, and demo exist, so contributions
    land with distribution already in place.
@@ -296,11 +242,11 @@ content. Summary of what remains open:
   `sugar-skills` version. Until `1.0.0`, every release must say which schema
   version it reads/writes, or old exports quietly rot. (The skill itself
   doesn't need separate pinning — it ships in lockstep with the engine, §1.1.)
-- **Privacy is a positioning claim — make it verifiable:** "your diagram
-  never leaves the browser" must stay literally true in the default paths
-  (JSON, fragment). One analytics call that includes diagram content, or a
-  share default that POSTs silently, burns the exact audience this pivot
-  targets.
+- **Privacy is a positioning claim — make it verifiable:** "your diagram never
+  leaves the browser" must stay literally true. With URL/KV sharing scrapped,
+  the only paths are the local file and the in-browser render — keep it that
+  way. One analytics call that includes diagram content, or any silent POST of
+  a diagram, burns the exact audience this pivot targets.
 - **Skill-ecosystem drift:** the Agent Skills standard and `npx skills`
   tooling are young; re-verify the install story at ship time rather than
   trusting today's snapshot.
