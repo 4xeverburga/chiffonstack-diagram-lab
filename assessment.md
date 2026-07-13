@@ -193,8 +193,9 @@ accidental-leak problem).
 single source of truth; `sugar/SCHEMA.md` is the written document; the export
 stamps `schemaVersion` as its first key (diagram-lab PR #7); both parsers (app +
 CLI) accept `≤ current` forever, degrade unknown node kinds to visual nodes, and
-notice a newer version. diagram-lab mirrors the constant locally until it bumps
-to a `sugar-skills` release that exports it.
+notice a newer version. diagram-lab imports the constant from the `sugar-skills`
+barrel (dep bumped to `^0.3.0`, PR #13) — the local mirror is gone, so the
+exported `schemaVersion` can no longer drift from the engine's value.
 
 ---
 
