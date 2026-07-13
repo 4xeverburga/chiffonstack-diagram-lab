@@ -69,7 +69,13 @@ packages; there's only one to pin).
 
 ## 2. Goal A — Ship the agent skill, distributed to every harness
 
-This is now the front of the queue. The good news from research: **there is no
+> **✅ DONE (2026-07-13, shipped in `sugar-skills@0.3.0`).** All gaps below
+> (A1–A6) are closed: `sugar run` / `sugar sweep`, the agent-facing summarizer,
+> `SCHEMA.md`, `SKILL.md`, and four bundled examples all ship in the public
+> sugar repo, installable via `npx skills add 4xeverburga/sugar`. The one
+> follow-up is A5's demo link, which depends on Goal B (§3) existing.
+
+This was the front of the queue. The good news from research: **there is no
 translation problem to solve.** Agent Skills (a folder with a `SKILL.md`:
 frontmatter name/description + markdown instructions) is an open standard
 adopted across Claude Code, OpenAI Codex CLI, Gemini CLI, Cursor, GitHub
@@ -88,7 +94,9 @@ maintain, and no second repo to keep in sync with the engine.
 
 ### Gaps
 
-**A1. The CLI is a placeholder.** `sugar/src/cli.ts` today prints help and
+**A1. ✅ DONE — CLI runner.** Shipped as `sugar run <diagram.json> --duration
+300s --seed 42` (`src/runner.ts` + `src/cli.ts`), plus `--json`/`--raw`. Was:
+`sugar/src/cli.ts` today prints help and
 `install` confirmation only. The skill has nothing to invoke. Needed:
 `sugar run topology.json --duration 300s --seed 42 --out windows.json` —
 load topology, tick virtual time as fast as CPU allows (no wall-clock timers),
@@ -96,27 +104,37 @@ emit results. ~100 LOC over the existing ports; `simWorker.ts` is the
 template. The `bin` wiring, ESM build, and npm publish pipeline already exist,
 so this is genuinely just the runner logic.
 
-**A2. No agent-friendly output.** A `MetricsWindow` per 200ms of sim time
+**A2. ✅ DONE — agent-friendly summary.** `src/summary.ts` (`summarizeRun`)
+emits steady state per node (averaged over the trailing 25% of windows to
+smooth Poisson noise), first-saturation order, backlog growth, and scaling
+events; raw windows behind `--raw`. Was: A `MetricsWindow` per 200ms of sim time
 will blow any context window. The runner's default output must be a summary:
 final steady-state per node (status, ρ, latency, shed), first-saturation
 ordering ("db-1 saturates first at t=42s"), backlog growth rates, scaling
 events. Raw windows behind `--raw`.
 
-**A3. The killer verb: breaking-point search.** Agents will be asked "will
+**A3. ✅ DONE — breaking-point search.** `src/sweep.ts` (`sugar sweep --param
+<node>.<field> --from X --to Y`) binary-searches the threshold and names the
+node that gives out first. Was: Agents will be asked "will
 this hold at 10×, and where does it break first?" A
 `sugar sweep --param <clientPool>.requestRatePerSec --from 100 --to 100000`
 that binary-searches for first saturation/collapse is a pure loop over the
 existing engine and turns the skill from "runs a sim" into "answers the
 question."
 
-**A4. No input schema documentation.** For an agent to *author* topology JSON
+**A4. ✅ DONE — input schema documentation.** `sugar/SCHEMA.md` is the written
+contract (profiles, fields, units, constraints, `schemaVersion`, compat
+policy); `src/diagramInput.ts` is its executable counterpart. Was: For an agent to *author* topology JSON
 (not just replay app exports), the format needs a written contract — JSON
 Schema or precise markdown — with field semantics, units, constraints. That
 knowledge currently lives in `plainNodeSim`-style validation code and spec
 files. This same document serves import validation, the future contributor
 param-schema docs, and the share format (§4). Write it once.
 
-**A5. The skill package itself.** In `sugar/`: `SKILL.md` (when to trigger,
+**A5. ✅ DONE (demo link pending Goal B).** `sugar/SKILL.md` + four topologies
+in `sugar/examples/` (checkout-system, web-tier-and-db, queue-backed-workers,
+collapse-demo) ship in 0.3.0. The only open piece is the hosted-demo link,
+which needs §3 to exist first (currently points at the repo README). Was: In `sugar/`: `SKILL.md` (when to trigger,
 how to author a topology, how to run/sweep/interpret, **and a link to the
 hosted demo UI so the user can *see* the result** — §3), plus 3–4 bundled
 example topologies (web tier + DB, queue-backed worker pool, fan-out,
@@ -124,7 +142,9 @@ collapse demo). Since engine and skill are one package (§1.1), there's no
 version-pinning gap between them — the skill just states which schema
 version its own release authors.
 
-**A6. UI-topology vs engine-topology.** The natural agent format is the
+**A6. ✅ DONE — accepts diagram JSON.** `src/diagramInput.ts` maps diagram
+JSON (app-export `data.sim` nesting or a flattened form) to `SimTopology` via
+`buildSimTopology`, carrying labels through into summaries. Was: The natural agent format is the
 diagram JSON (labels make summaries readable), but the engine takes
 `SimTopology` (ids). The runner should accept diagram JSON; the de-xyflow'd
 `buildSimTopology` makes this a small mapping layer now, with label
@@ -194,22 +214,27 @@ around where the data travels:
 
 **C1. Export/import UX should reflect its promotion.** If JSON is a
 first-class sharing mode, the export deserves: the schema version stamped in
-(§4.1), a stable field order (diff-able in PRs — architecture files will get
-committed to repos, which is exactly the workflow to encourage), and an
-"images included/stripped" choice at export time.
+(§4.1 — ✅ **done**, written as the first key), a stable field order (diff-able
+in PRs — ✅ partially: `schemaVersion` leads the object), and an "images
+included/stripped" choice at export time (⬜ still open). Only the image-strip
+choice remains here.
 
-### 4.1 Cross-cutting keystone (unchanged, still open): versioned schema
+### 4.1 Cross-cutting keystone — ✅ DONE (versioned schema)
 
-Still the gap everything lands on, now with three consumers instead of two:
-exported JSON files that live in repos for years, skill-authored topologies
-pinned to old engine versions, and (eventually) shared URLs. Today the export
-has **no schema-version field** — versioning is implicit in absence-based
-back-fills (`LEGACY_*_FOR_IMPORT` constants, now part of the engine's public
-barrel). Needed, unchanged from rev 1:
+> **✅ DONE (2026-07-13).** `DIAGRAM_SCHEMA_VERSION = 1` in `sugar/src/config.ts`
+> (barrel-exported) is the single source of truth; `sugar/SCHEMA.md` is the
+> written document; the export stamps `schemaVersion` (diagram-lab PR #7, merged
+> to dev) and both parsers (app + CLI) apply the ≤-current compat policy with a
+> newer-version notice. diagram-lab mirrors the constant locally until it bumps
+> to a `sugar-skills` release that exports it.
 
-- `schemaVersion` field written on every export.
-- The written schema document (same artifact as A4).
-- Compatibility policy: parsers accept ≤ current version forever; unknown
+This was the gap everything lands on, with three consumers: exported JSON files
+that live in repos for years, skill-authored topologies pinned to old engine
+versions, and (eventually) shared URLs. Delivered:
+
+- ✅ `schemaVersion` field written on every export.
+- ✅ The written schema document (same artifact as A4 — `SCHEMA.md`).
+- ✅ Compatibility policy: parsers accept ≤ current version forever; unknown
   node kinds degrade to visual nodes (the retired-roles machinery already
   does this) with a visible notice.
 
@@ -247,17 +272,18 @@ content. Summary of what remains open:
 
 ## 6. Suggested sequencing
 
-1. **Schema formalization** (small, unblocks everything): add
-   `schemaVersion` to export; write the topology schema doc (serves A4, C1,
-   D3).
-2. **Headless runner + skill (Goal A):** `sugar run`, summarizer, `sugar
-   sweep`, SKILL.md + examples, all in `sugar/`, `npx skills`-installable.
-   Fastest path to distribution; nothing blocks it.
-3. **Demo deployment (Goal B):** no-sourcemap production build to the
+1. ✅ **DONE — Schema formalization** (2026-07-13): `schemaVersion` on export
+   + `SCHEMA.md` topology doc (serves A4, C1, D3).
+2. ✅ **DONE — Headless runner + skill (Goal A)** (2026-07-13, shipped in
+   `sugar-skills@0.3.0`): `sugar run`, summarizer, `sugar sweep`, SKILL.md +
+   four examples, all in `sugar/`, `npx skills`-installable.
+3. ⬅ **NEXT — Demo deployment (Goal B):** no-sourcemap production build to the
    existing CF assets target; import-on-boot (file + fragment); cross-links
-   with the skill repo. Small, and multiplies the skill's value.
-4. **Sharing polish (Goal C):** export UX upgrades (stable ordering, image
-   strip choice), fragment encoding. KV shortener deferred until demanded.
+   with the skill repo. Small, and multiplies the skill's value — also closes
+   A5's open demo link.
+4. **Sharing polish (Goal C):** export UX upgrades (image strip choice —
+   stable ordering / `schemaVersion` already done), fragment encoding. KV
+   shortener deferred until demanded.
 5. **Node-model registry (Goal D):** the big refactor, still last, now in
    the engine repo — by then schema, skill, and demo exist, so contributions
    land with distribution already in place.
