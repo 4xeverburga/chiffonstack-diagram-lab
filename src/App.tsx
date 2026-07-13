@@ -186,6 +186,10 @@ function LabEditor() {
 
   const [jsonExportStatus, setJsonExportStatus] = useState<JsonStatus>('idle')
   const [jsonImportStatus, setJsonImportStatus] = useState<JsonStatus>('idle')
+  // Persistent (non-transient) provenance of the current diagram: 'initial' is
+  // the built-in demo topology; 'file' means a user/agent-supplied JSON was
+  // successfully imported. Drives the deterministic ready-signal in the DOM.
+  const [diagramSource, setDiagramSource] = useState<'initial' | 'file'>('initial')
   const uploadInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -216,16 +220,18 @@ function LabEditor() {
     uploadInputRef.current?.click()
   }, [])
 
-  const handleUploadFileChange = useCallback(
-    (event: ChangeEvent<HTMLInputElement>) => {
-      const file = event.target.files?.[0]
-      event.target.value = ''
-      if (!file) return
+  // Single import path shared by the file-picker (Upload JSON button) and the
+  // canvas file-drop (B2). Flips `diagramSource` to 'file' on success so the
+  // deterministic ready-signal (below) tells an automated driver its uploaded
+  // topology — not the initial demo diagram — is now loaded (assessment §3 B2).
+  const importDiagramFromFile = useCallback(
+    (file: File) => {
       file
         .text()
         .then((text) => {
           const { nodes: importedNodes, edges: importedEdges } = parseDiagram(text)
           handleImportDiagram(importedNodes, importedEdges)
+          setDiagramSource('file')
           setJsonImportStatus('done')
         })
         .catch((error: unknown) => {
@@ -234,6 +240,16 @@ function LabEditor() {
         })
     },
     [handleImportDiagram],
+  )
+
+  const handleUploadFileChange = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0]
+      event.target.value = ''
+      if (!file) return
+      importDiagramFromFile(file)
+    },
+    [importDiagramFromFile],
   )
 
   const jsonExportLabel = jsonExportStatus === 'done' ? 'Downloaded!' : jsonExportStatus === 'error' ? 'Download failed' : 'Export JSON'
@@ -306,11 +322,20 @@ function LabEditor() {
   const onDrop = useCallback(
     (event: DragEvent<HTMLDivElement>) => {
       event.preventDefault()
+      // A palette drag (adding a node) carries our MIME key; an OS file drag
+      // carries no key but does carry `files`. Check the palette key first so
+      // node-adds are unaffected, then fall back to importing a dropped JSON
+      // file — the drag-and-drop half of B2, sharing importDiagramFromFile
+      // with the file-picker so both paths behave identically.
       const paletteKey = event.dataTransfer.getData(DRAG_MIME_TYPE)
-      if (!paletteKey) return
-      addNode(simForPaletteKey(paletteKey), screenToFlowPosition({ x: event.clientX, y: event.clientY }))
+      if (paletteKey) {
+        addNode(simForPaletteKey(paletteKey), screenToFlowPosition({ x: event.clientX, y: event.clientY }))
+        return
+      }
+      const file = event.dataTransfer.files?.[0]
+      if (file) importDiagramFromFile(file)
     },
-    [addNode, screenToFlowPosition],
+    [addNode, screenToFlowPosition, importDiagramFromFile],
   )
 
   const onDragOver = useCallback((event: DragEvent<HTMLDivElement>) => {
@@ -332,9 +357,37 @@ function LabEditor() {
 
   return (
     <div className="lab">
+      {/*
+        Deterministic ready-signal (assessment §3 B2). Visually hidden but in
+        the accessibility tree and queryable by an automated driver: a stable
+        data-testid plus structured data-* attributes an agent can read after
+        browser_file_upload, and human-readable status text an aria-live region
+        / browser_wait_for can key on. "Ready" here means the topology parsed
+        and is loaded; the run is manual (the driver/user presses play).
+      */}
+      <div
+        className="lab-diagram-status"
+        data-testid="diagram-status"
+        data-diagram-source={diagramSource}
+        data-node-count={nodes.length}
+        data-edge-count={edges.length}
+        data-run-status={runStatus}
+        role="status"
+        aria-live="polite"
+      >
+        {diagramSource === 'file'
+          ? `Diagram loaded from file: ${nodes.length} ${nodes.length === 1 ? 'node' : 'nodes'}, ${edges.length} ${edges.length === 1 ? 'edge' : 'edges'}. Ready to run.`
+          : ''}
+      </div>
       <header className="lab-bar">
         <span className="lab-title">SUGAR</span>
         <span className="lab-meta">React Flow authoring tool for system topology diagrams</span>
+        {/* Reverse edge of the distribution loop (assessment §3 B3): the demo
+            points back at the open-source engine so a visitor can drive this
+            same analysis from their own agent via the `sugar` CLI / skill. */}
+        <a className="lab-engine-link" href="https://github.com/4xeverburga/sugar" target="_blank" rel="noopener noreferrer">
+          Run this from your agent →
+        </a>
         <SimulationControls
           runStatus={runStatus}
           statusMessage={statusMessage}
