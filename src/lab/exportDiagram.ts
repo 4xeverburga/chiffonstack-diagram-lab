@@ -3,8 +3,8 @@ import { HEAT_VARIANTS, type HeatVariant } from './heatVariants'
 import { LEGACY_SOURCE_SIDE, LEGACY_TARGET_SIDE, resolveHandleSide } from './handleSides'
 import { resolveDirection, resolveThickness } from './edgeStyle'
 import { resolveTextSize } from './textSizes'
-import { LEGACY_BOOT_DELAY_MS_FOR_IMPORT, LEGACY_HIGH_WATERMARK_FOR_IMPORT, LEGACY_LOW_WATERMARK_FOR_IMPORT, LEGACY_OVERLOAD_BEHAVIOR_FOR_IMPORT } from '../engine/config'
-import type { EdgeSimConfig, NodeSim } from '../engine/ports'
+import { LEGACY_BOOT_DELAY_MS_FOR_IMPORT, LEGACY_HIGH_WATERMARK_FOR_IMPORT, LEGACY_LOW_WATERMARK_FOR_IMPORT, LEGACY_OVERLOAD_BEHAVIOR_FOR_IMPORT } from 'sugar-skills'
+import type { EdgeSimConfig, NodeSim } from 'sugar-skills'
 
 // Tracks whether the current parseDiagram() call dropped any retired-role
 // node so a single, one-time console notice can be surfaced (research.md

@@ -10,8 +10,8 @@
 // host's replica telemetry and its declared maxReplicas, compute exactly
 // what ScalingGroupNode needs to render — kept pure so it's unit-testable
 // without mounting React (constitution VI).
-import { MAX_DISCRETE_CAPACITY_SEGMENTS } from '../engine/config'
-import type { HostReplicaTelemetry } from '../engine/ports'
+import { MAX_DISCRETE_CAPACITY_SEGMENTS } from 'sugar-skills'
+import type { HostReplicaTelemetry } from 'sugar-skills'
 
 export type ScalingGroupMode = 'segments' | 'proportional'
 

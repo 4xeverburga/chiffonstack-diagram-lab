@@ -1,4 +1,4 @@
-import type { MetricsWindow, SimTopology } from '../engine/ports'
+import type { MetricsWindow, SimTopology } from 'sugar-skills'
 
 // Discriminated unions over postMessage (structured clone) — the adapter
 // boundary between the UI thread and the worker hosting the engine

@@ -1,4 +1,4 @@
-import type { HostNodeMetrics, HostReplicaTelemetry } from '../engine/ports'
+import type { HostNodeMetrics, HostReplicaTelemetry } from 'sugar-skills'
 import { projectScalingGroup, resolveReplicaTelemetry } from './scalingGroupProjection'
 
 // The on-canvas "scaling group" visual (spec User Story 4) — rendered

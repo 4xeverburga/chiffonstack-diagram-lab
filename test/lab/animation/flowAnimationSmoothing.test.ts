@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_SIGMOID_MAPPING_CONFIG, DEFAULT_FLOW_SMOOTHING_CONFIG } from '../../src/engine/config'
-import { mapThroughputToAnimation } from '../../src/engine/sigmoidMapping'
-import { createInitialFlowAnimationState, updateFlowAnimationState, type FlowSmoothingConfig } from '../../src/engine/flowAnimationSmoothing'
+import { DEFAULT_SIGMOID_MAPPING_CONFIG, DEFAULT_FLOW_SMOOTHING_CONFIG } from '../../../src/lab/animation/trafficScalePresets'
+import { mapThroughputToAnimation } from '../../../src/lab/animation/sigmoidMapping'
+import { createInitialFlowAnimationState, updateFlowAnimationState, type FlowSmoothingConfig } from '../../../src/lab/animation/flowAnimationSmoothing'
 
 const mappingConfig = DEFAULT_SIGMOID_MAPPING_CONFIG
 

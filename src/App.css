@@ -1,4 +1,9 @@
 .lab {
+  /* Centralized panel-width token (plan: "Inspector denso y estado-
+     consciente" Fase 1) — the Inspector is wider than the Sidebar because
+     its content (config fields + telemetry + formulas) is denser; keep
+     this the single place that number lives. */
+  --panel-inspector-width: 300px;
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -109,6 +114,17 @@
   margin: 0;
 }
 
+/* Fase 3 (consciencia de estado): read-only summary of the capability +
+   scaling config while the sim runs — replaces ~10 disabled inputs. */
+.lab-spec-line {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  margin: 0 0 16px;
+  overflow-wrap: break-word;
+}
+
 .lab-field-checkbox {
   flex-direction: row;
   align-items: center;
@@ -156,6 +172,12 @@
   color: var(--text);
 }
 
+.sim-host-meter-value {
+  color: var(--text-h);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
 /* The binding meter is distinguished by weight/border, not color alone
    (spec Edge Cases — low-contrast token accessibility fallback). */
 .sim-host-meter-binding {
@@ -166,11 +188,8 @@
 
 /* Formula & sources panel (feature 010, US4/FR-008/FR-009) — bottom of the
    Inspector, per the fixed layout decision in spec.md's Assumptions. */
-.lab-formula-panel {
-  margin-top: 16px;
-  padding-top: 16px;
-  border-top: 1px solid var(--border);
-}
+/* Formula panel content — the section chrome (title, hairline, collapse)
+   now comes from .lab-section via InspectorSection. */
 
 .lab-formula-list {
   list-style: none;
@@ -206,12 +225,12 @@
   word-break: break-word;
 }
 
-.lab-formula-inputs {
-  list-style: none;
+.lab-formula-inputs-line {
   margin: 0 0 4px;
-  padding: 0;
   color: var(--text);
   opacity: 0.85;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: break-word;
 }
 
 .lab-formula-sources {
@@ -272,7 +291,6 @@
 /* Sidebar — add-node palette */
 .lab-sidebar,
 .lab-inspector {
-  flex: 0 0 220px;
   min-height: 0;
   overflow-y: auto;
   padding: 16px;
@@ -280,10 +298,14 @@
 }
 
 .lab-sidebar {
+  flex: 0 0 220px;
   border-right: 1px solid var(--border);
 }
 
 .lab-inspector {
+  /* Wider than the Sidebar (Fase 1): its content is denser (config fields +
+     telemetry + formulas), so 220px forced everything into one column. */
+  flex: 0 0 var(--panel-inspector-width, 300px);
   border-left: 1px solid var(--border);
 }
 
@@ -300,6 +322,70 @@
   margin-top: 24px;
   padding-top: 16px;
   border-top: 1px solid var(--border);
+}
+
+/* Inspector accordion sections: native <details>/<summary>, styled to the
+   same uppercase-mono section-title vocabulary. The hairline top border
+   replaces .lab-panel-title-spaced inside the Inspector; the summary row
+   keeps a right-hand slot (summaryExtra) reserved for the config-presets
+   picker (next feature). */
+.lab-section {
+  border-top: 1px solid var(--border);
+}
+
+.lab-section-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 0;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.lab-section-summary::-webkit-details-marker {
+  display: none;
+}
+
+.lab-section-summary:focus-visible {
+  outline: 1px solid #ff4715;
+  outline-offset: 2px;
+}
+
+.lab-section-title {
+  font-family: var(--mono);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text);
+}
+
+.lab-section-summary:hover .lab-section-title {
+  color: var(--text-h);
+}
+
+/* Chevron drawn with borders so it inherits the hover accent; points right
+   when collapsed, down when open. */
+.lab-section-caret {
+  flex: 0 0 auto;
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid var(--text);
+  border-bottom: 1.5px solid var(--text);
+  transform: translateY(-1px) rotate(-45deg);
+  transition: transform 0.18s cubic-bezier(0.165, 0.84, 0.44, 1);
+}
+
+.lab-section-summary:hover .lab-section-caret {
+  border-color: #ff4715;
+}
+
+.lab-section[open] > .lab-section-summary .lab-section-caret {
+  transform: translateY(-2px) rotate(45deg);
+}
+
+.lab-section-body {
+  padding: 2px 0 8px;
 }
 
 .lab-color-field {
@@ -412,6 +498,30 @@
   color: var(--text);
 }
 
+/* Fase 2 (densidad): 2-column grid for numeric config fields — an 8-field
+   single column becomes 4 rows. Children keep their own .lab-field layout;
+   this only governs the grid placement, so no other markup changes. */
+.lab-field-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.lab-field-grid .lab-field {
+  margin-bottom: 0;
+  min-width: 0;
+}
+
+.lab-field-grid .lab-field span {
+  overflow-wrap: break-word;
+}
+
+.lab-field-grid .lab-field input {
+  min-width: 0;
+  width: 100%;
+}
+
 .lab-field input {
   font-family: var(--mono);
   font-size: 13px;
@@ -420,12 +530,29 @@
   border-radius: 6px;
   border: 1px solid var(--border);
   background: var(--bg);
+  box-sizing: border-box;
 }
 
 .lab-button-row {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+}
+
+/* Fase 2 (densidad): Simulation role's 7 chips as an ordered 2-column grid
+   instead of ragged flex-wrap rows. */
+.lab-role-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.lab-role-grid .chip {
+  width: 100%;
+  min-width: 0;
+  text-align: center;
+  white-space: normal;
+  overflow-wrap: break-word;
 }
 
 .chip {
@@ -458,6 +585,31 @@
 
 .lab-danger:hover {
   border-color: #ff0024;
+}
+
+/* Styled trigger for the hidden image file input (same hidden-input +
+   button pattern as the top bar's JSON import). */
+.lab-image-upload {
+  align-self: flex-start;
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-h);
+  cursor: pointer;
+}
+
+.lab-image-upload:hover {
+  border-color: #ff4715;
+}
+
+/* Bottom slot for panel-level actions (Delete edge) below the last
+   accordion section. */
+.lab-inspector-footer {
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
 }
 
 .lab-node-image-preview {
@@ -1052,6 +1204,10 @@
 
   .lab-inspector-flash {
     animation: none;
+  }
+
+  .lab-section-caret {
+    transition: none;
   }
 
   .react-flow__node.sim-status-saturated,

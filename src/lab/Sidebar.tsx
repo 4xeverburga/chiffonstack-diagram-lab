@@ -1,34 +1,22 @@
 import type { DragEvent } from 'react'
-import { classNameForKind, type NodeKind } from './nodeKinds'
+import { classNameForKind } from './nodeKinds'
 import type { DesignTokens } from './designTokens'
-
-type PaletteItem = {
-  kind: NodeKind
-  label: string
-  hint: string
-}
-
-const PALETTE: PaletteItem[] = [
-  { kind: 'default', label: 'Node', hint: 'Neutral system node' },
-  { kind: 'active', label: 'Active node', hint: 'Heat-highlighted, the live path' },
-  { kind: 'dim', label: 'Dim node', hint: 'Faded, fallback / secondary path' },
-]
-
-export const DRAG_MIME_TYPE = 'application/chiffon-node'
+import type { NodeSim } from 'sugar-skills'
+import { DRAG_MIME_TYPE, PALETTE, type PaletteKey } from './nodePalette'
 
 type SidebarProps = {
-  onAddNode: (kind: NodeKind) => void
+  onAddNode: (sim: NodeSim | undefined) => void
   tokens: DesignTokens
   onChangeTokens: (tokens: DesignTokens) => void
 }
 
-// Langflow-style "add node" palette: drag a kind onto the canvas, or click to
+// Langflow-style "add node" palette: drag a role onto the canvas, or click to
 // drop it at the canvas center. Also hosts the design-token inputs (brand
 // colors/fonts), which restyle the live canvas immediately and feed every
 // export target.
 export function Sidebar({ onAddNode, tokens, onChangeTokens }: SidebarProps) {
-  const onDragStart = (event: DragEvent<HTMLButtonElement>, kind: NodeKind) => {
-    event.dataTransfer.setData(DRAG_MIME_TYPE, kind)
+  const onDragStart = (event: DragEvent<HTMLButtonElement>, key: PaletteKey) => {
+    event.dataTransfer.setData(DRAG_MIME_TYPE, key)
     event.dataTransfer.effectAllowed = 'move'
   }
 
@@ -37,15 +25,15 @@ export function Sidebar({ onAddNode, tokens, onChangeTokens }: SidebarProps) {
       <h2 className="lab-panel-title">Add node</h2>
       <ul className="lab-palette">
         {PALETTE.map((item) => (
-          <li key={item.kind}>
+          <li key={item.key}>
             <button
               type="button"
               className="palette-item"
               draggable
-              onDragStart={(event) => onDragStart(event, item.kind)}
-              onClick={() => onAddNode(item.kind)}
+              onDragStart={(event) => onDragStart(event, item.key)}
+              onClick={() => onAddNode(item.sim)}
             >
-              <span className={`palette-swatch ${classNameForKind(item.kind)}`} />
+              <span className={`palette-swatch ${classNameForKind('default')}`} />
               <span className="palette-copy">
                 <span className="palette-label">{item.label}</span>
                 <span className="palette-hint">{item.hint}</span>
@@ -85,24 +73,27 @@ export function Sidebar({ onAddNode, tokens, onChangeTokens }: SidebarProps) {
           />
         </div>
       </label>
-      <label className="lab-field">
-        <span>Heading font</span>
-        <input
-          value={tokens.headingFont}
-          onChange={(event) => onChangeTokens({ ...tokens, headingFont: event.target.value })}
-          placeholder="e.g. Quicksand, sans-serif"
-        />
-      </label>
-      <label className="lab-field">
-        <span>Body font</span>
-        <input
-          value={tokens.bodyFont}
-          onChange={(event) => onChangeTokens({ ...tokens, bodyFont: event.target.value })}
-          placeholder="e.g. Hanken Grotesk, sans-serif"
-        />
-      </label>
+      <div className="lab-field-grid">
+        <label className="lab-field">
+          <span>Heading font</span>
+          <input
+            value={tokens.headingFont}
+            onChange={(event) => onChangeTokens({ ...tokens, headingFont: event.target.value })}
+            placeholder="e.g. Quicksand, sans-serif"
+          />
+        </label>
+        <label className="lab-field">
+          <span>Body font</span>
+          <input
+            value={tokens.bodyFont}
+            onChange={(event) => onChangeTokens({ ...tokens, bodyFont: event.target.value })}
+            placeholder="e.g. Hanken Grotesk, sans-serif"
+          />
+        </label>
+      </div>
       <p className="lab-sidebar-note">Updates the canvas live and styles every export.</p>
     </aside>
   )
 }
+
 

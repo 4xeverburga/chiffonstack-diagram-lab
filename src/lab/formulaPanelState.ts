@@ -1,4 +1,4 @@
-import type { FormulaDescriptor, NodeSim } from '../engine/ports'
+import type { FormulaDescriptor, NodeSim } from 'sugar-skills'
 
 // Pure view-model logic for FormulaPanel.tsx, split into its own module so
 // that file only exports the component (oxlint's react/only-export-

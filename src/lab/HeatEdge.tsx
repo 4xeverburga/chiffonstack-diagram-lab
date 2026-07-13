@@ -3,9 +3,9 @@ import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import type { HeatVariant } from './heatVariants'
 import { edgeStyleClassNames, resolveDirection, resolveThickness } from './edgeStyle'
 import { EdgeToolbar } from './EdgeToolbar'
-import { DEFAULT_SIGMOID_MAPPING_CONFIG, DEFAULT_FLOW_SMOOTHING_CONFIG } from '../engine/config'
-import type { SigmoidMappingConfig } from '../engine/sigmoidMapping'
-import { createInitialFlowAnimationState, updateFlowAnimationState, type FlowAnimationState } from '../engine/flowAnimationSmoothing'
+import { DEFAULT_SIGMOID_MAPPING_CONFIG, DEFAULT_FLOW_SMOOTHING_CONFIG } from './animation/trafficScalePresets'
+import type { SigmoidMappingConfig } from './animation/sigmoidMapping'
+import { createInitialFlowAnimationState, updateFlowAnimationState, type FlowAnimationState } from './animation/flowAnimationSmoothing'
 
 // The "flowing heat path" edge from the Langflow/n8n reference: a live path
 // through a topology gets a moving gradient in the user's primary token
@@ -61,9 +61,10 @@ export function HeatEdge({
   // module for the two-timescale EMA + hysteresis/hold-time design.
   // mappingConfig rides in on data (App.tsx, from the traffic-scale
   // dropdown) rather than always using the fixed default — what counts as
-  // "fast"/"saturated" throughput is architecture-dependent (src/engine/
-  // config.ts's SIGMOID_MAPPING_BY_TRAFFIC_SCALE), so it must be tunable
-  // per diagram, not a single hardcoded curve for every project.
+  // "fast"/"saturated" throughput is architecture-dependent (src/lab/
+  // animation/trafficScalePresets.ts's SIGMOID_MAPPING_BY_TRAFFIC_SCALE),
+  // so it must be tunable per diagram, not a single hardcoded curve for
+  // every project.
   const throughputPerSec = (data as { simMetrics?: { throughputPerSec: number } } | undefined)?.simMetrics?.throughputPerSec
   const smoothingRef = useRef<FlowAnimationState>(createInitialFlowAnimationState(mappingConfig))
   const [committedAnimation, setCommittedAnimation] = useState(() => smoothingRef.current.committed)

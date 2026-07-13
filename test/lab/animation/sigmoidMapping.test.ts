@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_SIGMOID_MAPPING_CONFIG } from '../../src/engine/config'
-import { mapThroughputToAnimation } from '../../src/engine/sigmoidMapping'
+import { DEFAULT_SIGMOID_MAPPING_CONFIG } from '../../../src/lab/animation/trafficScalePresets'
+import { mapThroughputToAnimation } from '../../../src/lab/animation/sigmoidMapping'
 
 describe('mapThroughputToAnimation', () => {
   it('never produces a duration outside [durationMinSec, durationMaxSec]', () => {
