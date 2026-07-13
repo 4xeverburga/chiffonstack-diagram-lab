@@ -134,3 +134,18 @@ values, root-relative imports) and [PRODUCT.md](PRODUCT.md) for the
 product's scope and anti-references. CI runs lint, build, and the test suite
 on every push and pull request. `main` and `dev` are protected — PR feature
 branches into `dev` first, then `dev` into `main`.
+
+## License
+
+This application (the SUGAR canvas UI, editor, and app code) is
+**source-available** under the [Business Source License 1.1](LICENSE), not a
+traditional open-source license. In short: you may read, modify, self-host,
+and use it for internal, personal, educational, or evaluation purposes, but
+you may **not** offer it to others as a competing hosted or commercial
+diagramming product. Each released version converts to the Apache License 2.0
+on its Change Date (see [LICENSE](LICENSE) for the exact terms). For commercial
+licensing outside these terms, contact the Licensor.
+
+The underlying simulation engine is a **separate**, MIT-licensed package —
+[`sugar-skills`](https://github.com/4xeverburga/sugar) — and is not covered by
+this license. The BSL applies only to this repository's application code.
