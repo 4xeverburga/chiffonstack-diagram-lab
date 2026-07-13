@@ -3,17 +3,14 @@ import { HEAT_VARIANTS, type HeatVariant } from './heatVariants'
 import { LEGACY_SOURCE_SIDE, LEGACY_TARGET_SIDE, resolveHandleSide } from './handleSides'
 import { resolveDirection, resolveThickness } from './edgeStyle'
 import { resolveTextSize } from './textSizes'
-import { LEGACY_BOOT_DELAY_MS_FOR_IMPORT, LEGACY_HIGH_WATERMARK_FOR_IMPORT, LEGACY_LOW_WATERMARK_FOR_IMPORT, LEGACY_OVERLOAD_BEHAVIOR_FOR_IMPORT } from 'sugar-skills'
+import { DIAGRAM_SCHEMA_VERSION, LEGACY_BOOT_DELAY_MS_FOR_IMPORT, LEGACY_HIGH_WATERMARK_FOR_IMPORT, LEGACY_LOW_WATERMARK_FOR_IMPORT, LEGACY_OVERLOAD_BEHAVIOR_FOR_IMPORT } from 'sugar-skills'
 import type { EdgeSimConfig, NodeSim } from 'sugar-skills'
 
 // The interchange-format version stamped on every export (assessment.md §4.1
-// "versioned schema" keystone). Canonically this is `sugar-skills`'
-// DIAGRAM_SCHEMA_VERSION — the engine owns the schema contract (SCHEMA.md) and
-// ships it in lockstep with the package (§1.1). Kept as a local mirror here
-// only until the installed sugar-skills version exports the constant; when it
-// does, import it from 'sugar-skills' and delete this. It MUST match that
-// value. See sugar's SCHEMA.md for the compatibility policy this enables.
-const DIAGRAM_SCHEMA_VERSION = 1
+// "versioned schema" keystone) is `sugar-skills`' DIAGRAM_SCHEMA_VERSION — the
+// engine owns the schema contract (SCHEMA.md) and ships it in lockstep with the
+// package (§1.1), so we import it from the barrel rather than mirror it here.
+// See sugar's SCHEMA.md for the compatibility policy this enables.
 
 // Tracks whether the current parseDiagram() call dropped any retired-role
 // node so a single, one-time console notice can be surfaced (research.md
