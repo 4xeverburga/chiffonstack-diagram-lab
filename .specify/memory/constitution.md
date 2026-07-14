@@ -1,29 +1,15 @@
 <!--
 Sync Impact Report
-- Version change: 3.3.0 → 3.4.0
-- Bump rationale: MINOR — Principle I's closed parameter set gains one more
-  user-facing parameter (feature 012-overload-collapse): saturating host
-  profiles (transactional_api/worker_consumer/database_server, either config
-  mode) gain `overloadBehavior: 'clamp' | 'collapse'`. `clamp` reproduces
-  the existing plateau-and-shed behavior exactly; `collapse` (the new
-  default for freshly-assigned hosts) is a retrograde goodput curve past
-  the existing knee (`manualMaxRPS` / the calculated-mode ρ=1 point) derived
-  entirely from existing capability parameters plus a new internal-only
-  decay tunable — no second numeric knob. Imported pre-012 diagrams keep
-  `clamp` (their previous behavior) per the documented migration.
+- Version change: 3.4.0 → 3.4.1
+- Bump rationale: PATCH — cross-repo governance clarification after engine
+  extraction. Replaced stale `src/engine/config.ts` reference with
+  `sugar/src/config.ts` in Principle I.
 - Modified principles:
-  - I. Host-First Model Depth, Closed Parameter Set — closed list extended
-    with `overloadBehavior` on transactional_api/worker_consumer/
-    database_server (either config mode).
+  - I. Host-First Model Depth, Closed Parameter Set — path reference updated
+    to extracted engine location only (no policy change).
 - Added sections: none
 - Removed sections: none
-- Templates requiring updates:
-  - ✅ .specify/templates/plan-template.md — Constitution Check gate is
-    generic; derives from this file, no edit needed
-  - ✅ .specify/templates/spec-template.md — no constitution-specific references
-  - ✅ .specify/templates/tasks-template.md — no constitution-specific references
-  - ✅ PRODUCT.md — "Hosts first, lean parameters" bullet updated to mention
-    overloadBehavior/collapse in the same change
+- Templates requiring updates: none
 - Follow-up TODOs: none
 -->
 
@@ -76,7 +62,7 @@ they cannot eyeball is how hosts interact and where saturation appears first:
   explicitly includes the autoscaler's sustain window, cooldown, and the
   visible-replica cap on the canvas, and the overload-collapse curve's decay
   steepness and collapsed-status goodput threshold, all of which live in
-  `src/engine/config.ts`. Boot delay and the high/low saturation watermarks
+  `sugar/src/config.ts` (the extracted engine repository). Boot delay and the high/low saturation watermarks
   are user-declared capability parameters (`bootDelayMs`, `highWatermark`,
   `lowWatermark`), not internal tunables — boot delay varies by real
   infrastructure, and real Kubernetes HPA likewise sets its target
@@ -245,4 +231,4 @@ confidently change it — doubly so when the code encodes physics formulas.
 - **Compliance review**: the `/speckit-plan` Constitution Check is the standing
   gate; re-check after design (Phase 1) as the plan template requires.
 
-**Version**: 3.4.0 | **Ratified**: 2026-07-04 | **Last Amended**: 2026-07-07
+**Version**: 3.4.1 | **Ratified**: 2026-07-04 | **Last Amended**: 2026-07-13

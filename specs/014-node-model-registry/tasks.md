@@ -29,7 +29,7 @@ SUGAR constitution (VI) mandates unit tests for all pure engine logic.
 
 **Purpose**: Module skeleton for the registry and the conformance kit.
 
-- [ ] T001 Create the `sugar/src/registry/` module skeleton (dirs `registry/`, `registry/models/`, empty `registry/index.ts` stub) and `sugar/src/conformance/` per plan.md Project Structure
+- [X] T001 Create the `sugar/src/registry/` module skeleton (dirs `registry/`, `registry/models/`, empty `registry/index.ts` stub) and `sugar/src/conformance/` per plan.md Project Structure
 
 ---
 
@@ -41,12 +41,12 @@ before any model can migrate.
 
 **⚠️ CRITICAL**: No user-story work begins until this phase is complete.
 
-- [ ] T002 Define the `NodeModel` interface + supporting types (`WindowCtx`, `WindowResult`, `ParamSchema`, config-validation `Result`) in `sugar/src/registry/nodeModel.ts`, per contracts/node-model.md
-- [ ] T003 Implement `buildRegistry` + `Registry` (`Map<kind, NodeModel>`, throw on duplicate `id` (FR-009) and on an incomplete model) in `sugar/src/registry/registry.ts`
-- [ ] T004 Implement `resolveModelId(sim)` mapping the diagram `kind`/`profile` shape to a flat model id (R6; queue→queue, host/client_pool→client_pool, host/external_api→external_api, host/{transactional_api,worker_consumer,database_server}→saturatingHost) in `sugar/src/registry/resolve.ts`
-- [ ] T005 Generalize cross-window state: replace the hardcoded `queueBacklogGB` / `replicaRuntimeByNode` maps with an opaque `stateByNode: Map<string, unknown>` and collapse `nextQueueBacklogGB` / `nextReplicaRuntimeByNode` into `nextStateByNode` — plumbing only, models still on the legacy path — in `sugar/src/simulation.ts` and `sugar/src/flowPropagation.ts` (D2, R2)
-- [ ] T006 [P] Capture golden `sugar run --json` summaries (fixed `--seed 1`) for all `sugar/examples/*.json` topologies into `sugar/test/golden/` as the behavior baseline (R5)
-- [ ] T007 [P] Unit tests for `buildRegistry` (duplicate-id throws, incomplete-model throws) in `sugar/test/registry/registry.test.ts`
+- [X] T002 Define the `NodeModel` interface + supporting types (`WindowCtx`, `WindowResult`, `ParamSchema`, config-validation `Result`) in `sugar/src/registry/nodeModel.ts`, per contracts/node-model.md
+- [X] T003 Implement `buildRegistry` + `Registry` (`Map<kind, NodeModel>`, throw on duplicate `id` (FR-009) and on an incomplete model) in `sugar/src/registry/registry.ts`
+- [X] T004 Implement `resolveModelId(sim)` mapping the diagram `kind`/`profile` shape to a flat model id (R6; queue→queue, host/client_pool→client_pool, host/external_api→external_api, host/{transactional_api,worker_consumer,database_server}→saturatingHost) in `sugar/src/registry/resolve.ts`
+- [X] T005 Generalize cross-window state: replace the hardcoded `queueBacklogGB` / `replicaRuntimeByNode` maps with an opaque `stateByNode: Map<string, unknown>` and collapse `nextQueueBacklogGB` / `nextReplicaRuntimeByNode` into `nextStateByNode` — plumbing only, models still on the legacy path — in `sugar/src/simulation.ts` and `sugar/src/flowPropagation.ts` (D2, R2)
+- [X] T006 [P] Capture golden `sugar run --json` summaries (fixed `--seed 1`) for all `sugar/examples/*.json` topologies into `sugar/test/golden/` as the behavior baseline (R5)
+- [X] T007 [P] Unit tests for `buildRegistry` (duplicate-id throws, incomplete-model throws) in `sugar/test/registry/registry.test.ts`
 
 **Checkpoint**: Registry scaffolding, resolution, generalized state, and goldens exist — behavior still unchanged.
 
@@ -64,20 +64,20 @@ logic or the central stepping/dispatch code.
 
 ### Tests for User Story 1
 
-- [ ] T008 [P] [US1] Extensibility test: register a **test-only fixture model** and assert a diagram using it runs correctly AND that adding it touched only its own file + the one registration line (SC-001/SC-003) in `sugar/test/registry/extensibility.test.ts`
+- [X] T008 [P] [US1] Extensibility test: register a **test-only fixture model** and assert a diagram using it runs correctly AND that adding it touched only its own file + the one registration line (SC-001/SC-003) in `sugar/test/registry/extensibility.test.ts`
 
 ### Implementation for User Story 1 (migrate one model at a time; assert goldens after each — R5)
 
-- [ ] T009 [P] [US1] `queueModel` registry entry, folding `sugar/src/queueModel.ts`'s physics as its internals, in `sugar/src/registry/models/queueModel.ts`
-- [ ] T010 [P] [US1] `clientPoolModel` entry (traffic source; `acceptCapacityRPS` = 0-inbound / generates), delegating to `sugar/src/hostModel.ts` `computeClientPoolMetrics`, in `sugar/src/registry/models/clientPoolModel.ts`
-- [ ] T011 [P] [US1] `externalApiModel` entry (`acceptCapacityRPS` = +∞), delegating to `computeExternalApiMetrics`, in `sugar/src/registry/models/externalApiModel.ts`
-- [ ] T012 [US1] `saturatingHostModel` entry covering transactional_api/worker_consumer/database_server (both config modes), delegating physics to `hostModel.ts` + `autoscaler.ts`, owning `ReplicaRuntime` state, in `sugar/src/registry/models/saturatingHostModel.ts`
-- [ ] T013 [US1] Register all four built-ins (the single enumeration point) in `sugar/src/registry/index.ts`
-- [ ] T014 [US1] Drive `sugar/src/flowPropagation.ts` through registry hooks (`acceptCapacityRPS` for backpressure, `computeWindow` for output), removing the per-profile `isSaturatingProfile` / `hostAcceptCapacityRPS` / `hostCapacityRPS` branches so the file becomes the generic topological-order driver (shrinks it below the 250-line limit, Constitution VI)
-- [ ] T015 [US1] Drive `sugar/src/simulation.ts` cross-window state via each model's `initialState` / `reconcileState` / `computeWindow.nextState`, removing the hardcoded profile lists in `resetRuntimeState` / `reclampReplicaRuntimes` / generator scheduling
-- [ ] T016 [US1] Replace remaining profile-string dispatch with `registry.resolve(sim)` in `sugar/src/summary.ts`, `sugar/src/topology.ts`, `sugar/src/diagramInput.ts`, and `sugar/src/components.ts`
-- [ ] T017 [US1] Export `NodeModel`, `registry`, and supporting types from the package barrel `sugar/src/index.ts`
-- [ ] T018 [US1] Assert every golden summary is byte-identical after the full migration (SC-002) and grep-confirm no `sim.profile ===` dispatch remains in the stepping loop (SC-003) — add the assertion in `sugar/test/golden/goldenParity.test.ts`
+- [X] T009 [P] [US1] `queueModel` registry entry, folding `sugar/src/queueModel.ts`'s physics as its internals, in `sugar/src/registry/models/queueModel.ts`
+- [X] T010 [P] [US1] `clientPoolModel` entry (traffic source; `acceptCapacityRPS` = 0-inbound / generates), delegating to `sugar/src/hostModel.ts` `computeClientPoolMetrics`, in `sugar/src/registry/models/clientPoolModel.ts`
+- [X] T011 [P] [US1] `externalApiModel` entry (`acceptCapacityRPS` = +∞), delegating to `computeExternalApiMetrics`, in `sugar/src/registry/models/externalApiModel.ts`
+- [X] T012 [US1] `saturatingHostModel` entry covering transactional_api/worker_consumer/database_server (both config modes), delegating physics to `hostModel.ts` + `autoscaler.ts`, owning `ReplicaRuntime` state, in `sugar/src/registry/models/saturatingHostModel.ts`
+- [X] T013 [US1] Register all four built-ins (the single enumeration point) in `sugar/src/registry/index.ts`
+- [X] T014 [US1] Drive `sugar/src/flowPropagation.ts` through registry hooks (`acceptCapacityRPS` for backpressure, `computeWindow` for output), removing the per-profile `isSaturatingProfile` / `hostAcceptCapacityRPS` / `hostCapacityRPS` branches so the file becomes the generic topological-order driver (shrinks it below the 250-line limit, Constitution VI)
+- [X] T015 [US1] Drive `sugar/src/simulation.ts` cross-window state via each model's `initialState` / `reconcileState` / `computeWindow.nextState`, removing the hardcoded profile lists in `resetRuntimeState` / `reclampReplicaRuntimes` / generator scheduling
+- [X] T016 [US1] Replace remaining profile-string dispatch with `registry.resolve(sim)` in `sugar/src/summary.ts`, `sugar/src/topology.ts`, `sugar/src/diagramInput.ts`, and `sugar/src/components.ts`
+- [X] T017 [US1] Export `NodeModel`, `registry`, and supporting types from the package barrel `sugar/src/index.ts`
+- [X] T018 [US1] Assert every golden summary is byte-identical after the full migration (SC-002) and grep-confirm no `sim.profile ===` dispatch remains in the stepping loop (SC-003) — add the assertion in `sugar/test/golden/goldenParity.test.ts`
 
 **Checkpoint**: Engine is fully registry-driven; behavior identical to pre-refactor.
 
@@ -94,10 +94,10 @@ confirm both import without error.
 
 ### Tests for User Story 2
 
-- [ ] T019 [P] [US2] Determinism test: same seed → identical summaries across all examples (against `sugar/test/golden/`) in `sugar/test/registry/determinism.test.ts`
-- [ ] T020 [P] [US2] Backward-compat test: a pre-refactor diagram fixture imports and runs identically in `sugar/test/registry/backcompat.test.ts`
-- [ ] T021 [P] [US2] Unknown-kind degradation test: a diagram referencing a kind absent from the registry degrades that node to a plain visual node, leaves the rest intact, and notices a newer version (FR-007) in `sugar/test/registry/unknownKind.test.ts`
-- [ ] T022 [P] [US2] Schema round-trip test for every registered model, asserting `DIAGRAM_SCHEMA_VERSION` is unchanged (no bump, R6) and the `kind`/`profile` serialized shape is untouched (FR-008), in `sugar/test/registry/roundtrip.test.ts`
+- [X] T019 [P] [US2] Determinism test: same seed → identical summaries across all examples (against `sugar/test/golden/`) in `sugar/test/registry/determinism.test.ts`
+- [X] T020 [P] [US2] Backward-compat test: a pre-refactor diagram fixture imports and runs identically in `sugar/test/registry/backcompat.test.ts`
+- [X] T021 [P] [US2] Unknown-kind degradation test: a diagram referencing a kind absent from the registry degrades that node to a plain visual node, leaves the rest intact, and notices a newer version (FR-007) in `sugar/test/registry/unknownKind.test.ts`
+- [X] T022 [P] [US2] Schema round-trip test for every registered model, asserting `DIAGRAM_SCHEMA_VERSION` is unchanged (no bump, R6) and the `kind`/`profile` serialized shape is untouched (FR-008), in `sugar/test/registry/roundtrip.test.ts`
 
 **Checkpoint**: Compatibility and determinism guarantees are test-enforced.
 
@@ -113,13 +113,13 @@ NaN-producing model and confirm the suite fails each, naming the violation.
 
 ### Tests / Implementation for User Story 3
 
-- [ ] T023 [US3] Conformance harness iterating `registry.byKind` (drives each model on a fixture topology, runs every check below) in `sugar/src/conformance/conformance.test.ts`
-- [ ] T024 [P] [US3] Determinism check (two seeded runs identical) as a check function in `sugar/src/conformance/checks.ts`
-- [ ] T025 [P] [US3] Finite / no-NaN check (Infinity only as the explicit unbounded-capacity sentinel) in `sugar/src/conformance/checks.ts`
-- [ ] T026 [P] [US3] Flow-conservation check (`outflow ≤ inflow + released backlog` within ε) in `sugar/src/conformance/checks.ts`
-- [ ] T027 [P] [US3] Sourced-formula check reusing `validateFormulaDescriptorsHaveSources` from `sugar/src/formulaCatalog.ts` (FR-011, SC-006), wired into `sugar/src/conformance/checks.ts`
-- [ ] T028 [P] [US3] Schema round-trip check per model (default config → serialize → parse → equal) in `sugar/src/conformance/checks.ts`
-- [ ] T029 [US3] Negative tests: a non-deterministic fixture model and a NaN-producing fixture model each fail the suite with a message naming the violated property and model (FR-012) in `sugar/test/conformance/negative.test.ts`
+- [X] T023 [US3] Conformance harness iterating `registry.byKind` (drives each model on a fixture topology, runs every check below) in `sugar/src/conformance/conformance.test.ts`
+- [X] T024 [P] [US3] Determinism check (two seeded runs identical) as a check function in `sugar/src/conformance/checks.ts`
+- [X] T025 [P] [US3] Finite / no-NaN check (Infinity only as the explicit unbounded-capacity sentinel) in `sugar/src/conformance/checks.ts`
+- [X] T026 [P] [US3] Flow-conservation check (`outflow ≤ inflow + released backlog` within ε) in `sugar/src/conformance/checks.ts`
+- [X] T027 [P] [US3] Sourced-formula check reusing `validateFormulaDescriptorsHaveSources` from `sugar/src/formulaCatalog.ts` (FR-011, SC-006), wired into `sugar/src/conformance/checks.ts`
+- [X] T028 [P] [US3] Schema round-trip check per model (default config → serialize → parse → equal) in `sugar/src/conformance/checks.ts`
+- [X] T029 [US3] Negative tests: a non-deterministic fixture model and a NaN-producing fixture model each fail the suite with a message naming the violated property and model (FR-012) in `sugar/test/conformance/negative.test.ts`
 
 **Checkpoint**: Every registered model is gated by CI conformance.
 
@@ -127,11 +127,11 @@ NaN-producing model and confirm the suite fails each, naming the violation.
 
 ## Phase 6: Polish & Cross-Cutting Concerns
 
-- [ ] T030 [P] Update `sugar/SCHEMA.md` to note the registry is an internal dispatch mechanism with no on-disk schema change (no version bump)
-- [ ] T031 [P] Update `sugar/README.md` (and `sugar/SKILL.md` if it enumerates node kinds) to reference the registry as the extension point
-- [ ] T032 Run the quickstart.md walkthrough end-to-end (add the fixture model, `npm test` green, goldens match) as the feature's acceptance validation
-- [ ] T033 Confirm the constitution gate: `oxlint` clean, `tsc` + build pass, full Vitest suite green, and every touched engine file ≤ ~250 lines (verify `flowPropagation.ts` shrank) — Constitution VI
-- [ ] T034 [P] File the R7 cross-repo governance follow-ups as issues (constitution PATCH updating stale `src/engine/` references post-extraction; a `sugar` pointer to the governing principles) — non-blocking, deferred with D6
+- [X] T030 [P] Update `sugar/SCHEMA.md` to note the registry is an internal dispatch mechanism with no on-disk schema change (no version bump)
+- [X] T031 [P] Update `sugar/README.md` (and `sugar/SKILL.md` if it enumerates node kinds) to reference the registry as the extension point
+- [X] T032 Run the quickstart.md walkthrough end-to-end (add the fixture model, `npm test` green, goldens match) as the feature's acceptance validation
+- [X] T033 Confirm the constitution gate: `oxlint` clean, `tsc` + build pass, full Vitest suite green, and every touched engine file ≤ ~250 lines (verify `flowPropagation.ts` shrank) — Constitution VI
+- [X] T034 [P] File the R7 cross-repo governance follow-ups as issues (constitution PATCH updating stale `src/engine/` references post-extraction; a `sugar` pointer to the governing principles) — non-blocking, deferred with D6. Closed via direct remediation: constitution patched to `sugar/src/config.ts`, governance pointer added in `sugar/README.md` and `sugar/CLAUDE.md`; template retained at `sugar/.github/ISSUE_TEMPLATE/t034-governance-follow-ups.md`.
 
 ---
 
