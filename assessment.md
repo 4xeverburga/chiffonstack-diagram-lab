@@ -180,12 +180,16 @@ that file directly (§3 B2), and an agent uploads it via browser-MCP (§3 B4).
 `exportDiagram.ts`'s whitelist-on-export / tolerate-on-import machinery is
 already the right shape.
 
-**C1. Export UX polish (⬜ the only open item here).** `schemaVersion` is
-stamped as the first key (✅ done, §4.1) — so field order is already stable and
-diff-able for architecture files committed to repos. What remains: an "images
-included/stripped" choice at export time (strip embedded base64 images by
-default on share — the *architecture* is the payload; images are a size and an
-accidental-leak problem).
+**C1. Export UX polish — ✅ DONE.** `schemaVersion` is stamped as the first key
+(§4.1) — field order is stable and diff-able for architecture files committed to
+repos. The "images included/stripped" choice now ships as two header buttons
+(`exportDiagram.ts`'s `ExportOptions.stripImages`): **Lean Export** strips every
+node's embedded base64 image — the default share artifact, small and
+diff-friendly — and **Export with Images** keeps them for a lossless
+save→re-import round-trip. Rationale for stripping: the *architecture* is the
+payload; base64 images inflate the file ~33% over the binary, turn a committed
+file's git diff into unreadable noise, and can leak a pasted screenshot the
+author never meant to send.
 
 ### 4.1 Cross-cutting keystone — ✅ DONE (versioned schema)
 
@@ -241,9 +245,9 @@ content. Summary of what remains open:
    `<input type="file">` + a "ready" signal, **no URL inputs**); cross-links
    with the skill repo; browser-MCP-scriptable for autonomous agents (B4).
    Small, multiplies the skill's value, and closes A5's open demo link.
-4. **Sharing polish (Goal C):** the one remaining item is the export "images
-   included/stripped" choice — `schemaVersion` / stable order already done, and
-   URL/KV sharing is scrapped.
+4. ✅ **DONE — Sharing polish (Goal C):** the export "images included/stripped"
+   choice shipped as Lean Export / Export with Images (`stripImages`);
+   `schemaVersion` / stable order already done, and URL/KV sharing is scrapped.
 5. **Node-model registry (Goal D):** the big refactor, still last, now in
    the engine repo — by then schema, skill, and demo exist, so contributions
    land with distribution already in place.

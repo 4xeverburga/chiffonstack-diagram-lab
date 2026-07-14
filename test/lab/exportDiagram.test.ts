@@ -660,3 +660,41 @@ describe('parseDiagram', () => {
     expect(nodes.every((node) => node.data.sim === undefined)).toBe(true)
   })
 })
+
+describe('lean export (stripImages)', () => {
+  it('drops the embedded image (and its imageAspect) from every node when stripImages is set', () => {
+    const fitted = kitchenSinkNodes.map((node) =>
+      node.id === 'image-node' ? { ...node, data: { ...node.data, imageAspect: 2 } } : node,
+    )
+    const { nodes } = toPlainDiagram(fitted, kitchenSinkEdges, { stripImages: true })
+    const imageNode = nodes.find((node) => node.id === 'image-node')
+    expect(imageNode?.data.image).toBeUndefined()
+    expect(imageNode?.data.imageAspect).toBeUndefined()
+    // Only the image is stripped — the rest of the node is untouched.
+    expect(imageNode?.data.label).toBe('image')
+  })
+
+  it('emits no base64 payload anywhere in the serialized lean output', () => {
+    const lean = serializeDiagram(kitchenSinkNodes, kitchenSinkEdges, { stripImages: true })
+    expect(lean).not.toContain('base64')
+    // The "image" key is gone entirely (the label value happens to be the
+    // word "image", so match the key form, not the bare substring).
+    expect(lean).not.toContain('"image":')
+  })
+
+  it('keeps the embedded image by default (full-fidelity export is the default)', () => {
+    const full = JSON.parse(serializeDiagram(kitchenSinkNodes, kitchenSinkEdges)) as {
+      nodes: Array<{ id: string; data: { image?: string } }>
+    }
+    const imageNode = full.nodes.find((node) => node.id === 'image-node')
+    expect(imageNode?.data.image).toContain('base64')
+  })
+
+  it('round-trips: a lean export re-imports with no image; a full export keeps it', () => {
+    const leanBack = parseDiagram(serializeDiagram(kitchenSinkNodes, kitchenSinkEdges, { stripImages: true }))
+    expect(leanBack.nodes.find((node) => node.id === 'image-node')?.data.image).toBeUndefined()
+
+    const fullBack = parseDiagram(serializeDiagram(kitchenSinkNodes, kitchenSinkEdges))
+    expect(fullBack.nodes.find((node) => node.id === 'image-node')?.data.image).toContain('base64')
+  })
+})
