@@ -3,7 +3,7 @@
 Guidance for Claude Code when working in this repository.
 
 <!-- SPECKIT START -->
-Current feature plan: specs/012-overload-collapse/plan.md (constitution: .specify/memory/constitution.md v3.3.0; feature includes v3.4.0 amendment)
+Current feature plan: specs/014-node-model-registry/plan.md (constitution: .specify/memory/constitution.md v3.4.0). Note: implementation lands in the `sugar` engine repo; this spec lives here for speckit continuity.
 <!-- SPECKIT END -->
 
 ## Coding conventions
