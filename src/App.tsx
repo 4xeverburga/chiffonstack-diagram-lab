@@ -185,6 +185,9 @@ function LabEditor() {
   )
 
   const [jsonExportStatus, setJsonExportStatus] = useState<JsonStatus>('idle')
+  // Which export button most recently ran, so only that button shows the
+  // transient "Downloaded!"/"Download failed" label (the two share one status).
+  const [exportVariant, setExportVariant] = useState<'lean' | 'images'>('lean')
   const [jsonImportStatus, setJsonImportStatus] = useState<JsonStatus>('idle')
   // Persistent (non-transient) provenance of the current diagram: 'initial' is
   // the built-in demo topology; 'file' means a user/agent-supplied JSON was
@@ -204,17 +207,23 @@ function LabEditor() {
     return () => clearTimeout(timer)
   }, [jsonImportStatus])
 
-  // The only remaining export target (FR-010): the topology JSON, now
-  // including each node's simulation role (exportDiagram.ts).
-  const handleExportJson = useCallback(() => {
-    try {
-      downloadDiagram(nodes, edges)
-      setJsonExportStatus('done')
-    } catch (error: unknown) {
-      console.error('Failed to download diagram JSON', error)
-      setJsonExportStatus('error')
-    }
-  }, [nodes, edges])
+  // Topology JSON export (FR-010), in two flavors (assessment.md C1): a
+  // "Lean Export" that strips embedded base64 images — the default share
+  // artifact, small and diff-friendly — and a full "Export with Images" that
+  // keeps them for a lossless save→re-import round-trip.
+  const handleExportJson = useCallback(
+    (stripImages: boolean) => {
+      setExportVariant(stripImages ? 'lean' : 'images')
+      try {
+        downloadDiagram(nodes, edges, { stripImages })
+        setJsonExportStatus('done')
+      } catch (error: unknown) {
+        console.error('Failed to download diagram JSON', error)
+        setJsonExportStatus('error')
+      }
+    },
+    [nodes, edges],
+  )
 
   const handleClickUpload = useCallback(() => {
     uploadInputRef.current?.click()
@@ -252,7 +261,16 @@ function LabEditor() {
     [importDiagramFromFile],
   )
 
-  const jsonExportLabel = jsonExportStatus === 'done' ? 'Downloaded!' : jsonExportStatus === 'error' ? 'Download failed' : 'Export JSON'
+  // Each export button shows the shared transient status only when it was the
+  // one that ran (exportVariant); the other keeps its resting label.
+  const leanExportLabel =
+    exportVariant === 'lean' && jsonExportStatus === 'done' ? 'Downloaded!'
+    : exportVariant === 'lean' && jsonExportStatus === 'error' ? 'Download failed'
+    : 'Lean Export'
+  const imagesExportLabel =
+    exportVariant === 'images' && jsonExportStatus === 'done' ? 'Downloaded!'
+    : exportVariant === 'images' && jsonExportStatus === 'error' ? 'Download failed'
+    : 'Export with Images'
   const jsonImportLabel = jsonImportStatus === 'done' ? 'Loaded!' : jsonImportStatus === 'error' ? 'Upload failed' : 'Upload JSON'
 
   const canvasRef = useRef<HTMLDivElement>(null)
@@ -398,8 +416,11 @@ function LabEditor() {
           onReset={simActions.reset}
           onChangeTrafficScale={setTrafficScale}
         />
-        <button type="button" className="lab-export" onClick={handleExportJson}>
-          {jsonExportLabel}
+        <button type="button" className="lab-export" onClick={() => handleExportJson(true)}>
+          {leanExportLabel}
+        </button>
+        <button type="button" className="lab-export" onClick={() => handleExportJson(false)}>
+          {imagesExportLabel}
         </button>
         <button type="button" className="lab-export" onClick={handleClickUpload}>
           {jsonImportLabel}

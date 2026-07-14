@@ -177,12 +177,27 @@ function plainEdgeData(data: unknown) {
   }
 }
 
+// Export options. `stripImages` drops every node's embedded base64 image
+// (and its dependent imageAspect) from the output — the "Lean Export" path
+// (assessment.md C1). Sharing the *architecture* shouldn't ship the pixels:
+// base64 images inflate the file ~33% over the binary, turn the git diff of
+// a committed architecture file into unreadable noise, and can leak a pasted
+// screenshot the author never meant to send. Full-fidelity export (the
+// default, false) keeps them so a save→re-import round-trip is lossless.
+export interface ExportOptions {
+  stripImages?: boolean
+}
+
 // Strips React Flow's internal/runtime fields down to the canonical shape
 // (specs/001-export-suite/data-model.md). Shared by the JSON export, the
 // component export, and the bundle so `diagram.json` is byte-identical no
 // matter which export target produced it (single generator, no forks).
-export function toPlainDiagram(nodes: Node[], edges: Edge[]) {
+export function toPlainDiagram(nodes: Node[], edges: Edge[], options: ExportOptions = {}) {
   const plainNodes = nodes.map((node) => {
+    // stripImages forces the image (and thus imageAspect) out of the output;
+    // undefined here means JSON.stringify drops the keys, so a lean file is
+    // byte-clean — no empty "image" placeholder.
+    const image = options.stripImages ? undefined : node.data.image
     const imageAspect = typeof node.data.imageAspect === 'number' && Number.isFinite(node.data.imageAspect) && node.data.imageAspect > 0
       ? node.data.imageAspect
       : undefined
@@ -192,12 +207,12 @@ export function toPlainDiagram(nodes: Node[], edges: Edge[]) {
       position: node.position,
       data: {
         label: node.data.label,
-        image: node.data.image,
+        image,
         labelSize: resolveTextSize(node.data.labelSize),
         // Only carried alongside an image — undefined here drops the key
         // via JSON.stringify, keeping legacy/no-image nodes byte-identical
         // to pre-005 output (contracts/image-fit.md guarantee 3).
-        imageAspect: node.data.image ? imageAspect : undefined,
+        imageAspect: image ? imageAspect : undefined,
         sim: plainNodeSim(node.data.sim),
       },
       className: node.className,
@@ -231,12 +246,12 @@ export function toPlainDiagram(nodes: Node[], edges: Edge[]) {
   return { schemaVersion: DIAGRAM_SCHEMA_VERSION, nodes: plainNodes, edges: plainEdges }
 }
 
-export function serializeDiagram(nodes: Node[], edges: Edge[]): string {
-  return JSON.stringify(toPlainDiagram(nodes, edges), null, 2)
+export function serializeDiagram(nodes: Node[], edges: Edge[], options: ExportOptions = {}): string {
+  return JSON.stringify(toPlainDiagram(nodes, edges, options), null, 2)
 }
 
-export function downloadDiagram(nodes: Node[], edges: Edge[]): void {
-  const json = serializeDiagram(nodes, edges)
+export function downloadDiagram(nodes: Node[], edges: Edge[], options: ExportOptions = {}): void {
+  const json = serializeDiagram(nodes, edges, options)
   const blob = new Blob([json], { type: 'application/json' })
   const url = URL.createObjectURL(blob)
   const anchor = document.createElement('a')
